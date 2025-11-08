@@ -1,0 +1,414 @@
+/**
+ * Unit Tests for Auth Middleware
+ *
+ * Tests for lib/auth/middleware.ts
+ *
+ * Test Coverage:
+ * - requireAuth extracts and validates JWT from cookies
+ * - requireAuth throws error when no token
+ * - optionalAuth returns null when no token
+ * - createAuthCookie formats cookie correctly
+ * - clearAuthCookie formats cookie correctly
+ */
+
+import { describe, it, expect, beforeEach } from 'vitest';
+import { NextRequest } from 'next/server';
+import {
+  requireAuth,
+  optionalAuth,
+  createAuthCookie,
+  clearAuthCookie,
+} from '@/lib/auth/middleware';
+import { signJWT } from '@/lib/auth/jwt';
+
+// Helper function to create a mock NextRequest with cookies
+function createMockRequest(cookieHeader?: string): NextRequest {
+  const headers = new Headers();
+  if (cookieHeader) {
+    headers.set('cookie', cookieHeader);
+  }
+
+  return new NextRequest('http://localhost:3000/api/test', {
+    headers,
+  });
+}
+
+describe('Auth Middleware', () => {
+  describe('requireAuth', () => {
+    it('should extract and verify valid JWT from cookie', async () => {
+      // Arrange
+      const payload = { sub: 'user-123', email: 'test@example.com' };
+      const token = await signJWT(payload);
+      const request = createMockRequest(`auth_token=${token}`);
+
+      // Act
+      const result = await requireAuth(request);
+
+      // Assert
+      expect(result).toBeDefined();
+      expect(result.sub).toBe(payload.sub);
+      expect(result.email).toBe(payload.email);
+    });
+
+    it('should work with multiple cookies', async () => {
+      // Arrange
+      const payload = { sub: 'user-456', email: 'multi@example.com' };
+      const token = await signJWT(payload);
+      const request = createMockRequest(`other=value; auth_token=${token}; another=cookie`);
+
+      // Act
+      const result = await requireAuth(request);
+
+      // Assert
+      expect(result.sub).toBe(payload.sub);
+      expect(result.email).toBe(payload.email);
+    });
+
+    it('should throw error when no cookie header', async () => {
+      // Arrange
+      const request = createMockRequest();
+
+      // Act & Assert
+      await expect(requireAuth(request)).rejects.toThrow('Authentication required');
+    });
+
+    it('should throw error when auth_token cookie is missing', async () => {
+      // Arrange
+      const request = createMockRequest('other=value; session=abc123');
+
+      // Act & Assert
+      await expect(requireAuth(request)).rejects.toThrow('Authentication required');
+    });
+
+    it('should throw error for invalid token', async () => {
+      // Arrange
+      const request = createMockRequest('auth_token=invalid-token-format');
+
+      // Act & Assert
+      await expect(requireAuth(request)).rejects.toThrow('Invalid or expired token');
+    });
+
+    it('should throw error for malformed token', async () => {
+      // Arrange
+      const request = createMockRequest('auth_token=not.a.jwt');
+
+      // Act & Assert
+      await expect(requireAuth(request)).rejects.toThrow('Invalid or expired token');
+    });
+
+    it('should throw error for empty token', async () => {
+      // Arrange
+      const request = createMockRequest('auth_token=');
+
+      // Act & Assert
+      await expect(requireAuth(request)).rejects.toThrow('Authentication required');
+    });
+
+    it('should extract all JWT payload fields', async () => {
+      // Arrange
+      const payload = {
+        sub: 'user-789',
+        email: 'detailed@example.com',
+      };
+      const token = await signJWT(payload);
+      const request = createMockRequest(`auth_token=${token}`);
+
+      // Act
+      const result = await requireAuth(request);
+
+      // Assert
+      expect(result.sub).toBe(payload.sub);
+      expect(result.email).toBe(payload.email);
+      expect(result.iat).toBeDefined();
+      expect(result.exp).toBeDefined();
+    });
+  });
+
+  describe('optionalAuth', () => {
+    it('should return payload for valid token', async () => {
+      // Arrange
+      const payload = { sub: 'user-123', email: 'test@example.com' };
+      const token = await signJWT(payload);
+      const request = createMockRequest(`auth_token=${token}`);
+
+      // Act
+      const result = await optionalAuth(request);
+
+      // Assert
+      expect(result).not.toBeNull();
+      expect(result?.sub).toBe(payload.sub);
+      expect(result?.email).toBe(payload.email);
+    });
+
+    it('should return null when no cookie header', async () => {
+      // Arrange
+      const request = createMockRequest();
+
+      // Act
+      const result = await optionalAuth(request);
+
+      // Assert
+      expect(result).toBeNull();
+    });
+
+    it('should return null when auth_token cookie is missing', async () => {
+      // Arrange
+      const request = createMockRequest('other=value; session=abc123');
+
+      // Act
+      const result = await optionalAuth(request);
+
+      // Assert
+      expect(result).toBeNull();
+    });
+
+    it('should return null for invalid token', async () => {
+      // Arrange
+      const request = createMockRequest('auth_token=invalid-token');
+
+      // Act
+      const result = await optionalAuth(request);
+
+      // Assert
+      expect(result).toBeNull();
+    });
+
+    it('should return null for empty token', async () => {
+      // Arrange
+      const request = createMockRequest('auth_token=');
+
+      // Act
+      const result = await optionalAuth(request);
+
+      // Assert
+      expect(result).toBeNull();
+    });
+
+    it('should not throw errors', async () => {
+      // Arrange
+      const request = createMockRequest('auth_token=will-cause-error');
+
+      // Act & Assert
+      // Should not throw, just return null
+      const result = await optionalAuth(request);
+      expect(result).toBeNull();
+    });
+  });
+
+  describe('createAuthCookie', () => {
+    it('should create cookie string with default max age', () => {
+      // Arrange
+      const token = 'test-jwt-token';
+      const defaultMaxAge = 60 * 60 * 24 * 7; // 7 days
+
+      // Act
+      const cookie = createAuthCookie(token);
+
+      // Assert
+      expect(cookie).toContain('auth_token=');
+      expect(cookie).toContain(token);
+      expect(cookie).toContain('HttpOnly');
+      expect(cookie).toContain('Secure');
+      expect(cookie).toContain('SameSite=Strict');
+      expect(cookie).toContain('Path=/');
+      expect(cookie).toContain(`Max-Age=${defaultMaxAge}`);
+    });
+
+    it('should create cookie string with custom max age', () => {
+      // Arrange
+      const token = 'test-jwt-token';
+      const customMaxAge = 3600; // 1 hour
+
+      // Act
+      const cookie = createAuthCookie(token, customMaxAge);
+
+      // Assert
+      expect(cookie).toContain(`Max-Age=${customMaxAge}`);
+    });
+
+    it('should include all security flags', () => {
+      // Arrange
+      const token = 'secure-token';
+
+      // Act
+      const cookie = createAuthCookie(token);
+
+      // Assert
+      expect(cookie).toContain('HttpOnly'); // Prevent XSS
+      expect(cookie).toContain('Secure'); // HTTPS only
+      expect(cookie).toContain('SameSite=Strict'); // CSRF protection
+    });
+
+    it('should set path to root', () => {
+      // Arrange
+      const token = 'test-token';
+
+      // Act
+      const cookie = createAuthCookie(token);
+
+      // Assert
+      expect(cookie).toContain('Path=/');
+    });
+
+    it('should format cookie correctly', () => {
+      // Arrange
+      const token = 'formatted-token';
+
+      // Act
+      const cookie = createAuthCookie(token);
+
+      // Assert
+      // Should be: auth_token=formatted-token; HttpOnly; Secure; SameSite=Strict; Path=/; Max-Age=604800
+      const parts = cookie.split('; ');
+      expect(parts[0]).toBe('auth_token=formatted-token');
+      expect(parts).toContain('HttpOnly');
+      expect(parts).toContain('Secure');
+      expect(parts).toContain('SameSite=Strict');
+      expect(parts).toContain('Path=/');
+      expect(parts.some(part => part.startsWith('Max-Age='))).toBe(true);
+    });
+
+    it('should handle tokens with special characters', () => {
+      // Arrange
+      const token = 'token.with.dots-and_underscores';
+
+      // Act
+      const cookie = createAuthCookie(token);
+
+      // Assert
+      expect(cookie).toContain(token);
+    });
+
+    it('should use max age of 0 when specified', () => {
+      // Arrange
+      const token = 'expire-now';
+
+      // Act
+      const cookie = createAuthCookie(token, 0);
+
+      // Assert
+      expect(cookie).toContain('Max-Age=0');
+    });
+  });
+
+  describe('clearAuthCookie', () => {
+    it('should create cookie string to clear auth cookie', () => {
+      // Act
+      const cookie = clearAuthCookie();
+
+      // Assert
+      expect(cookie).toContain('auth_token=');
+      expect(cookie).toContain('Max-Age=0');
+    });
+
+    it('should include all security flags', () => {
+      // Act
+      const cookie = clearAuthCookie();
+
+      // Assert
+      expect(cookie).toContain('HttpOnly');
+      expect(cookie).toContain('Secure');
+      expect(cookie).toContain('SameSite=Strict');
+    });
+
+    it('should set empty value', () => {
+      // Act
+      const cookie = clearAuthCookie();
+
+      // Assert
+      // Should start with auth_token= (empty value)
+      expect(cookie).toMatch(/^auth_token=;/);
+    });
+
+    it('should set Max-Age to 0', () => {
+      // Act
+      const cookie = clearAuthCookie();
+
+      // Assert
+      expect(cookie).toContain('Max-Age=0');
+    });
+
+    it('should set path to root', () => {
+      // Act
+      const cookie = clearAuthCookie();
+
+      // Assert
+      expect(cookie).toContain('Path=/');
+    });
+
+    it('should format cookie correctly', () => {
+      // Act
+      const cookie = clearAuthCookie();
+
+      // Assert
+      const parts = cookie.split('; ');
+      expect(parts[0]).toBe('auth_token=');
+      expect(parts).toContain('HttpOnly');
+      expect(parts).toContain('Secure');
+      expect(parts).toContain('SameSite=Strict');
+      expect(parts).toContain('Path=/');
+      expect(parts).toContain('Max-Age=0');
+    });
+  });
+
+  describe('Integration: Full auth flow', () => {
+    it('should authenticate user through complete flow', async () => {
+      // Arrange
+      const payload = { sub: 'user-integration', email: 'flow@example.com' };
+
+      // Act - Simulate login: create token and cookie
+      const token = await signJWT(payload);
+      const setCookie = createAuthCookie(token);
+
+      // Extract token from cookie string (simulate browser storing it)
+      const tokenMatch = setCookie.match(/auth_token=([^;]+)/);
+      const storedToken = tokenMatch ? tokenMatch[1] : '';
+
+      // Simulate subsequent request with cookie
+      const request = createMockRequest(`auth_token=${storedToken}`);
+      const authenticatedUser = await requireAuth(request);
+
+      // Assert
+      expect(authenticatedUser.sub).toBe(payload.sub);
+      expect(authenticatedUser.email).toBe(payload.email);
+    });
+
+    it('should handle logout flow', async () => {
+      // Arrange
+      const payload = { sub: 'user-logout', email: 'logout@example.com' };
+      const token = await signJWT(payload);
+
+      // Act - User is authenticated
+      const request1 = createMockRequest(`auth_token=${token}`);
+      const user = await requireAuth(request1);
+      expect(user).toBeDefined();
+
+      // Logout - clear cookie
+      const clearCookie = clearAuthCookie();
+      expect(clearCookie).toContain('Max-Age=0');
+
+      // After logout - no auth cookie
+      const request2 = createMockRequest();
+      await expect(requireAuth(request2)).rejects.toThrow('Authentication required');
+    });
+
+    it('should work with optionalAuth for public endpoints', async () => {
+      // Arrange - Authenticated user
+      const payload = { sub: 'user-optional', email: 'optional@example.com' };
+      const token = await signJWT(payload);
+      const requestAuth = createMockRequest(`auth_token=${token}`);
+
+      // Arrange - Anonymous user
+      const requestAnon = createMockRequest();
+
+      // Act
+      const userAuth = await optionalAuth(requestAuth);
+      const userAnon = await optionalAuth(requestAnon);
+
+      // Assert
+      expect(userAuth).not.toBeNull();
+      expect(userAuth?.sub).toBe(payload.sub);
+      expect(userAnon).toBeNull();
+    });
+  });
+});
