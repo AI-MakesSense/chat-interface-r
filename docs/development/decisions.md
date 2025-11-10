@@ -700,5 +700,270 @@ Generate tier-specific default configurations:
 
 ---
 
-**Last Updated**: November 9, 2025
-**Total Decisions**: 17
+## ADR-018: Two-Tier Authorization for Widget API
+
+**Date**: November 10, 2025
+**Status**: ✅ Accepted
+**Phase**: Phase 3 Module 2
+
+### Context
+
+Widget operations require verifying that the authenticated user has permission to access the widget. Need to decide authorization strategy.
+
+### Decision
+
+Implement two-tier authorization:
+1. **User Authentication**: Verify JWT token (existing `requireAuth` middleware)
+2. **Resource Ownership**: Verify user owns the license associated with widget
+
+### Rationale
+
+1. **Security**: Prevents horizontal privilege escalation (user accessing another user's widgets)
+2. **Simplicity**: Builds on existing auth infrastructure
+3. **Consistency**: Same pattern used in license API (proven approach)
+4. **Performance**: Single database query to get widget with license
+5. **Clarity**: Clear separation between authentication and authorization
+
+### Alternatives Considered
+
+- **License ID in JWT**: Rejected - would require re-issuing JWT on license purchase
+- **Role-Based Access**: Rejected - overkill for current requirements
+- **License Ownership Only**: Rejected - need user context for audit logs
+
+### Consequences
+
+- Every widget endpoint must call `verifyWidgetOwnership(widgetId, userId)`
+- Helper function consolidates ownership logic in one place
+- Database query joins widgets with licenses for ownership check
+- Consistent error messages: 401 for auth, 403 for ownership, 404 for not found
+
+---
+
+## ADR-019: Deep Merge Strategy for Partial Config Updates
+
+**Date**: November 10, 2025
+**Status**: ✅ Accepted
+**Phase**: Phase 3 Module 2
+
+### Context
+
+Users update widget configs via PATCH endpoint. Should we require full config or support partial updates?
+
+### Decision
+
+Support partial config updates with deep merge:
+- User provides only fields they want to change
+- System deep merges with existing config
+- Arrays are replaced (not merged)
+- Use `structuredClone()` for immutability
+
+### Rationale
+
+1. **User Experience**: Users don't need to send entire config for small changes
+2. **Network Efficiency**: Smaller payloads (send only changed fields)
+3. **Simplicity**: Frontend can send patch requests without fetching full config
+4. **Flexibility**: Supports both shallow and deep nested updates
+5. **Safety**: structuredClone prevents mutation bugs
+
+### Alternatives Considered
+
+- **Full Config Required**: Rejected - poor UX, larger payloads, requires fetch-before-update
+- **Shallow Merge**: Rejected - can't update nested properties (e.g., theme.colors.primary)
+- **JSONPatch (RFC 6902)**: Rejected - overcomplicated for this use case
+
+### Consequences
+
+- Need `deepMerge()` helper function with proper array handling
+- Must validate merged result (not just user input)
+- Version number increments on any config change
+- Frontend can send minimal payloads: `{ config: { theme: { colors: { primary: "#FF0000" } } } }`
+
+### Merge Behavior
+
+```typescript
+// Example: Update only primary color
+PATCH /api/widgets/123
+{
+  "config": {
+    "theme": {
+      "colors": {
+        "primary": "#FF5733"
+      }
+    }
+  }
+}
+
+// Result: existing.config deep merged with above
+// - theme.colors.primary → "#FF5733" (updated)
+// - theme.colors.secondary → unchanged
+// - branding → unchanged
+// - behavior → unchanged
+```
+
+---
+
+## ADR-020: Widget Limit Enforcement at Creation Time
+
+**Date**: November 10, 2025
+**Status**: ✅ Accepted
+**Phase**: Phase 3 Module 2
+
+### Context
+
+Tier limits restrict widget count (Basic=1, Pro=3, Agency=unlimited). When should we enforce these limits?
+
+### Decision
+
+Enforce limits at widget creation time by counting active widgets (status ≠ 'deleted'):
+- Count widgets with `status IN ('active', 'paused')`
+- Exclude soft-deleted widgets from count
+- Check limit before creating new widget
+
+### Rationale
+
+1. **Business Logic**: Deleted widgets don't count toward limit (user can delete and recreate)
+2. **User Experience**: Users can experiment by deleting and recreating widgets
+3. **Simple Check**: Single database query for count
+4. **No Cleanup Needed**: Soft delete pattern naturally supports this
+
+### Alternatives Considered
+
+- **Count All Widgets**: Rejected - deleted widgets would block new creation forever
+- **Hard Delete**: Rejected - loses historical data, ADR-005 chose soft delete
+- **Limit at Update**: Rejected - confusing if user can't activate existing widget
+
+### Consequences
+
+- Race condition possible with concurrent creates (acceptable for MVP)
+- Users can delete widget to free up slot
+- Dashboard shows "2/3 widgets used" based on active count
+- Agency tier check: `if (limit === -1) allow;` (unlimited)
+
+### Known Limitation
+
+Concurrent widget creation could bypass limits:
+- User A creates widget (count check: 2 < 3, OK)
+- User B creates widget (count check: 2 < 3, OK)
+- Result: 4 widgets for Pro tier (should be 3 max)
+
+**Mitigation**: Document as known limitation, add database constraint post-MVP if needed
+
+---
+
+## ADR-021: Separate Deployment Validation Endpoint
+
+**Date**: November 10, 2025
+**Status**: ✅ Accepted
+**Phase**: Phase 3 Module 2
+
+### Context
+
+Widgets can be saved with incomplete config (e.g., empty webhookUrl). Should deployment be automatic or explicit?
+
+### Decision
+
+Create explicit `POST /api/widgets/[id]/deploy` endpoint with strict validation:
+- Separate from create/update endpoints
+- Validates config is complete (webhookUrl required, allowDefaults=false)
+- Sets `deployedAt` timestamp
+- Only deployed widgets can be embedded
+
+### Rationale
+
+1. **User Safety**: Prevents accidental deployment of incomplete widgets
+2. **Clear Intent**: Explicit deployment action (not auto-deploy on update)
+3. **Validation Flexibility**: Different rules for "save draft" vs "deploy to production"
+4. **Audit Trail**: `deployedAt` timestamp shows when widget went live
+5. **Rollback**: Can "undeploy" by setting status='paused'
+
+### Alternatives Considered
+
+- **Auto-Deploy on Create**: Rejected - users may want to configure before deploying
+- **Auto-Deploy on First Update**: Rejected - unclear when deployment happens
+- **Deploy Flag in Update**: Rejected - overloads update endpoint with multiple concerns
+
+### Consequences
+
+- Widget lifecycle: Create → Configure (multiple updates) → Deploy → Embed
+- Frontend needs "Deploy" button (separate from "Save")
+- Embed endpoint checks `deployedAt !== null` before serving config
+- Deployment validation stricter than save validation
+
+### Validation Difference
+
+```typescript
+// SAVE (PATCH /api/widgets/[id])
+// - Allows empty webhookUrl
+// - Uses createWidgetConfigSchema(tier, allowDefaults=true)
+// - Permissive: users can save incomplete drafts
+
+// DEPLOY (POST /api/widgets/[id]/deploy)
+// - Requires valid HTTPS webhookUrl
+// - Uses createWidgetConfigSchema(tier, allowDefaults=false)
+// - Strict: all required fields must be complete
+```
+
+---
+
+## ADR-022: Public Embed Endpoint with Domain-Based Security
+
+**Date**: November 10, 2025
+**Status**: ✅ Accepted
+**Phase**: Phase 3 Module 2
+
+### Context
+
+Widgets need to load configuration on embed. Should this require authentication or be public?
+
+### Decision
+
+Create public endpoint `GET /api/widgets/[id]/embed?domain=...` with domain-based authorization:
+- No JWT required (public endpoint)
+- Security via license validation + domain whitelist
+- Only active, deployed widgets can be embedded
+- Domain parameter required (prevents mass scraping)
+
+### Rationale
+
+1. **Ease of Use**: Widgets embed without auth (simpler for end users)
+2. **Domain Security**: License validation ensures only authorized domains load widget
+3. **Performance**: No auth overhead (faster response times)
+4. **Cacheability**: Public endpoint can be CDN-cached
+5. **License Validation**: Existing `validateLicense(key, domain)` function handles authorization
+
+### Alternatives Considered
+
+- **Require JWT**: Rejected - widgets would need auth tokens (complex embed code)
+- **API Key in URL**: Rejected - sensitive data exposed in URLs (logging, analytics)
+- **No Domain Check**: Rejected - anyone could embed widget anywhere
+
+### Consequences
+
+- Endpoint is PUBLIC and UNAUTHENTICATED
+- Must validate: widget active, widget deployed, license active, domain authorized
+- Rate limiting critical to prevent abuse (10 req/sec per IP)
+- CDN caching recommended (cache key: widgetId + domain)
+- Return sanitized config (exclude sensitive data)
+
+### Security Measures
+
+```typescript
+// Checks before returning config
+1. Widget exists
+2. Widget.status === 'active'
+3. Widget.deployedAt !== null
+4. License.status === 'active'
+5. License not expired
+6. Domain in license.domains (normalized)
+```
+
+### Rate Limiting (Post-MVP)
+
+- 10 requests/second per IP address
+- 1000 requests/hour per widget ID
+- CDN caching reduces backend load
+
+---
+
+**Last Updated**: November 10, 2025
+**Total Decisions**: 22

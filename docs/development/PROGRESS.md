@@ -318,31 +318,49 @@ n8n-widget-designer/
 
 **Test Results:** 32/32 passing
 
-### Day 2: License-Related Queries - PENDING
-- ⏳ getWidgetsByLicenseId() - Get all widgets for a license
-- ⏳ getWidgetsByUserId() - Get widgets across user's licenses
-- ⏳ getActiveWidgetCount() - Count non-deleted widgets (for limits)
-- ⏳ getLicenseWithWidgetCount() - Join license + widget count
-- ⏳ Estimated 20-25 tests
+### Day 2: License-Related Queries ✅
+- ✅ 28 RED tests written (TDD-QA-Lead)
+- ✅ 4 query functions implemented (Implementer)
+- ✅ All 28 tests passing (100% GREEN)
+- ✅ No regressions (all 613 tests passing)
+
+**Functions Implemented:**
+1. `getWidgetsByLicenseId(licenseId, includeDeleted)` - Get all widgets for a license
+2. `getWidgetsByUserId(userId, includeDeleted, licenseId?)` - Get widgets across user's licenses with JOIN
+3. `getActiveWidgetCount(licenseId)` - Count non-deleted widgets (for tier limit enforcement)
+4. `getLicenseWithWidgetCount(id)` - Get license with widget count attached
+
+**Files Created:**
+- `lib/db/queries.ts` - Modified with 4 new functions (~117 lines added)
+- `tests/unit/db/license-widget-queries.test.ts` - 28 comprehensive tests
+- `tests/unit/db/LICENSE_WIDGET_QUERIES_TEST_SUMMARY.md` - Test documentation
+
+**Test Results:** 28/28 passing (613 total tests passing)
+
+### Day 3: Update & Delete Queries - PENDING
+- ⏳ deployWidget(id) - Mark widget as deployed
+- ⏳ Additional update functions as needed
+- ⏳ Estimated 15-20 tests
 
 ---
 
 ## 📊 Current Metrics
 
-- **Total Tests:** 585/585 passing ✅
+- **Total Tests:** 613/613 passing ✅
   - Phase 1 (Authentication): 169 tests
   - Phase 2 (License Management): 205 tests
   - Phase 3 Module 1 (Widget Schema): 179 tests
     - 1A: Database schema (28 tests)
     - 1C: Zod validation (102 tests)
     - 1D: Default configs (49 tests)
-  - Phase 3 Module 2 Day 1 (Widget Queries): 32 tests
-- **Test Files:** 19/19 passing
-- **Lines of Code:** ~6,500+ (full-stack)
+  - Phase 3 Module 2 Day 1 (Core Widget Queries): 32 tests
+  - Phase 3 Module 2 Day 2 (License-Related Queries): 28 tests
+- **Test Files:** 20/20 passing
+- **Lines of Code:** ~6,700+ (full-stack)
 - **API Endpoints:** 10 (4 auth + 6 license)
 - **Database Tables:** 6 (users, licenses, widgets, widget_configs, analytics_events, password_reset_tokens)
-- **Time Spent:** ~20 hours
-- **Completion:** Phase 1 (100%), Phase 2 (100%), Phase 3 Module 1 (100%), Phase 3 Module 2 (Day 1/14 complete)
+- **Time Spent:** ~22 hours
+- **Completion:** Phase 1 (100%), Phase 2 (100%), Phase 3 Module 1 (100%), Phase 3 Module 2 (Days 1-2/14 complete)
 
 ## 🎯 Recent Commits
 
@@ -351,9 +369,10 @@ n8n-widget-designer/
 - `25e9b2d` - Phase 3 Module 1C: Zod Validation Schemas Complete
 - `9524483` - Phase 3 Module 1D: Default Config Generators Complete
 - `30ea544` - Phase 3 Module 2 Day 1: Core Widget Database Queries Complete
+- (pending) - Phase 3 Module 2 Day 2: License-Related Widget Queries Complete
 
 ---
 
-**Status:** Phase 3 Module 2 Day 1 complete (32 tests passing)
-**Next Action:** Day 2 - License-related widget query functions (4 functions, ~20-25 tests)
-**Updated:** November 10, 2025 - End of Session
+**Status:** Phase 3 Module 2 Days 1-2 complete (613 tests passing)
+**Next Action:** Day 3 - Update & delete query functions
+**Updated:** November 10, 2025 - Day 2 Complete

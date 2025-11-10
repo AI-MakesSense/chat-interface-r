@@ -11,7 +11,7 @@
  * - Keep queries focused (single responsibility)
  */
 
-import { eq, and, desc, sql } from 'drizzle-orm';
+import { eq, ne, and, desc, sql } from 'drizzle-orm';
 import { db } from './client';
 import {
   users,
@@ -486,4 +486,112 @@ export async function deleteWidget(id: string): Promise<Widget | null> {
     .returning();
 
   return widget || null;
+}
+
+// ============================================================
+// LICENSE-RELATED WIDGET QUERIES
+// ============================================================
+
+/**
+ * Get all widgets for a specific license
+ * Excludes deleted widgets by default
+ * Returns widgets ordered by newest first
+ */
+export async function getWidgetsByLicenseId(
+  licenseId: string,
+  includeDeleted = false
+): Promise<Widget[]> {
+  // Build conditions array
+  const conditions = [eq(widgets.licenseId, licenseId)];
+
+  // Exclude deleted by default
+  if (!includeDeleted) {
+    conditions.push(ne(widgets.status, 'deleted'));
+  }
+
+  // Query with conditions, order by newest first
+  return db
+    .select()
+    .from(widgets)
+    .where(and(...conditions))
+    .orderBy(desc(widgets.createdAt));
+}
+
+/**
+ * Get all widgets for a user across all their licenses
+ * Returns widgets with license information attached
+ * Excludes deleted widgets by default
+ */
+export async function getWidgetsByUserId(
+  userId: string,
+  includeDeleted = false,
+  licenseId?: string
+): Promise<Array<Widget & { license: License }>> {
+  // Build conditions array
+  const conditions = [eq(licenses.userId, userId)];
+
+  // Optional: filter by specific license
+  if (licenseId) {
+    conditions.push(eq(widgets.licenseId, licenseId));
+  }
+
+  // Exclude deleted by default
+  if (!includeDeleted) {
+    conditions.push(ne(widgets.status, 'deleted'));
+  }
+
+  // JOIN widgets + licenses, filter, order
+  const results = await db
+    .select()
+    .from(widgets)
+    .innerJoin(licenses, eq(widgets.licenseId, licenses.id))
+    .where(and(...conditions))
+    .orderBy(desc(widgets.createdAt));
+
+  // Transform results to Widget & { license: License }
+  return results.map(r => ({
+    ...r.widgets,
+    license: r.licenses,
+  }));
+}
+
+/**
+ * Get count of active widgets for a license
+ * Excludes soft-deleted widgets (status='deleted')
+ * Returns integer count
+ */
+export async function getActiveWidgetCount(licenseId: string): Promise<number> {
+  const result = await db
+    .select({ count: sql<number>`count(*)::int` })
+    .from(widgets)
+    .where(
+      and(
+        eq(widgets.licenseId, licenseId),
+        ne(widgets.status, 'deleted')
+      )
+    );
+
+  return result[0]?.count || 0;
+}
+
+/**
+ * Get license with active widget count attached
+ * Returns null if license doesn't exist
+ * Uses existing functions for consistency
+ */
+export async function getLicenseWithWidgetCount(
+  id: string
+): Promise<(License & { widgetCount: number }) | null> {
+  // Get license using existing function
+  const license = await getLicenseById(id);
+  if (!license) return null;
+
+  // Get widget count using existing function
+  const count = await getActiveWidgetCount(id);
+
+  // Return license with widgetCount attached
+  return {
+    ...license,
+    widgetCount: count,
+  };
 }

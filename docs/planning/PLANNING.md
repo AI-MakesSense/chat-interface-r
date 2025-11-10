@@ -765,4 +765,293 @@ export async function DELETE(
 
 ---
 
+---
+
+## November 10, 2025 - Phase 3 Module 2: Widget CRUD API Design
+
+### Problem Statement
+
+Implement RESTful API endpoints for creating, reading, updating, and deleting widgets, enabling users to:
+
+1. Create multiple widgets per license (within tier limits)
+2. List and filter widgets across their licenses
+3. Update widget configurations (partial or full)
+4. Deploy widgets after validation
+5. Soft delete widgets (status='deleted')
+6. Provide public embed endpoint for widget loading
+
+### Constraints
+
+- Widget limits MUST be enforced: Basic=1, Pro=3, Agency=unlimited
+- Users can ONLY access widgets from their own licenses (two-tier auth)
+- Config updates MUST validate against tier-specific schemas
+- Deployment MUST validate complete config (webhookUrl required)
+- Soft delete MUST preserve data (no physical deletion)
+- Public embed endpoint MUST validate domain authorization
+
+### Assumptions
+
+- Phase 3 Module 1 complete (179 tests passing)
+- Database schema with `widgets` table exists
+- TypeScript types (`WidgetConfig`) defined
+- Zod validation schemas (`createWidgetConfigSchema`) ready
+- Default config generators (`createDefaultConfig`) available
+- License query functions available
+
+### Proposed Design
+
+**Component Breakdown:**
+
+```
+app/api/widgets/
+  ├── route.ts                      # POST (create), GET (list)
+  └── [id]/
+      ├── route.ts                  # GET (single), PATCH (update), DELETE (soft delete)
+      ├── deploy/
+      │   └── route.ts              # POST (deploy with validation)
+      └── embed/
+          └── route.ts              # GET (public - no auth)
+
+lib/widgets/
+  └── helpers.ts                    # NEW
+      ├── verifyWidgetOwnership()   # Auth helper
+      ├── verifyLicenseOwnership()  # Auth helper
+      ├── checkWidgetLimit()        # Limit enforcement
+      ├── mergeWidgetConfig()       # Config merging
+      └── validateDeploymentConfig() # Strict validation
+
+lib/db/queries.ts                   # ADD 12 widget query functions
+lib/api/schemas.ts                  # ADD 4 request validation schemas
+```
+
+**Data Flow:**
+
+1. **Widget Creation** (POST /api/widgets)
+   - Authenticate user
+   - Verify license ownership
+   - Check widget limit not exceeded
+   - Merge user config with tier defaults
+   - Validate merged config
+   - Insert widget with status='active', version=1
+
+2. **Widget Listing** (GET /api/widgets)
+   - Authenticate user
+   - Get all user's licenses
+   - Filter by licenseId if provided
+   - Exclude deleted widgets by default
+   - Paginate results (20 per page)
+
+3. **Widget Update** (PATCH /api/widgets/[id])
+   - Authenticate user
+   - Verify ownership
+   - Deep merge partial config
+   - Validate merged config
+   - Increment version number
+   - Auto-set deployedAt if activating
+
+4. **Widget Deployment** (POST /api/widgets/[id]/deploy)
+   - Authenticate user
+   - Verify ownership
+   - Validate config with strict schema (allowDefaults=false)
+   - Check webhookUrl is valid HTTPS URL
+   - Set deployedAt timestamp
+   - Activate widget
+
+5. **Widget Embed** (GET /api/widgets/[id]/embed?domain=...)
+   - NO authentication (public)
+   - Verify widget status='active'
+   - Verify deployedAt not null
+   - Validate license and domain
+   - Return sanitized config
+
+**External Boundaries:**
+
+- **Database**: Drizzle ORM with widgets table (JSONB config)
+- **License System**: validateLicense(key, domain) from Phase 2
+- **Validation**: createWidgetConfigSchema(tier, allowDefaults) from Phase 3.1
+- **Defaults**: createDefaultConfig(tier) from Phase 3.1
+
+### Risks & Mitigations
+
+**Risk 1**: Widget count race condition (concurrent creation)
+
+- **Mitigation**: Document limitation, low priority for MVP (unlikely scenario), consider DB constraint post-launch
+
+**Risk 2**: Large JSONB config performance (>1MB)
+
+- **Mitigation**: Add config size validation (max 500KB), monitor query performance, GIN index already in place
+
+**Risk 3**: Public embed endpoint abuse (DoS, scraping)
+
+- **Mitigation**: Rate limiting (10 req/sec), CDN caching, require domain parameter, monitor traffic
+
+**Risk 4**: Config merging bugs (deep merge, arrays, null)
+
+- **Mitigation**: Comprehensive unit tests, use structuredClone, document merge behavior, handle arrays explicitly
+
+**Risk 5**: Incomplete deployment validation
+
+- **Mitigation**: Strict validation with allowDefaults=false, explicit webhookUrl check, thorough endpoint testing
+
+### Implementation Order (TDD)
+
+**Week 1: Database Queries & Helpers**
+
+Day 1: Core Widget Queries
+- getWidgetById, getWidgetWithLicense, createWidget
+
+Day 2: License-Related Queries
+- getWidgetsByLicenseId, getWidgetsByUserId, getActiveWidgetCount
+
+Day 3: Update & Delete Queries
+- updateWidget, deleteWidget, deployWidget
+
+Day 4: Pagination & Helpers
+- getWidgetsPaginated, verifyWidgetOwnership, mergeWidgetConfig
+
+**Week 2: API Endpoints Part 1**
+
+Day 5: POST /api/widgets (Create)
+- Basic creation, config merging, limit enforcement, validation
+
+Day 6: GET /api/widgets (List)
+- List all, filter by license, pagination, includeDeleted
+
+Day 7: GET /api/widgets/[id] (Get Single)
+- Get with license info, ownership check, error handling
+
+**Week 3: API Endpoints Part 2**
+
+Day 8: PATCH /api/widgets/[id] (Update)
+- Update name, config, status, version tracking, deployedAt logic
+
+Day 9: DELETE /api/widgets/[id] (Soft Delete)
+- Soft delete, data preservation, widget count logic
+
+Day 10: POST /api/widgets/[id]/deploy (Deploy)
+- Deployment validation, timestamp logic, activation
+
+**Week 4: Public Embed & Testing**
+
+Day 11-12: GET /api/widgets/[id]/embed (Public)
+- Domain validation, status checks, license validation, sanitized config
+
+Day 13-14: Integration Testing & Refinement
+- Full test suite, authorization testing, security review, performance testing
+
+### Test Strategy
+
+**Estimated Test Count:** 110 tests
+
+**Integration Tests** (7 files):
+- create.test.ts: 15 tests
+- list.test.ts: 12 tests
+- get.test.ts: 8 tests
+- update.test.ts: 18 tests
+- delete.test.ts: 8 tests
+- deploy.test.ts: 12 tests
+- embed.test.ts: 15 tests
+
+**Unit Tests** (2 files):
+- helpers.test.ts: 12 tests
+- merging.test.ts: 10 tests
+
+**Coverage Goal:** 90%+ of widget API functionality
+
+### Interface Contracts
+
+**Database Queries** (lib/db/queries.ts):
+
+```typescript
+// Core queries
+export async function getWidgetById(id: string): Promise<Widget | null>
+export async function getWidgetWithLicense(id: string): Promise<(Widget & { license: License }) | null>
+export async function createWidget(data: NewWidget): Promise<Widget>
+export async function updateWidget(id: string, data: Partial<Widget>): Promise<Widget | null>
+export async function deleteWidget(id: string): Promise<Widget | null>
+
+// License-related
+export async function getWidgetsByLicenseId(licenseId: string, includeDeleted?: boolean): Promise<Widget[]>
+export async function getWidgetsByUserId(userId: string, includeDeleted?: boolean, licenseId?: string): Promise<Array<Widget & { license: License }>>
+export async function getActiveWidgetCount(licenseId: string): Promise<number>
+
+// Pagination & deployment
+export async function getWidgetsPaginated(userId: string, options: PaginationOptions): Promise<{ widgets: Widget[], total: number }>
+export async function deployWidget(id: string): Promise<Widget | null>
+```
+
+**Helper Functions** (lib/widgets/helpers.ts):
+
+```typescript
+export async function verifyWidgetOwnership(widgetId: string, userId: string): Promise<Widget & { license: License }>
+export async function verifyLicenseOwnership(licenseId: string, userId: string): Promise<License>
+export async function checkWidgetLimit(licenseId: string, tier: LicenseTier): Promise<void>
+export function mergeWidgetConfig(userConfig: Partial<WidgetConfig>, tier: LicenseTier): WidgetConfig
+export function validateDeploymentConfig(config: WidgetConfig, tier: LicenseTier): void
+```
+
+**Request Schemas** (lib/api/schemas.ts):
+
+```typescript
+export const createWidgetSchema = z.object({
+  licenseId: z.string().uuid(),
+  name: z.string().min(1).max(100),
+  config: z.any().optional(),
+});
+
+export const updateWidgetSchema = z.object({
+  name: z.string().min(1).max(100).optional(),
+  config: z.any().optional(),
+  status: z.enum(['active', 'paused']).optional(),
+});
+
+export const listWidgetsSchema = z.object({
+  licenseId: z.string().uuid().optional(),
+  includeDeleted: z.boolean().optional(),
+  page: z.number().int().min(1).optional(),
+  limit: z.number().int().min(1).max(100).optional(),
+});
+
+export const embedWidgetSchema = z.object({
+  domain: z.string().min(1).max(255),
+});
+```
+
+**API Endpoints:**
+
+```typescript
+// POST /api/widgets - Create widget
+// Request: { licenseId, name, config? }
+// Response: { widget: Widget }
+// Status: 201 Created, 400/401/403/404 on error
+
+// GET /api/widgets - List widgets
+// Query: ?licenseId&includeDeleted&page&limit
+// Response: { widgets: Widget[], pagination: PaginationInfo }
+// Status: 200 OK, 401/403 on error
+
+// GET /api/widgets/[id] - Get single widget
+// Response: { widget: Widget & { license: License } }
+// Status: 200 OK, 401/403/404 on error
+
+// PATCH /api/widgets/[id] - Update widget
+// Request: { name?, config?, status? }
+// Response: { widget: Widget }
+// Status: 200 OK, 400/401/403/404 on error
+
+// DELETE /api/widgets/[id] - Soft delete
+// Response: { message: string, widgetId: string }
+// Status: 200 OK, 401/403/404 on error
+
+// POST /api/widgets/[id]/deploy - Deploy widget
+// Response: { message: string, widget: { id, status, deployedAt, version } }
+// Status: 200 OK, 400/401/403/404 on error
+
+// GET /api/widgets/[id]/embed?domain=... - Public embed (no auth)
+// Response: { config: WidgetConfig, version: number, licenseKey: string }
+// Status: 200 OK, 400/403/404 on error
+```
+
+---
+
 **End of Planning Document**
