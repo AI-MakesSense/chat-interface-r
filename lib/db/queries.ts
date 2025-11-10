@@ -595,3 +595,110 @@ export async function getLicenseWithWidgetCount(
     widgetCount: count,
   };
 }
+
+// ============================================================
+// DEPLOYMENT & PAGINATION QUERIES
+// ============================================================
+
+/**
+ * Deploy a widget by setting its deployment timestamp and activating it
+ * Sets deployedAt to current time and status to 'active'
+ * Returns null if widget doesn't exist
+ * Uses database server time to match schema defaults and updateWidget pattern
+ */
+export async function deployWidget(id: string): Promise<Widget | null> {
+  const [widget] = await db
+    .update(widgets)
+    .set({
+      deployedAt: sql`NOW()`,
+      status: 'active',
+      updatedAt: sql`NOW()`,
+    })
+    .where(eq(widgets.id, id))
+    .returning();
+
+  return widget || null;
+}
+
+/**
+ * Get paginated widgets for a user with total count
+ * Supports pagination, filtering by license, and including deleted widgets
+ * Returns widgets with license information and total count
+ */
+export async function getWidgetsPaginated(
+  userId: string,
+  options: {
+    page?: number;
+    limit?: number;
+    licenseId?: string;
+    includeDeleted?: boolean;
+  } = {}
+): Promise<{
+  widgets: Array<Widget & { license: License }>;
+  total: number;
+}> {
+  // Parse and validate pagination params
+  const page = options.page || 1;
+  const limit = Math.min(options.limit || 20, 100); // Max 100
+  const offset = (page - 1) * limit;
+
+  // Build filter conditions
+  const conditions = [eq(licenses.userId, userId)];
+
+  if (options.licenseId) {
+    conditions.push(eq(widgets.licenseId, options.licenseId));
+  }
+
+  if (!options.includeDeleted) {
+    conditions.push(ne(widgets.status, 'deleted'));
+  }
+
+  // Get total count (first query)
+  const [countResult] = await db
+    .select({ count: sql<number>`count(*)::int` })
+    .from(widgets)
+    .innerJoin(licenses, eq(widgets.licenseId, licenses.id))
+    .where(and(...conditions));
+
+  const total = countResult?.count || 0;
+
+  // Get paginated results (second query)
+  const results = await db
+    .select()
+    .from(widgets)
+    .innerJoin(licenses, eq(widgets.licenseId, licenses.id))
+    .where(and(...conditions))
+    .orderBy(desc(widgets.createdAt))
+    .limit(limit)
+    .offset(offset);
+
+  // Transform results to Widget & { license: License }
+  const widgetsWithLicenses = results.map(r => ({
+    ...r.widgets,
+    license: r.licenses,
+  }));
+
+  return { widgets: widgetsWithLicenses, total };
+}
+
+/**
+ * Get all user licenses with widget count attached
+ * Uses existing functions for consistency
+ * Returns licenses with widgetCount property
+ */
+export async function getUserLicensesWithWidgetCounts(
+  userId: string
+): Promise<Array<License & { widgetCount: number }>> {
+  // Get all licenses for user (reuse existing function)
+  const userLicenses = await getUserLicenses(userId);
+
+  // For each license, get widget count (parallel execution)
+  const licensesWithCounts = await Promise.all(
+    userLicenses.map(async (license) => {
+      const count = await getActiveWidgetCount(license.id);
+      return { ...license, widgetCount: count };
+    })
+  );
+
+  return licensesWithCounts;
+}
