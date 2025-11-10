@@ -523,6 +523,174 @@ Use Vercel for hosting, deployment, and Postgres database.
 
 ---
 
+## ADR-014: Hybrid Database Schema for Widget Storage
+
+**Date**: November 9, 2025
+**Status**: ✅ Accepted
+**Phase**: Phase 3
+
+### Context
+
+Need to decide how to store widget configurations: fully normalized tables vs JSONB vs hybrid approach.
+
+### Decision
+
+Create a new `widgets` table with indexed columns (id, licenseId, name, status) and a JSONB `config` field for flexible configuration storage.
+
+### Rationale
+
+1. **Flexibility**: JSONB allows adding new configuration options without schema migrations
+2. **Performance**: Indexed columns for fast queries on frequently-accessed fields
+3. **Type Safety**: Zod validation ensures JSONB structure despite flexible storage
+4. **Query Efficiency**: Can filter by name/status without parsing JSON
+5. **Future-Proof**: Easy to add new config fields without database changes
+
+### Alternatives Considered
+
+- **Fully Normalized** (widget_configs, theme_configs, position_configs tables):
+  - Rejected - Over-engineering, requires many JOINs, complex updates, no real benefit
+
+- **Pure JSONB** (everything in config field):
+  - Rejected - Can't efficiently query by widget name or status, poor indexing
+
+- **Keep widget_configs table**:
+  - Rejected - One-to-one relationship doesn't support multiple widgets per license
+
+### Consequences
+
+- Need migration script to move data from `widget_configs` to `widgets`
+- JSONB queries require GIN index for performance
+- Must validate JSONB structure with Zod on read/write
+- Schema evolution handled at application layer (not database)
+
+---
+
+## ADR-015: One-to-Many Relationship (License → Widgets)
+
+**Date**: November 9, 2025
+**Status**: ✅ Accepted
+**Phase**: Phase 3
+
+### Context
+
+Should we support one widget per license or multiple widgets per license?
+
+### Decision
+
+Support multiple widgets per license, with tier-based limits:
+- Basic: 1 widget
+- Pro: 3 widgets
+- Agency: unlimited widgets (-1)
+
+### Rationale
+
+1. **Business Logic**: Pro and Agency tiers should offer more value (multiple widgets)
+2. **User Experience**: Users may want different widgets for different pages/purposes
+3. **Scalability**: Agency tier can manage many client websites (each needs a widget)
+4. **Upsell Opportunity**: Basic → Pro upgrade motivated by widget limit
+5. **Database Design**: Foreign key naturally supports 1:N relationship
+
+### Alternatives Considered
+
+- **One Widget Per License**:
+  - Rejected - Limits Pro/Agency value proposition, requires multiple licenses for multi-page sites
+
+- **Unlimited Widgets for All Tiers**:
+  - Rejected - No differentiation between tiers, eliminates upsell motivation
+
+### Consequences
+
+- Need `widgetLimit` field on licenses table (or derive from tier)
+- Widget creation API must check count against limit
+- Dashboard UI must show "2/3 widgets used" progress
+- Deletion of widgets decrements count
+
+---
+
+## ADR-016: Tier-Aware Validation with Zod Refinements
+
+**Date**: November 9, 2025
+**Status**: ✅ Accepted
+**Phase**: Phase 3
+
+### Context
+
+How do we enforce tier-based configuration restrictions (e.g., Basic tier requires branding)?
+
+### Decision
+
+Use Zod schemas with `.refine()` and `.superRefine()` methods that accept `tier` context parameter and conditionally validate based on tier.
+
+### Rationale
+
+1. **Centralized Validation**: All tier logic in one place (validation schemas)
+2. **Type Safety**: Zod infers TypeScript types automatically
+3. **Reusability**: Same schemas used in API routes and frontend forms
+4. **Error Messages**: Zod provides clear error messages ("Branding required for Basic tier")
+5. **Testability**: Easy to test tier validation in isolation
+
+### Alternatives Considered
+
+- **Database Constraints**:
+  - Rejected - Can't express complex tier logic in SQL CHECK constraints
+
+- **Separate Schemas Per Tier** (basicWidgetSchema, proWidgetSchema, agencyWidgetSchema):
+  - Rejected - Code duplication, harder to maintain, complex to switch between
+
+- **Runtime Checks in API Routes**:
+  - Rejected - Scattered validation logic, not reusable, harder to test
+
+### Consequences
+
+- Every widget create/update must pass tier to validation
+- Validation functions signature: `validateWidgetConfig(config, tier, licenseInfo)`
+- Need separate validation for "create" vs "update"
+- Frontend can use same schemas for client-side validation
+
+---
+
+## ADR-017: Smart Defaults Based on Tier
+
+**Date**: November 9, 2025
+**Status**: ✅ Accepted
+**Phase**: Phase 3
+
+### Context
+
+What should new widgets look like when created? Empty config or pre-filled defaults?
+
+### Decision
+
+Generate tier-specific default configurations:
+- Basic: Minimal config with branding enabled, default theme
+- Pro: Rich config with branding disabled, premium themes available
+- Agency: Full-featured config with white-label, advanced options
+
+### Rationale
+
+1. **User Experience**: Users get sensible starting point, not blank slate
+2. **Discoverability**: Defaults showcase available features per tier
+3. **Tier Differentiation**: Basic users see branding, Pro users don't (immediately visible value)
+4. **Onboarding**: New users can deploy widget immediately without configuration
+5. **Testing**: Default configs used in tests for consistency
+
+### Alternatives Considered
+
+- **Blank Configuration**:
+  - Rejected - Poor UX, requires all fields filled before deployment
+
+- **Single Default for All Tiers**:
+  - Rejected - Doesn't showcase tier benefits
+
+### Consequences
+
+- Need `generateDefaultConfig(tier)` function
+- Defaults must be kept in sync with validation schemas
+- May need to update defaults when adding new features
+- Migration: existing configs without new fields get defaults merged
+
+---
+
 ## Status Legend
 
 - ✅ **Accepted**: Decision is approved and implemented
@@ -532,5 +700,5 @@ Use Vercel for hosting, deployment, and Postgres database.
 
 ---
 
-**Last Updated**: November 8, 2025
-**Total Decisions**: 13
+**Last Updated**: November 9, 2025
+**Total Decisions**: 17

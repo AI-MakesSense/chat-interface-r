@@ -10,7 +10,7 @@
  * - analytics_events: Usage tracking (optional for MVP)
  */
 
-import { pgTable, uuid, varchar, text, boolean, timestamp, integer, jsonb } from 'drizzle-orm/pg-core';
+import { pgTable, uuid, varchar, text, boolean, timestamp, integer, jsonb, index } from 'drizzle-orm/pg-core';
 import { relations } from 'drizzle-orm';
 
 /**
@@ -43,6 +43,7 @@ export const licenses = pgTable('licenses', {
   tier: varchar('tier', { length: 20 }).notNull(), // 'basic' | 'pro' | 'agency'
   domains: text('domains').array().notNull().default([]), // Array of allowed domains
   domainLimit: integer('domain_limit').notNull(), // 1 for basic/pro, -1 for agency (unlimited)
+  widgetLimit: integer('widget_limit').notNull().default(1), // 1 for basic, 3 for pro, -1 for agency (unlimited)
   brandingEnabled: boolean('branding_enabled').default(true), // false for pro/agency
   status: varchar('status', { length: 20 }).default('active'), // 'active' | 'expired' | 'cancelled'
   stripeSubscriptionId: varchar('stripe_subscription_id', { length: 255 }),
@@ -70,6 +71,54 @@ export const widgetConfigs = pgTable('widget_configs', {
   createdAt: timestamp('created_at').defaultNow().notNull(),
   updatedAt: timestamp('updated_at').defaultNow().notNull(),
 });
+
+/**
+ * Widgets Table (Phase 3 - New Design)
+ * Stores widget instances with their configurations
+ *
+ * Purpose: Replaces one-to-one widget_configs with one-to-many widgets per license
+ *
+ * Relationships:
+ * - Many-to-one with licenses (multiple widgets per license)
+ * - Tier-based widget count limits enforced at application layer
+ *
+ * JSONB Config Structure:
+ * - branding: Company name, logo, welcome text
+ * - theme: Colors, fonts, position, size
+ * - behavior: Auto-open, triggers, welcome message
+ * - connection: N8n webhook URL, route
+ * - features: File attachments, allowed extensions
+ */
+export const widgets = pgTable('widgets', {
+  // Primary Key
+  id: uuid('id').primaryKey().defaultRandom(),
+
+  // Foreign Keys
+  licenseId: uuid('license_id')
+    .references(() => licenses.id, { onDelete: 'cascade' })
+    .notNull(),
+
+  // Core Fields (indexed for performance)
+  name: varchar('name', { length: 100 }).notNull(), // User-friendly name ("Homepage Chat", "Support Widget")
+  status: varchar('status', { length: 20 }).default('active').notNull(), // 'active' | 'paused' | 'deleted'
+
+  // Configuration (JSONB for flexibility)
+  config: jsonb('config').notNull(), // Full widget configuration object
+
+  // Metadata
+  version: integer('version').default(1).notNull(), // Increment on config updates
+  deployedAt: timestamp('deployed_at'), // Last deployment timestamp (null if never deployed)
+
+  // Timestamps
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+  updatedAt: timestamp('updated_at').defaultNow().notNull(),
+}, (table) => ({
+  // Indexes for performance
+  licenseIdIdx: index('widgets_license_id_idx').on(table.licenseId),
+  statusIdx: index('widgets_status_idx').on(table.status),
+  // GIN index for JSONB queries
+  configIdx: index('widgets_config_idx').using('gin', table.config),
+}));
 
 /**
  * Analytics Events Table (Optional for MVP)
@@ -108,12 +157,20 @@ export const licensesRelations = relations(licenses, ({ one, many }) => ({
     references: [users.id],
   }),
   widgetConfig: one(widgetConfigs),
+  widgets: many(widgets), // NEW: One license → many widgets
   analyticsEvents: many(analyticsEvents),
 }));
 
 export const widgetConfigsRelations = relations(widgetConfigs, ({ one }) => ({
   license: one(licenses, {
     fields: [widgetConfigs.licenseId],
+    references: [licenses.id],
+  }),
+}));
+
+export const widgetsRelations = relations(widgets, ({ one }) => ({
+  license: one(licenses, {
+    fields: [widgets.licenseId],
     references: [licenses.id],
   }),
 }));
@@ -141,6 +198,9 @@ export type NewLicense = typeof licenses.$inferInsert;
 
 export type WidgetConfig = typeof widgetConfigs.$inferSelect;
 export type NewWidgetConfig = typeof widgetConfigs.$inferInsert;
+
+export type Widget = typeof widgets.$inferSelect;
+export type NewWidget = typeof widgets.$inferInsert;
 
 export type AnalyticsEvent = typeof analyticsEvents.$inferSelect;
 export type NewAnalyticsEvent = typeof analyticsEvents.$inferInsert;
