@@ -20,7 +20,7 @@
  * Total Tests: 18
  */
 
-import { describe, it, expect, beforeAll, afterAll } from 'vitest';
+import { describe, it, expect, beforeAll, afterAll, afterEach } from 'vitest';
 import { PATCH } from '@/app/api/widgets/[id]/route';
 import { signJWT } from '@/lib/auth/jwt';
 import { db } from '@/lib/db/client';
@@ -99,6 +99,18 @@ describe.sequential('PATCH /api/widgets/[id] - Integration Tests', () => {
     // Generate auth tokens
     authToken = await signJWT({ sub: testUser.id, email: testUser.email });
     otherUserToken = await signJWT({ sub: otherUser.id, email: otherUser.email });
+  });
+
+  afterEach(async () => {
+    // Reset testWidget to original state after each test
+    await db.update(widgets)
+      .set({
+        name: 'Original Widget Name',
+        status: 'active',
+        config: createDefaultConfig('pro'),
+        version: 1,
+      })
+      .where(eq(widgets.id, testWidget.id));
   });
 
   afterAll(async () => {

@@ -18,7 +18,7 @@
  * Total Tests: 15
  */
 
-import { describe, it, expect, beforeAll, afterAll } from 'vitest';
+import { describe, it, expect, beforeAll, afterAll, afterEach } from 'vitest';
 import { GET } from '@/app/api/widgets/route';
 import { signJWT } from '@/lib/auth/jwt';
 import { db } from '@/lib/db/client';

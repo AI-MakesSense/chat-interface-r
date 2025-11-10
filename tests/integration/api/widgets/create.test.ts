@@ -17,7 +17,7 @@
  * Total Tests: 20
  */
 
-import { describe, it, expect, beforeAll, afterAll } from 'vitest';
+import { describe, it, expect, beforeAll, afterAll, afterEach } from 'vitest';
 import { POST } from '@/app/api/widgets/route';
 import { signJWT } from '@/lib/auth/jwt';
 import { db } from '@/lib/db/client';
@@ -90,6 +90,13 @@ describe.sequential('POST /api/widgets - Integration Tests', () => {
     // Generate auth tokens
     authToken = await signJWT({ sub: testUser.id, email: testUser.email });
     otherUserToken = await signJWT({ sub: otherUser.id, email: otherUser.email });
+  });
+
+  afterEach(async () => {
+    // Clean up widgets after each test to prevent isolation issues
+    await db.delete(widgets).where(eq(widgets.licenseId, basicLicense.id));
+    await db.delete(widgets).where(eq(widgets.licenseId, proLicense.id));
+    await db.delete(widgets).where(eq(widgets.licenseId, agencyLicense.id));
   });
 
   afterAll(async () => {
