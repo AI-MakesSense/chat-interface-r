@@ -11,11 +11,12 @@
  * - Keep queries focused (single responsibility)
  */
 
-import { eq, and, desc } from 'drizzle-orm';
+import { eq, and, desc, sql } from 'drizzle-orm';
 import { db } from './client';
 import {
   users,
   licenses,
+  widgets,
   widgetConfigs,
   analyticsEvents,
   passwordResetTokens,
@@ -23,6 +24,8 @@ import {
   type NewUser,
   type License,
   type NewLicense,
+  type Widget,
+  type NewWidget,
   type WidgetConfig,
   type NewWidgetConfig,
 } from './schema';
@@ -353,4 +356,134 @@ export async function logAnalyticsEvent(
     domain,
     metadata,
   });
+}
+
+// ============================================================
+// WIDGET QUERIES
+// ============================================================
+
+/**
+ * Type for widget with joined license data
+ */
+export type WidgetWithLicense = Widget & {
+  license: License;
+};
+
+/**
+ * Get widget by ID
+ * Returns widget including soft-deleted ones (status='deleted')
+ * Throws error for invalid UUID format
+ */
+export async function getWidgetById(id: string): Promise<Widget | null> {
+  const [widget] = await db
+    .select()
+    .from(widgets)
+    .where(eq(widgets.id, id))
+    .limit(1);
+
+  return widget || null;
+}
+
+/**
+ * Get widget with license data (joined query)
+ * Returns widget with nested license object
+ * Throws error for invalid UUID format
+ */
+export async function getWidgetWithLicense(id: string): Promise<WidgetWithLicense | null> {
+  const result = await db
+    .select()
+    .from(widgets)
+    .innerJoin(licenses, eq(widgets.licenseId, licenses.id))
+    .where(eq(widgets.id, id))
+    .limit(1);
+
+  if (!result[0]) return null;
+
+  return {
+    ...result[0].widgets,
+    license: result[0].licenses,
+  };
+}
+
+/**
+ * Create a new widget
+ * Sets default status='active' and version=1 if not provided
+ * Sets timestamps using client-side time for consistency
+ */
+export async function createWidget(data: {
+  licenseId: string;
+  name: string;
+  config: any;
+  status?: string;
+  version?: number;
+  deployedAt?: Date | null;
+}): Promise<Widget> {
+  const now = new Date();
+  const [widget] = await db
+    .insert(widgets)
+    .values({
+      licenseId: data.licenseId,
+      name: data.name,
+      config: data.config,
+      status: data.status || 'active',
+      version: data.version || 1,
+      deployedAt: data.deployedAt || null,
+      createdAt: now,
+      updatedAt: now,
+    })
+    .returning();
+
+  return widget;
+}
+
+/**
+ * Update widget fields (partial update)
+ * Returns null if widget doesn't exist
+ * Never updates createdAt, always updates updatedAt
+ */
+export async function updateWidget(
+  id: string,
+  data: {
+    name?: string;
+    config?: any;
+    status?: string;
+    version?: number;
+    deployedAt?: Date | null;
+  }
+): Promise<Widget | null> {
+  const updateData: any = {};
+  if (data.name !== undefined) updateData.name = data.name;
+  if (data.config !== undefined) updateData.config = data.config;
+  if (data.status !== undefined) updateData.status = data.status;
+  if (data.version !== undefined) updateData.version = data.version;
+  if (data.deployedAt !== undefined) updateData.deployedAt = data.deployedAt;
+
+  // Always update timestamp using database server time
+  updateData.updatedAt = sql`NOW()`;
+
+  const [widget] = await db
+    .update(widgets)
+    .set(updateData)
+    .where(eq(widgets.id, id))
+    .returning();
+
+  return widget || null;
+}
+
+/**
+ * Soft delete a widget (sets status='deleted')
+ * Preserves all other data (name, config, etc.)
+ * Returns null if widget doesn't exist
+ */
+export async function deleteWidget(id: string): Promise<Widget | null> {
+  const [widget] = await db
+    .update(widgets)
+    .set({
+      status: 'deleted',
+      updatedAt: sql`NOW()`,
+    })
+    .where(eq(widgets.id, id))
+    .returning();
+
+  return widget || null;
 }
