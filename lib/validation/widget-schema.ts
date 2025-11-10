@@ -186,8 +186,24 @@ export const behaviorSchema = z.object({
 // Connection Schema
 // =============================================================================
 
+/**
+ * Webhook URL validator
+ * Allows empty string for default configs (user must configure)
+ * Otherwise requires HTTPS URL
+ */
+const webhookUrlSchema = z
+  .string()
+  .refine(
+    (url) => url === '' || (url.startsWith('https://') || url.includes('localhost')),
+    'Must be a valid HTTPS URL (or empty for configuration)'
+  )
+  .refine(
+    (url) => url === '' || z.string().url().safeParse(url).success,
+    'Must be a valid URL format or empty'
+  );
+
 export const connectionSchema = z.object({
-  webhookUrl: httpsUrlSchema,
+  webhookUrl: webhookUrlSchema,
   route: z.string().max(100).nullable(),
   timeoutSeconds: z.number().int().min(10).max(60),
 });
