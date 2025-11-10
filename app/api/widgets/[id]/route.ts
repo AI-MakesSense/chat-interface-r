@@ -146,7 +146,10 @@ export async function PATCH(
 
   } catch (error) {
     if (error instanceof z.ZodError) {
-      return NextResponse.json({ error: 'Validation failed', details: error.errors }, { status: 400 });
+      // Extract the first error message for user-friendly response
+      const firstError = error.errors?.[0];
+      const errorMessage = firstError?.message || 'Validation failed';
+      return NextResponse.json({ error: errorMessage, details: error.errors }, { status: 400 });
     }
 
     // Handle auth errors

@@ -485,7 +485,16 @@ describe.sequential('POST /api/widgets - Integration Tests', () => {
 
   it('should reject when Basic tier limit exceeded (already has 1) - 403', async () => {
     // RED: Route doesn't exist yet
-    // Basic license already has 1 widget from earlier test
+    // Create 1 widget to reach Basic tier limit (widgetLimit: 1)
+    await db.insert(widgets).values({
+      licenseId: basicLicense.id,
+      name: 'First Widget',
+      config: createDefaultConfig('basic'),
+      status: 'active',
+      version: 1,
+    });
+
+    // Now attempt to create a second widget (should fail with 403)
     const request = new Request('http://localhost:3000/api/widgets', {
       method: 'POST',
       headers: {
@@ -507,7 +516,32 @@ describe.sequential('POST /api/widgets - Integration Tests', () => {
 
   it('should reject when Pro tier limit exceeded (already has 3) - 403', async () => {
     // RED: Route doesn't exist yet
-    // Pro license already has 3 widgets from earlier tests
+    // Create 3 widgets to reach Pro tier limit (widgetLimit: 3)
+    await db.insert(widgets).values([
+      {
+        licenseId: proLicense.id,
+        name: 'Pro Widget 1',
+        config: createDefaultConfig('pro'),
+        status: 'active',
+        version: 1,
+      },
+      {
+        licenseId: proLicense.id,
+        name: 'Pro Widget 2',
+        config: createDefaultConfig('pro'),
+        status: 'active',
+        version: 1,
+      },
+      {
+        licenseId: proLicense.id,
+        name: 'Pro Widget 3',
+        config: createDefaultConfig('pro'),
+        status: 'active',
+        version: 1,
+      },
+    ]);
+
+    // Now attempt to create a 4th widget (should fail with 403)
     const request = new Request('http://localhost:3000/api/widgets', {
       method: 'POST',
       headers: {

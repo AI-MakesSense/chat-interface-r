@@ -198,7 +198,7 @@ describe.sequential('PATCH /api/widgets/[id] - Integration Tests', () => {
 
     expect(response.status).toBe(200);
     expect(data.widget.status).toBe('paused');
-    expect(data.widget.version).toBe(2); // Version from previous config update
+    expect(data.widget.version).toBe(1); // Version NOT incremented for status-only update
   });
 
   it('should update widget status to active', async () => {
