@@ -2,18 +2,19 @@
  * Individual Widget API Routes
  *
  * Purpose: Handles operations on specific widgets by ID
- * Responsibility: Get, update individual widgets with ownership verification
+ * Responsibility: Get, update, and delete individual widgets with ownership verification
  *
  * Constraints:
  * - Requires authentication for all operations
  * - Verifies widget ownership through license
  * - Validates configuration updates against tier restrictions
  * - Increments version only on config changes
+ * - Uses soft delete (sets status='deleted', preserves data)
  */
 
 import { NextRequest, NextResponse } from 'next/server';
 import { requireAuth } from '@/lib/auth/middleware';
-import { getWidgetWithLicense, updateWidget } from '@/lib/db/queries';
+import { getWidgetWithLicense, updateWidget, deleteWidget } from '@/lib/db/queries';
 import { createWidgetConfigSchema } from '@/lib/validation/widget-schema';
 import { z } from 'zod';
 
@@ -156,6 +157,57 @@ export async function PATCH(
 
     // Log unexpected errors
     console.error('Widget update error:', error);
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
+  }
+}
+
+// =============================================================================
+// DELETE /api/widgets/[id] - Delete Widget (Soft Delete)
+// =============================================================================
+
+export async function DELETE(
+  request: NextRequest,
+  { params }: { params: { id: string } }
+) {
+  try {
+    // 1. Authenticate user
+    const user = await requireAuth(request);
+
+    // 2. Validate widget ID format
+    const idSchema = z.string().uuid();
+    const widgetId = idSchema.parse(params.id);
+
+    // 3. Get widget with license information
+    const widget = await getWidgetWithLicense(widgetId);
+
+    if (!widget) {
+      return NextResponse.json({ error: 'Widget not found' }, { status: 404 });
+    }
+
+    // 4. Verify ownership through license
+    if (widget.license.userId !== user.sub) {
+      return NextResponse.json({ error: 'You do not own this widget' }, { status: 403 });
+    }
+
+    // 5. Soft delete widget (sets status='deleted')
+    await deleteWidget(widgetId);
+
+    // 6. Return 204 No Content on success
+    return new NextResponse(null, { status: 204 });
+
+  } catch (error) {
+    if (error instanceof z.ZodError) {
+      return NextResponse.json({ error: 'Invalid widget ID format' }, { status: 400 });
+    }
+
+    // Handle auth errors
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+    if (errorMessage === 'Authentication required' || errorMessage === 'Invalid or expired token') {
+      return NextResponse.json({ error: errorMessage }, { status: 401 });
+    }
+
+    // Log unexpected errors
+    console.error('Widget deletion error:', error);
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 }

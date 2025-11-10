@@ -381,11 +381,39 @@ n8n-widget-designer/
 
 **Test Status:** 59/63 passing (4 failures due to test isolation, not implementation bugs)
 
+### Day 5: DELETE Endpoint Implementation - COMPLETED ✅
+- ✅ DELETE /api/widgets/[id] - Soft delete widget
+- ✅ 12 integration tests written (12 passing - 100% GREEN)
+- ✅ Comprehensive test coverage (success, auth, authz, validation, edge cases)
+
+**Files Modified:**
+- `app/api/widgets/[id]/route.ts` - Added DELETE handler (~50 lines)
+
+**Files Created:**
+- `tests/integration/api/widgets/delete.test.ts` - 12 comprehensive tests
+
+**Key Features:**
+- Soft delete pattern (sets status='deleted', preserves data)
+- Idempotent operation (returns 204 even for already-deleted widgets)
+- Two-tier authorization (JWT auth + license ownership)
+- Integration with GET /api/widgets (deleted widgets excluded by default)
+- Integration with getActiveWidgetCount (deleted widgets not counted)
+- Comprehensive error handling (400/401/403/404/500)
+
+**Test Coverage:**
+- 3 success scenarios (delete, timestamp update, idempotency)
+- 1 authentication failure (401)
+- 2 authorization failures (403)
+- 2 validation failures (400, 404)
+- 4 edge cases (soft delete verification, list/count exclusion, immutability)
+
+**Test Results:** 12/12 passing (100% GREEN) ✅
+
 ---
 
 ## 📊 Current Metrics
 
-- **Total Tests:** 672/676 passing (99.4% pass rate) ✅
+- **Total Tests:** 684/688 passing (99.4% pass rate) ✅
   - Phase 1 (Authentication): 169 tests
   - Phase 2 (License Management): 205 tests
   - Phase 3 Module 1 (Widget Schema): 179 tests
@@ -396,13 +424,14 @@ n8n-widget-designer/
   - Phase 3 Module 2 Day 2 (License-Related Queries): 28 tests
   - Phase 3 Module 2 Day 3 (Deployment & Pagination): 26 tests
   - Phase 3 Module 2 Day 4 (Widget API Routes): 59/63 tests passing
-- **Test Files:** 25 files
-- **Lines of Code:** ~9,000+ (full-stack)
+  - Phase 3 Module 2 Day 5 (DELETE Endpoint): 12/12 tests passing ✅
+- **Test Files:** 26 files
+- **Lines of Code:** ~9,100+ (full-stack)
 - **Query Functions:** 12 widget query functions
-- **API Endpoints:** 14 (4 auth + 6 license + 4 widget)
+- **API Endpoints:** 15 (4 auth + 6 license + 5 widget)
 - **Database Tables:** 6 (users, licenses, widgets, widget_configs, analytics_events, password_reset_tokens)
-- **Time Spent:** ~30 hours
-- **Completion:** Phase 1 (100%), Phase 2 (100%), Phase 3 Module 1 (100%), Phase 3 Module 2 (Days 1-4/14 complete)
+- **Time Spent:** ~32 hours
+- **Completion:** Phase 1 (100%), Phase 2 (100%), Phase 3 Module 1 (100%), Phase 3 Module 2 (Days 1-5/14 complete)
 
 ## 🎯 Recent Commits
 
@@ -417,6 +446,6 @@ n8n-widget-designer/
 
 ---
 
-**Status:** Phase 3 Module 2 Days 1-4 complete (672/676 tests passing - 99.4%)
-**Next Action:** Day 5+ - Continue widget API implementation or fix test isolation issues
-**Updated:** November 10, 2025 - Day 4 Complete
+**Status:** Phase 3 Module 2 Days 1-5 complete (684/688 tests passing - 99.4%)
+**Next Action:** Day 6+ - Continue widget API implementation (deploy endpoint, analytics, etc.)
+**Updated:** November 10, 2025 - Day 5 Complete
