@@ -409,11 +409,46 @@ n8n-widget-designer/
 
 **Test Results:** 12/12 passing (100% GREEN) ✅
 
+### Day 6: POST /api/widgets/[id]/deploy - Deploy Widget - COMPLETED ✅
+- ✅ POST /api/widgets/[id]/deploy - Deploy widget with validation
+- ✅ 14 integration tests written (14 passing - 100% GREEN)
+- ✅ Comprehensive test coverage (success, auth, authz, validation, edge cases)
+- ✅ Fixed `deployWidget()` idempotency using SQL COALESCE
+
+**Files Modified:**
+- `lib/db/queries.ts` - Fixed `deployWidget()` for idempotency (line 614: `COALESCE(deployed_at, NOW())`)
+-  `tests/integration/api/widgets/deploy.test.ts` - Fixed timing assertions (added 1s tolerance for database server time)
+
+**Files Created:**
+- `app/api/widgets/[id]/deploy/route.ts` - POST deploy endpoint (~155 lines)
+- `tests/integration/api/widgets/deploy.test.ts` - 14 comprehensive tests
+
+**Key Features:**
+- Strict config validation (no defaults allowed for deployment)
+- HTTPS webhook URL enforcement (except localhost for development)
+- Idempotent deployment (preserves original `deployedAt` timestamp on re-deployment)
+- Cannot deploy deleted widgets
+- Activates paused widgets on deployment
+- Two-tier authorization (JWT auth + license ownership)
+- Detailed validation error responses
+
+**Test Coverage:**
+- 3 success scenarios (first deployment, re-deployment, paused widget)
+- 1 authentication failure (401)
+- 2 authorization failures (403)
+- 4 validation failures (400, 404, deleted widget, invalid webhookUrl)
+- 4 edge cases (strict validation, localhost allowed, deployment state verification)
+
+**Test Results:** 14/14 passing (100% GREEN) ✅
+
+**Technical Highlight:**
+The `deployWidget()` function uses SQL `COALESCE(deployed_at, NOW())` to ensure idempotent deployments - the timestamp is only set on first deployment and preserved on subsequent deployments. This prevents timestamp changes on re-deployment while still allowing the endpoint to be called multiple times safely.
+
 ---
 
 ## 📊 Current Metrics
 
-- **Total Tests:** 684/688 passing (99.4% pass rate) ✅
+- **Total Tests:** 698/702 passing (99.4% pass rate) ✅
   - Phase 1 (Authentication): 169 tests
   - Phase 2 (License Management): 205 tests
   - Phase 3 Module 1 (Widget Schema): 179 tests
@@ -425,13 +460,14 @@ n8n-widget-designer/
   - Phase 3 Module 2 Day 3 (Deployment & Pagination): 26 tests
   - Phase 3 Module 2 Day 4 (Widget API Routes): 59/63 tests passing
   - Phase 3 Module 2 Day 5 (DELETE Endpoint): 12/12 tests passing ✅
-- **Test Files:** 26 files
-- **Lines of Code:** ~9,100+ (full-stack)
+  - Phase 3 Module 2 Day 6 (Deploy Endpoint): 14/14 tests passing ✅
+- **Test Files:** 27 files
+- **Lines of Code:** ~9,300+ (full-stack)
 - **Query Functions:** 12 widget query functions
-- **API Endpoints:** 15 (4 auth + 6 license + 5 widget)
+- **API Endpoints:** 16 (4 auth + 6 license + 6 widget)
 - **Database Tables:** 6 (users, licenses, widgets, widget_configs, analytics_events, password_reset_tokens)
-- **Time Spent:** ~32 hours
-- **Completion:** Phase 1 (100%), Phase 2 (100%), Phase 3 Module 1 (100%), Phase 3 Module 2 (Days 1-5/14 complete)
+- **Time Spent:** ~34 hours
+- **Completion:** Phase 1 (100%), Phase 2 (100%), Phase 3 Module 1 (100%), Phase 3 Module 2 (Days 1-6/14 complete)
 
 ## 🎯 Recent Commits
 

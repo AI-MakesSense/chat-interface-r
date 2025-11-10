@@ -602,7 +602,8 @@ export async function getLicenseWithWidgetCount(
 
 /**
  * Deploy a widget by setting its deployment timestamp and activating it
- * Sets deployedAt to current time and status to 'active'
+ * Sets deployedAt to current time ONLY if currently null (idempotent)
+ * Always sets status to 'active'
  * Returns null if widget doesn't exist
  * Uses database server time to match schema defaults and updateWidget pattern
  */
@@ -610,7 +611,7 @@ export async function deployWidget(id: string): Promise<Widget | null> {
   const [widget] = await db
     .update(widgets)
     .set({
-      deployedAt: sql`NOW()`,
+      deployedAt: sql`COALESCE(deployed_at, NOW())`, // Only set if currently null
       status: 'active',
       updatedAt: sql`NOW()`,
     })
