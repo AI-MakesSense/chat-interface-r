@@ -25,6 +25,8 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Alert, AlertDescription } from '@/components/ui/alert';
+import { PreviewFrame } from '@/components/configurator/preview-frame';
+import { DeviceSwitcher } from '@/components/configurator/device-switcher';
 
 /**
  * Configurator page component
@@ -399,27 +401,25 @@ export default function ConfiguratorPage() {
             </Card>
           </div>
 
-          {/* Preview Panel (Placeholder) */}
+          {/* Preview Panel */}
           <div className="space-y-6">
             <Card>
               <CardHeader>
-                <CardTitle>Live Preview</CardTitle>
-                <CardDescription>
-                  Preview your widget in real-time
-                </CardDescription>
+                <div className="flex items-center justify-between">
+                  <div>
+                    <CardTitle>Live Preview</CardTitle>
+                    <CardDescription>
+                      Preview your widget in real-time
+                    </CardDescription>
+                  </div>
+                  <DeviceSwitcher />
+                </div>
               </CardHeader>
               <CardContent>
-                <div className="bg-gradient-to-br from-slate-100 to-slate-200 dark:from-slate-800 dark:to-slate-900 rounded-lg p-8 min-h-[600px] flex items-center justify-center border-2 border-dashed">
-                  <div className="text-center">
-                    <p className="text-lg font-semibold mb-2">Preview Coming Soon</p>
-                    <p className="text-sm text-muted-foreground">
-                      Module 4: Real-Time Preview Engine
-                    </p>
-                    <p className="text-xs text-muted-foreground mt-4">
-                      Current configuration will be rendered here
-                    </p>
-                  </div>
-                </div>
+                <PreviewFrame
+                  config={currentConfig}
+                  className="min-h-[700px] relative"
+                />
               </CardContent>
             </Card>
           </div>
