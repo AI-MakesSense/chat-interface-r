@@ -482,7 +482,77 @@ The `deployWidget()` function uses SQL `COALESCE(deployed_at, NOW())` to ensure 
 
 ---
 
-**Status:** Phase 3 Module 2 Days 1-6 complete (697/702 tests passing - 99.3%)
-**Next Action:** Delete obsolete test file `tests/unit/db/deploy-paginate-queries.test.ts` to achieve 100%
-**Updated:** November 10, 2025 - Day 6 Complete, Widget Integration Tests Fixed
-**Note:** Fixed 4 test issues in create.test.ts and update.test.ts. Remaining 5 failures are from obsolete Day 3 RED tests that should be deleted.
+## 🔄 Phase 3 Module 3: Widget Serving & Embedding - IN PROGRESS
+
+### Widget Bundle Build System ✅
+- ✅ Vite build configuration (IIFE format)
+- ✅ TypeScript compilation
+- ✅ Markdown rendering (markdown-it)
+- ✅ Code syntax highlighting (Prism.js)
+- ✅ Widget source code (~400 lines)
+- ✅ Build output: `public/widget/chat-widget.iife.js` (110KB)
+
+**Files:**
+- `widget/vite.config.ts` - Build configuration
+- `widget/src/index.ts` - IIFE entry point
+- `widget/src/widget.ts` - Core widget implementation
+- `widget/src/markdown.ts` - Markdown rendering
+- `widget/src/types.ts` - TypeScript types
+- `public/widget/chat-widget.iife.js` - Compiled bundle
+
+### Widget Serving API ✅
+- ✅ GET /api/widget/[license]/chat-widget.js - Widget serving route
+- ✅ License validation (status, expiration, domain checking)
+- ✅ Domain normalization (remove www, protocol, port)
+- ✅ License flag injection (brandingEnabled)
+- ✅ Next.js 16 async params support
+- ✅ Referer header validation
+- ✅ JavaScript content-type with caching
+
+**Files Created:**
+- `app/api/widget/[license]/chat-widget.js/route.ts` - Widget serving endpoint (~152 lines)
+
+### Test Page & Database Setup ✅
+- ✅ Database seeded with test users and licenses
+- ✅ Test page at `public/widget-test.html`
+- ✅ Pro license key configured: `a617d8b04cf31b035047605d71f6b057`
+- ✅ Dev server running at http://localhost:3000
+- ✅ Widget bundle accessible via API
+
+**Current License Keys:**
+- Basic: `68f382f7e1ccec05a81c795440f3f6d1` (branding enabled)
+- Pro: `a617d8b04cf31b035047605d71f6b057` (white-label)
+- Agency: `e6800d027f6980269fc5e515b7b2b981` (unlimited domains)
+
+### Widget Features Implemented
+**UI Components:**
+1. ✅ Chat bubble button (60px, circular, configurable color)
+2. ✅ Chat window (380x600px, rounded corners)
+3. ✅ Header with company name, welcome text, logo
+4. ✅ Message list with scrolling
+5. ✅ Input field with send button
+6. ✅ Keyboard support (Enter to send)
+7. ✅ Branding footer (conditional on tier)
+8. ✅ Responsive positioning (bottom-right/bottom-left)
+9. ✅ Theme support (light/dark/auto)
+
+**Functionality:**
+- ✅ SSE streaming for real-time responses (EventSource)
+- ✅ Markdown rendering for assistant messages
+- ✅ Custom styling (colors, corner radius, fonts)
+- ✅ Configuration via `window.ChatWidgetConfig`
+- ⚠️ **KNOWN ISSUE:** Widget uses SSE (GET) but N8n requires POST webhooks
+
+### Next Steps
+- 🔲 **PENDING:** Install Playwright MCP for browser testing (requires restart)
+- 🔲 **PENDING:** Test widget loading in browser with Playwright
+- 🔲 **PENDING:** Fix N8n integration (replace EventSource with fetch POST)
+- 🔲 **PENDING:** Add widget serving integration tests
+- 🔲 **PENDING:** Document widget embedding instructions
+
+---
+
+**Status:** Phase 3 Module 3 - Widget serving route created, test page ready, awaiting browser verification
+**Next Action:** Restart Claude Code to enable Playwright MCP, then test widget in browser
+**Updated:** November 10, 2025 - Widget Serving Route Complete
+**Note:** Playwright MCP installed but requires Claude Code restart to activate. Widget currently uses SSE which is incompatible with N8n POST webhooks - will need refactoring.

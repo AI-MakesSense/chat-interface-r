@@ -21,10 +21,10 @@ import { getLicenseByKey } from '@/lib/db/queries';
 
 export async function GET(
   request: NextRequest,
-  { params }: { params: { license: string } }
+  { params }: { params: Promise<{ license: string }> }
 ) {
   try {
-    const licenseKey = params.license;
+    const { license: licenseKey } = await params;
 
     // 1. Get referer header (required for domain validation)
     const referer = request.headers.get('referer') || request.headers.get('Referer');
@@ -149,4 +149,3 @@ function generateWidgetCode(brandingEnabled: boolean): string {
 
   return licenseInjection + '\n' + widgetCode;
 }
-

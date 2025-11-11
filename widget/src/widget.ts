@@ -2,13 +2,13 @@
  * Chat Widget Core
  *
  * Purpose: Main widget UI and interaction logic
- * Responsibility: Create chat bubble, message list, input, handle sending/streaming
+ * Responsibility: Create chat bubble, message list, input, handle sending/receiving
  *
  * Constraints:
  * - Vanilla JavaScript (no framework dependencies)
  * - Minimal DOM manipulation for performance
- * - SSE streaming for N8n responses
- * - Basic markdown rendering
+ * - POST requests to N8n webhook for responses
+ * - Markdown rendering for assistant messages
  */
 
 import { WidgetConfig, Message } from './types';
@@ -313,7 +313,30 @@ export function createChatWidget(config: WidgetConfig): void {
     }
   }
 
-  // Stream response from N8n webhook using SSE
+  // Capture page context (URL, query params, title, domain)
+  function capturePageContext() {
+    try {
+      const url = new URL(window.location.href);
+      return {
+        pageUrl: window.location.href,
+        pagePath: window.location.pathname,
+        pageTitle: document.title,
+        queryParams: Object.fromEntries(url.searchParams),
+        domain: window.location.hostname,
+      };
+    } catch (error) {
+      console.error('[N8n Chat Widget] Error capturing page context:', error);
+      return {
+        pageUrl: window.location.href,
+        pagePath: window.location.pathname,
+        pageTitle: document.title,
+        queryParams: {},
+        domain: window.location.hostname,
+      };
+    }
+  }
+
+  // Send message to N8n webhook using POST
   async function streamResponse(userMessage: string, assistantMessageId: string) {
     const webhookUrl = mergedConfig.connection.webhookUrl;
 
@@ -322,48 +345,50 @@ export function createChatWidget(config: WidgetConfig): void {
       ? `${webhookUrl}${webhookUrl.includes('?') ? '&' : '?'}${mergedConfig.connection.routeParam}`
       : webhookUrl;
 
-    let accumulatedContent = '';
+    try {
+      // Build request payload
+      const payload: any = {
+        message: userMessage,
+        sessionId: `session-${Date.now()}`, // Simple session ID for N8n workflows
+      };
 
-    // Use EventSource for SSE streaming
-    const eventSource = new EventSource(`${url}&message=${encodeURIComponent(userMessage)}`);
-
-    eventSource.onmessage = (event) => {
-      try {
-        const data = JSON.parse(event.data);
-
-        // N8n sends chunks in { chunk: "..." } format
-        if (data.chunk) {
-          accumulatedContent += data.chunk;
-          updateMessage(assistantMessageId, accumulatedContent);
-        }
-
-        // Check for completion signal
-        if (data.done) {
-          eventSource.close();
-        }
-      } catch (error) {
-        console.error('[N8n Chat Widget] Error parsing SSE data:', error);
+      // Add page context if enabled (default: true)
+      const shouldCaptureContext = mergedConfig.connection.captureContext !== false;
+      if (shouldCaptureContext) {
+        payload.context = capturePageContext();
       }
-    };
 
-    eventSource.onerror = (error) => {
-      console.error('[N8n Chat Widget] SSE error:', error);
-      eventSource.close();
-
-      // Show error message if no content received
-      if (!accumulatedContent) {
-        updateMessage(assistantMessageId, 'Connection error. Please try again.');
+      // Add custom context if provided
+      if (mergedConfig.connection.customContext) {
+        payload.customContext = mergedConfig.connection.customContext;
       }
-    };
 
-    // Timeout after 30 seconds
-    setTimeout(() => {
-      if (eventSource.readyState !== EventSource.CLOSED) {
-        eventSource.close();
-        if (!accumulatedContent) {
-          updateMessage(assistantMessageId, 'Request timed out. Please try again.');
-        }
+      // Send POST request to N8n webhook
+      const response = await fetch(url, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(payload),
+      });
+
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
       }
-    }, 30000);
+
+      // Parse JSON response
+      const data = await response.json();
+
+      // N8n webhook should return { response: "..." } or { message: "..." }
+      const assistantResponse = data.response || data.message || data.output || 'No response received';
+
+      // Update message with response
+      updateMessage(assistantMessageId, assistantResponse);
+
+    } catch (error) {
+      console.error('[N8n Chat Widget] Error sending message:', error);
+      updateMessage(assistantMessageId, 'Sorry, there was an error connecting to the server. Please try again.');
+      throw error;
+    }
   }
 }

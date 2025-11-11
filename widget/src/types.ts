@@ -29,6 +29,8 @@ export interface StyleConfig {
 export interface ConnectionConfig {
   webhookUrl: string;
   routeParam?: string;
+  captureContext?: boolean; // Capture page URL and query params
+  customContext?: Record<string, any>; // User-defined metadata
 }
 
 export interface LicenseConfig {
