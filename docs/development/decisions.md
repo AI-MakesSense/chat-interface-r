@@ -965,5 +965,65 @@ Create public endpoint `GET /api/widgets/[id]/embed?domain=...` with domain-base
 
 ---
 
+## ADR-023: 10 Essential Tests for Widget Serving Endpoint
+
+**Date**: November 10, 2025
+**Status**: ✅ Accepted
+**Phase**: Phase 3 - Widget Serving
+
+### Context
+
+Widget serving endpoint is critical infrastructure - must validate licenses, authorize domains, and serve JavaScript. Need to decide test coverage strategy.
+
+### Decision
+
+Implement **exactly 10 integration tests** covering:
+- 1 success path
+- 5 auth/authorization failures
+- 1 edge case (localhost)
+- 2 business logic validations (branding)
+- 1 technical validation (IIFE structure)
+
+### Rationale
+
+1. **User Request**: "only 10/10 test we don't want to many" - high-quality, essential tests only
+2. **Critical Path Coverage**: All failure modes tested (expired, cancelled, domain mismatch)
+3. **No Redundancy**: Each test validates distinct behavior
+4. **Business Logic**: Branding differentiation is core value proposition
+5. **Security**: Domain validation prevents license key theft
+6. **Integration Focus**: Tests hit actual API route with real database
+
+### Alternatives Considered
+
+- **15-20 Tests**: Rejected - redundant variations (domain normalization tested in unit tests)
+- **5 Tests Only**: Rejected - insufficient coverage of failure modes
+- **Unit Tests for Route**: Rejected - need integration tests for route + DB + license validation
+
+### Consequences
+
+- Total test count: 10 (exactly as requested)
+- Test file: 395 lines (already written)
+- Excluded: Domain normalization edge cases (covered by unit tests)
+- Excluded: Cache headers, CORS, rate limiting (Phase 5 concerns)
+- Excluded: Widget bundle missing (build-time issue)
+
+### Test Coverage Justification
+
+**Included** (critical for MVP):
+- ✅ License validation (exists, active, not expired)
+- ✅ Domain authorization (referer check, domain whitelist)
+- ✅ Tier-based branding (Basic vs Pro differentiation)
+- ✅ JavaScript serving (IIFE format, proper content-type)
+- ✅ Localhost exception (enables development)
+
+**Excluded** (tested elsewhere or low-value):
+- ❌ Domain normalization (www, case, port) - unit tested in `tests/unit/license/domain.test.ts`
+- ❌ SQL injection attempts - Drizzle ORM prevents by design
+- ❌ Rate limiting - Phase 5 feature
+- ❌ Cache-Control headers - non-critical, easily verified manually
+- ❌ Widget bundle size - build-time concern (bundle analyzer)
+
+---
+
 **Last Updated**: November 10, 2025
-**Total Decisions**: 22
+**Total Decisions**: 23

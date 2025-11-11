@@ -1,8 +1,8 @@
 # N8n Widget Designer Platform - Planning Documentation
 
-**Last Updated:** November 8, 2025
-**Phase:** Phase 2 - License Management System
-**Status:** Planning Complete, Ready for Implementation
+**Last Updated:** November 10, 2025
+**Phase:** Phase 3 - Widget Serving API Tests
+**Status:** Test Plan Complete, Ready for RED Phase Execution
 
 ---
 
@@ -1051,6 +1051,98 @@ export const embedWidgetSchema = z.object({
 // Response: { config: WidgetConfig, version: number, licenseKey: string }
 // Status: 200 OK, 400/403/404 on error
 ```
+
+---
+
+## November 10, 2025 - Widget Serving Integration Tests Plan
+
+### Problem Statement
+
+The widget serving endpoint (`GET /api/widget/[license]/chat-widget.js`) is the **critical delivery mechanism** for the entire platform. It must validate licenses, authorize domains, inject license flags, and serve the compiled widget JavaScript bundle.
+
+**Status**: Tests already written (10 tests), route implemented (152 lines), need RED phase verification.
+
+### Test Strategy
+
+**10 Essential Tests** (minimal, no redundancy):
+
+1. **Success Path** (1 test):
+   - Valid license + valid domain → 200 + JavaScript IIFE
+
+2. **Auth/Authorization Failures** (5 tests):
+   - Invalid license key → 404
+   - Expired license → 403
+   - Cancelled license → 403
+   - Domain mismatch → 403
+   - Missing referer header → 403
+
+3. **Edge Cases** (1 test):
+   - HTTP localhost allowed → 200 (development exception)
+
+4. **Business Logic** (2 tests):
+   - Basic tier → brandingEnabled=true injected
+   - Pro tier → brandingEnabled=false injected
+
+5. **Technical Validation** (1 test):
+   - IIFE structure + config injection point verified
+
+### Why Only 10 Tests?
+
+**Intentional Exclusions** (tested elsewhere or low-value):
+- ❌ Domain normalization variations (unit tested separately)
+- ❌ Widget bundle missing (build-time issue)
+- ❌ Cache headers (non-critical)
+- ❌ CORS (Phase 5)
+- ❌ Rate limiting (Phase 5)
+- ❌ SQL injection (Drizzle ORM prevents by design)
+
+### Implementation Approach
+
+**Test File**: `tests/integration/api/widget-serving.test.ts` (395 lines, complete)
+
+**Route File**: `app/api/widget/[license]/chat-widget.js/route.ts` (152 lines, implemented)
+
+**Test Data**:
+- 1 test user
+- 5 test licenses (active, expired, cancelled, basic, pro)
+- Widget bundle at `public/widget/chat-widget.iife.js`
+
+**TDD Workflow**:
+```
+RED (Current) → GREEN (Next) → REFACTOR (Later)
+```
+
+### Success Criteria
+
+- ✅ All 10 tests pass
+- ✅ Route file stays under 200 lines
+- ✅ Response time < 100ms (p95)
+- ✅ Security: Referer required, license validated, domain authorized
+- ✅ Business logic: Correct branding flags based on tier
+
+### Risks & Mitigations
+
+**Risk 1**: Widget bundle missing
+- **Mitigation**: Check `public/widget/chat-widget.iife.js` exists, document build step
+
+**Risk 2**: Next.js 16 async params API
+- **Mitigation**: Route uses `await params`, tests pass params correctly
+
+**Risk 3**: Database cleanup
+- **Mitigation**: Unique email per suite, cleanup in afterAll
+
+### Documentation
+
+**Plan Document**: `docs/planning/WIDGET_SERVING_INTEGRATION_TESTS_PLAN.md`
+
+**Detailed Plan Includes**:
+- Complete test strategy rationale
+- Analysis of existing implementation
+- Test-by-test breakdown with justifications
+- Interface contracts
+- Implementation briefs for TDD-QA-Lead and Implementer
+- Risk assessment
+- Success criteria
 
 ---
 
