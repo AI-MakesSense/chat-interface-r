@@ -103,6 +103,7 @@ export function SignupForm({
     formState: { errors, isSubmitting },
   } = useForm<SignupFormData>({
     resolver: zodResolver(signupSchema),
+    mode: 'onChange', // Validate on change for immediate feedback
   });
 
   /**

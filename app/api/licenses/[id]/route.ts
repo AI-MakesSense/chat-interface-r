@@ -10,6 +10,7 @@
 
 import { NextRequest } from 'next/server';
 import { requireAuth } from '@/lib/auth/middleware';
+import { getAuthenticatedUserId } from '@/lib/auth/helpers';
 import { updateLicenseSchema } from '@/lib/api/schemas';
 import { normalizeDomain } from '@/lib/license/domain';
 import { db } from '@/lib/db/client';
@@ -29,9 +30,8 @@ export async function PATCH(
   context: { params: Promise<{ id: string }> }
 ) {
   try {
-    // Require authentication
-    const user = await requireAuth(request) as any;
-    const userId = user.userId || user.sub; // Support both test mock and real JWT
+    // Require authentication and get user ID
+    const userId = await getAuthenticatedUserId(request);
 
     // Await params to get license ID (Next.js 15 requirement)
     const { id } = await context.params;

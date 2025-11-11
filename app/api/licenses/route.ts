@@ -11,6 +11,7 @@
 
 import { NextRequest } from 'next/server';
 import { requireAuth } from '@/lib/auth/middleware';
+import { getAuthenticatedUserId } from '@/lib/auth/helpers';
 import { createLicenseSchema } from '@/lib/api/schemas';
 import { generateLicenseKey } from '@/lib/license/generate';
 import { normalizeDomain } from '@/lib/license/domain';
@@ -28,9 +29,8 @@ import { handleAPIError, successResponse } from '@/lib/utils/api-error';
  */
 export async function POST(request: NextRequest) {
   try {
-    // Require authentication
-    const user = await requireAuth(request) as any;
-    const userId = user.userId || user.sub; // Support both test mock and real JWT
+    // Require authentication and get user ID
+    const userId = await getAuthenticatedUserId(request);
 
     // Parse and validate request body
     const body = await request.json();
@@ -99,9 +99,8 @@ export async function POST(request: NextRequest) {
  */
 export async function GET(request: NextRequest) {
   try {
-    // Require authentication
-    const user = await requireAuth(request) as any;
-    const userId = user.userId || user.sub; // Support both test mock and real JWT
+    // Require authentication and get user ID
+    const userId = await getAuthenticatedUserId(request);
 
     // Query licenses for authenticated user
     const userLicenses = await db

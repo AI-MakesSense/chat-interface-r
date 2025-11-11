@@ -80,6 +80,7 @@ export function LoginForm({
     formState: { errors, isSubmitting },
   } = useForm<LoginFormData>({
     resolver: zodResolver(loginSchema),
+    mode: 'onChange', // Validate on change for immediate feedback
   });
 
   /**

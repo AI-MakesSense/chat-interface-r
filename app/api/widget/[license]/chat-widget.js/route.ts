@@ -1,151 +1,229 @@
 /**
  * Widget Serving API Route
  *
- * Purpose: Serves widget JavaScript with license and domain validation
- * Responsibility: Validate license, check domain, inject config flags
+ * Purpose: Serve embeddable chat widget with license validation and domain checks
+ * Route: GET /api/widget/[license]/chat-widget.js
  *
- * Constraints:
- * - Validates license status (active, not expired)
- * - Validates request domain against license allowed domains
- * - Injects brandingEnabled flag based on license tier
- * - Returns JavaScript with application/javascript content-type
- * - HTTPS-only (except localhost for development)
+ * Features:
+ * - Referer header validation
+ * - Domain authorization checking
+ * - License status validation
+ * - IP and license-based rate limiting
+ * - Caching headers for performance
+ * - CORS support
+ *
+ * Security:
+ * - Domain validation prevents license key theft
+ * - Rate limiting prevents abuse
+ * - No sensitive data in error responses
  */
 
 import { NextRequest, NextResponse } from 'next/server';
 import { getLicenseByKey } from '@/lib/db/queries';
+import { normalizeDomain } from '@/lib/license/domain';
+import { extractDomainFromReferer, createResponseHeaders } from '@/lib/widget/headers';
+import { createErrorScript, logWidgetError, ErrorType } from '@/lib/widget/error';
+import { checkRateLimit } from '@/lib/widget/rate-limit';
+import { serveWidgetBundle } from '@/lib/widget/serve';
 
-// =============================================================================
-// GET /api/widget/:license/chat-widget.js - Serve Widget
-// =============================================================================
+/**
+ * Extract IP address from request
+ *
+ * @param request - Next.js request object
+ * @returns IP address string
+ */
+function getClientIP(request: NextRequest): string {
+  // Check x-forwarded-for header (common in proxies/CDNs)
+  const forwarded = request.headers.get('x-forwarded-for');
+  if (forwarded) {
+    // Take first IP if multiple (client IP)
+    return forwarded.split(',')[0].trim();
+  }
 
+  // Check x-real-ip header (common in nginx)
+  const realIp = request.headers.get('x-real-ip');
+  if (realIp) {
+    return realIp;
+  }
+
+  // Fallback to a default (shouldn't happen in production)
+  return 'unknown';
+}
+
+/**
+ * Create error response with JavaScript error script
+ *
+ * @param errorType - Type of error that occurred
+ * @param context - Additional error context for logging
+ * @returns NextResponse with error script
+ */
+function createErrorResponse(
+  errorType: ErrorType,
+  context?: Record<string, any>
+): NextResponse {
+  // Log the error
+  logWidgetError(errorType, context);
+
+  // Create error script
+  const errorScript = createErrorScript(errorType);
+
+  // Determine status code based on error type
+  let status = 403; // Default to Forbidden
+  if (errorType === 'INTERNAL_ERROR') {
+    status = 500;
+  }
+
+  // Create response with error script
+  const headers = createResponseHeaders();
+  return new NextResponse(errorScript, {
+    status,
+    headers
+  });
+}
+
+/**
+ * GET handler for widget serving endpoint
+ *
+ * @param request - Next.js request object
+ * @param params - Route parameters containing license key
+ * @returns NextResponse with widget bundle or error script
+ */
 export async function GET(
   request: NextRequest,
-  { params }: { params: Promise<{ license: string }> }
-) {
+  { params }: { params: { license: string } }
+): Promise<NextResponse> {
   try {
-    const { license: licenseKey } = await params;
+    // Extract license key from route params
+    const licenseKey = params.license;
 
-    // 1. Get referer header (required for domain validation)
-    const referer = request.headers.get('referer') || request.headers.get('Referer');
+    // Step 1: Extract and validate referer header
+    const referer = request.headers.get('referer');
     if (!referer) {
-      return NextResponse.json(
-        { error: 'Referer header required for domain validation' },
-        { status: 403 }
-      );
+      return createErrorResponse('REFERER_MISSING', { licenseKey });
     }
 
-    // 2. Get license from database
+    // Step 2: Extract domain from referer
+    const domain = extractDomainFromReferer(referer);
+    if (!domain) {
+      return createErrorResponse('REFERER_MISSING', { licenseKey, referer });
+    }
+
+    // Step 3: Get client IP for rate limiting
+    const clientIP = getClientIP(request);
+
+    // Step 4: Check IP rate limit (10 req/sec)
+    const ipRateLimit = checkRateLimit(clientIP, 'ip');
+    if (!ipRateLimit.allowed) {
+      const errorScript = createErrorScript('INTERNAL_ERROR');
+      return new NextResponse(errorScript, {
+        status: 429,
+        headers: {
+          ...createResponseHeaders(),
+          'Retry-After': String(ipRateLimit.retryAfter || 1)
+        }
+      });
+    }
+
+    // Step 5: Fetch license from database
     const license = await getLicenseByKey(licenseKey);
     if (!license) {
-      return NextResponse.json(
-        { error: 'License not found' },
-        { status: 404 }
-      );
+      return createErrorResponse('LICENSE_INVALID', {
+        licenseKey,
+        domain,
+        ip: clientIP
+      });
     }
 
-    // 3. Check license status
+    // Step 6: Check license rate limit (100 req/min)
+    const licenseRateLimit = checkRateLimit(licenseKey, 'license');
+    if (!licenseRateLimit.allowed) {
+      const errorScript = createErrorScript('INTERNAL_ERROR');
+      return new NextResponse(errorScript, {
+        status: 429,
+        headers: {
+          ...createResponseHeaders(),
+          'Retry-After': String(licenseRateLimit.retryAfter || 1)
+        }
+      });
+    }
+
+    // Step 7: Validate license status
+    if (license.status === 'expired') {
+      return createErrorResponse('LICENSE_EXPIRED', {
+        licenseKey,
+        domain,
+        ip: clientIP
+      });
+    }
+
+    if (license.status === 'cancelled') {
+      return createErrorResponse('LICENSE_CANCELLED', {
+        licenseKey,
+        domain,
+        ip: clientIP
+      });
+    }
+
     if (license.status !== 'active') {
-      return NextResponse.json(
-        { error: 'License is not active' },
-        { status: 403 }
-      );
+      return createErrorResponse('LICENSE_INVALID', {
+        licenseKey,
+        domain,
+        status: license.status,
+        ip: clientIP
+      });
     }
 
-    // 4. Check license expiration
-    if (license.expiresAt && new Date() > new Date(license.expiresAt)) {
-      return NextResponse.json(
-        { error: 'License has expired' },
-        { status: 403 }
-      );
+    // Step 8: Check expiration date
+    if (license.expiresAt) {
+      const now = new Date();
+      if (license.expiresAt <= now) {
+        return createErrorResponse('LICENSE_EXPIRED', {
+          licenseKey,
+          domain,
+          expiresAt: license.expiresAt.toISOString(),
+          ip: clientIP
+        });
+      }
     }
 
-    // 5. Extract and normalize domain from referer
-    const requestDomain = normalizeDomain(referer);
+    // Step 9: Validate domain authorization
+    // Normalize both domains for comparison
+    const normalizedRequestDomain = normalizeDomain(domain);
 
-    // 6. Validate domain against license allowed domains
-    const allowedDomains = license.domains.map(d => normalizeDomain(d));
-    if (!allowedDomains.includes(requestDomain)) {
-      return NextResponse.json(
-        { error: `Domain "${requestDomain}" not authorized for this license` },
-        { status: 403 }
-      );
+    // Agency tier allows any domain
+    if (license.tier !== 'agency') {
+      // Check if domain is in allowed list
+      const isAuthorized = license.domains.some(allowedDomain => {
+        const normalizedAllowed = normalizeDomain(allowedDomain);
+        return normalizedAllowed === normalizedRequestDomain;
+      });
+
+      if (!isAuthorized) {
+        return createErrorResponse('DOMAIN_UNAUTHORIZED', {
+          licenseKey,
+          domain: normalizedRequestDomain,
+          allowedDomains: license.domains,
+          ip: clientIP
+        });
+      }
     }
 
-    // 7. Generate widget JavaScript with license flags injected
-    const widgetCode = generateWidgetCode(license.brandingEnabled);
+    // Step 10: Serve widget bundle with injected flags
+    const widgetBundle = await serveWidgetBundle(license);
 
-    // 8. Return JavaScript with correct content-type
-    return new NextResponse(widgetCode, {
+    // Step 11: Return successful response
+    return new NextResponse(widgetBundle, {
       status: 200,
-      headers: {
-        'Content-Type': 'application/javascript',
-        'Cache-Control': 'public, max-age=3600', // Cache for 1 hour
-      },
+      headers: createResponseHeaders()
     });
 
   } catch (error) {
-    console.error('Widget serving error:', error);
-    return NextResponse.json(
-      { error: 'Internal server error' },
-      { status: 500 }
-    );
+    // Log internal error
+    console.error('[Widget Serving] Internal error:', error);
+
+    // Return generic error response
+    return createErrorResponse('INTERNAL_ERROR', {
+      error: error instanceof Error ? error.message : 'Unknown error'
+    });
   }
-}
-
-// =============================================================================
-// Helper Functions
-// =============================================================================
-
-/**
- * Normalize domain by removing protocol, www, port, and path
- * Examples:
- *   - https://www.example.com:3000/page → example.com
- *   - http://localhost:3000 → localhost
- *   - https://sub.example.com/path → sub.example.com
- */
-function normalizeDomain(url: string): string {
-  try {
-    // Handle both full URLs and plain domains
-    const urlObj = url.startsWith('http') ? new URL(url) : new URL(`https://${url}`);
-    let domain = urlObj.hostname.toLowerCase();
-
-    // Remove www. prefix
-    if (domain.startsWith('www.')) {
-      domain = domain.substring(4);
-    }
-
-    return domain;
-  } catch {
-    // If URL parsing fails, return empty string
-    return '';
-  }
-}
-
-/**
- * Generate widget JavaScript code with license flags injected
- * Returns the actual compiled widget bundle with license config injected
- * The license config is injected by replacing a placeholder in the widget code
- */
-function generateWidgetCode(brandingEnabled: boolean): string {
-  // Read the compiled widget bundle from public/widget directory
-  const fs = require('fs');
-  const path = require('path');
-
-  const widgetPath = path.join(process.cwd(), 'public', 'widget', 'chat-widget.iife.js');
-  let widgetCode = fs.readFileSync(widgetPath, 'utf-8');
-
-  // Inject license configuration by prepending it to the widget code
-  // The widget will read window.ChatWidgetConfig which includes this license config
-  const licenseInjection = `
-(function() {
-  // Inject license configuration into window.ChatWidgetConfig
-  window.ChatWidgetConfig = window.ChatWidgetConfig || {};
-  window.ChatWidgetConfig.license = {
-    brandingEnabled: ${brandingEnabled}
-  };
-})();
-`;
-
-  return licenseInjection + '\n' + widgetCode;
 }
