@@ -124,35 +124,29 @@ function normalizeDomain(url: string): string {
 
 /**
  * Generate widget JavaScript code with license flags injected
- * Returns an IIFE (Immediately Invoked Function Expression) that:
- * - Reads window.ChatWidgetConfig for user configuration
- * - Injects license flags (brandingEnabled)
- * - Initializes the chat widget
+ * Returns the actual compiled widget bundle with license config injected
+ * The license config is injected by replacing a placeholder in the widget code
  */
 function generateWidgetCode(brandingEnabled: boolean): string {
-  // Minimal widget code for MVP
-  // In production, this would load the actual compiled widget bundle
-  return `
-(function() {
-  'use strict';
+  // Read the compiled widget bundle from public/widget directory
+  const fs = require('fs');
+  const path = require('path');
 
-  // License configuration injected at serve time
-  var licenseConfig = {
+  const widgetPath = path.join(process.cwd(), 'public', 'widget', 'chat-widget.iife.js');
+  let widgetCode = fs.readFileSync(widgetPath, 'utf-8');
+
+  // Inject license configuration by prepending it to the widget code
+  // The widget will read window.ChatWidgetConfig which includes this license config
+  const licenseInjection = `
+(function() {
+  // Inject license configuration into window.ChatWidgetConfig
+  window.ChatWidgetConfig = window.ChatWidgetConfig || {};
+  window.ChatWidgetConfig.license = {
     brandingEnabled: ${brandingEnabled}
   };
-
-  // Read user configuration from window
-  var userConfig = window.ChatWidgetConfig || {};
-
-  // Merge configurations
-  var config = Object.assign({}, userConfig, { license: licenseConfig });
-
-  // Widget initialization placeholder
-  console.log('N8N Chat Widget initialized with config:', config);
-
-  // TODO: Actual widget implementation will be added in Phase 3
-  // This stub satisfies the tests for now
 })();
-`.trim();
+`;
+
+  return licenseInjection + '\n' + widgetCode;
 }
 

@@ -1,0 +1,123 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>N8n Chat Widget - Test Page</title>
+  <style>
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      max-width: 800px;
+      margin: 50px auto;
+      padding: 20px;
+      line-height: 1.6;
+    }
+    h1 {
+      color: #333;
+    }
+    .info {
+      background: #f0f9ff;
+      border-left: 4px solid #0ea5e9;
+      padding: 16px;
+      margin: 20px 0;
+    }
+    code {
+      background: #f3f4f6;
+      padding: 2px 6px;
+      border-radius: 3px;
+      font-family: 'Courier New', monospace;
+    }
+    pre {
+      background: #1f2937;
+      color: #f9fafb;
+      padding: 16px;
+      border-radius: 6px;
+      overflow-x: auto;
+    }
+  </style>
+</head>
+<body>
+  <h1>N8n Chat Widget - Test Page</h1>
+
+  <div class="info">
+    <p><strong>Widget Configuration</strong></p>
+    <p>The widget is configured with the following settings (see script below):</p>
+    <ul>
+      <li>Company: Acme Support</li>
+      <li>Welcome text: How can we help you today?</li>
+      <li>First message: Hello! I'm your AI assistant...</li>
+      <li>Primary color: #00bfff (sky blue)</li>
+      <li>Position: bottom-right</li>
+    </ul>
+  </div>
+
+  <h2>Test Instructions</h2>
+  <ol>
+    <li>Ensure the database has been seeded with test data (<code>pnpm db:seed</code>)</li>
+    <li>Replace <code>YOUR_LICENSE_KEY_HERE</code> below with a valid license key from the database</li>
+    <li>Update the <code>webhookUrl</code> to point to your N8n workflow webhook</li>
+    <li>Open this page in a browser (it's located at <code>http://localhost:3000/widget-test.html</code>)</li>
+    <li>The chat bubble should appear in the bottom-right corner</li>
+    <li>Click the bubble to open the chat window</li>
+    <li>Send a test message and verify it connects to the N8n webhook</li>
+  </ol>
+
+  <h2>Widget Configuration</h2>
+  <pre><code>&lt;script&gt;
+  window.ChatWidgetConfig = {
+    branding: {
+      companyName: "Acme Support",
+      welcomeText: "How can we help you today?",
+      firstMessage: "Hello! I'm your AI assistant. Ask me anything!"
+    },
+    style: {
+      theme: "light",
+      primaryColor: "#00bfff",
+      position: "bottom-right"
+    },
+    connection: {
+      webhookUrl: "https://your-n8n-instance.com/webhook/your-webhook-id"
+    }
+  };
+&lt;/script&gt;
+&lt;script src="/api/widget/YOUR_LICENSE_KEY_HERE/chat-widget.js"&gt;&lt;/script&gt;</code></pre>
+
+  <h2>Page Content</h2>
+  <p>
+    This is a simple test page to demonstrate the N8n chat widget. The widget is completely
+    isolated and works on any website without interfering with the existing page styles or
+    JavaScript.
+  </p>
+
+  <p>
+    Lorem ipsum dolor sit amet, consectetur adipiscing elit. Sed do eiusmod tempor incididunt
+    ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco
+    laboris nisi ut aliquip ex ea commodo consequat.
+  </p>
+
+  <!-- Widget Configuration and Script -->
+  <script>
+    // Configure the chat widget
+    window.ChatWidgetConfig = {
+      branding: {
+        companyName: "Acme Support",
+        welcomeText: "How can we help you today?",
+        firstMessage: "Hello! I'm your AI assistant. Ask me anything!"
+      },
+      style: {
+        theme: "light",
+        primaryColor: "#00bfff",
+        position: "bottom-right",
+        cornerRadius: 12
+      },
+      connection: {
+        // IMPORTANT: Replace with your actual N8n webhook URL
+        webhookUrl: "https://your-n8n-instance.com/webhook/your-webhook-id"
+      }
+    };
+  </script>
+
+  <!-- Widget Script - Replace YOUR_LICENSE_KEY_HERE with actual license key -->
+  <script src="/api/widget/YOUR_LICENSE_KEY_HERE/chat-widget.js"></script>
+</body>
+</html>

@@ -1,0 +1,20 @@
+{
+  "name": "n8n-chat-widget",
+  "version": "1.0.0",
+  "description": "Embeddable chat widget for N8n workflows",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview",
+    "copy": "npm run build && cp dist/chat-widget.iife.js ../public/widget/chat-widget.js"
+  },
+  "devDependencies": {
+    "terser": "^5.44.1",
+    "typescript": "^5.3.3",
+    "vite": "^5.0.0"
+  },
+  "dependencies": {
+    "markdown-it": "^14.0.0"
+  }
+}
