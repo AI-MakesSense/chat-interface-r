@@ -8,6 +8,149 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { JSDOM } from 'jsdom';
 
+// ============================================================
+// CONSTANTS
+// ============================================================
+
+/**
+ * Widget initialization timeout
+ *
+ * Reason: JSDOM + IIFE execution requires brief async delay
+ * for widget to fully initialize DOM elements
+ */
+const WIDGET_INIT_TIMEOUT = 100;
+
+/**
+ * Message send timeout
+ *
+ * Reason: Fetch spy needs time to capture the network call
+ * after button click triggers async sendMessage()
+ */
+const MESSAGE_SEND_TIMEOUT = 100;
+
+/**
+ * Test webhook URL used across all tests
+ */
+const TEST_WEBHOOK_URL = 'https://test.n8n.cloud/webhook/test123';
+
+// ============================================================
+// HELPER FUNCTIONS
+// ============================================================
+
+/**
+ * Setup JSDOM environment with navigator fix
+ *
+ * This helper applies the Object.defineProperty fix for the
+ * read-only navigator global property issue.
+ */
+function setupNavigatorFix(window: Window & typeof globalThis) {
+  Object.defineProperty(global, 'navigator', {
+    value: window.navigator,
+    writable: true,
+    configurable: true,
+  });
+}
+
+/**
+ * Initialize widget with given config
+ *
+ * IMPORTANT: Config must be set BEFORE import because the widget
+ * uses an IIFE pattern that runs synchronously on module import.
+ *
+ * @param config - Partial widget configuration
+ * @returns Promise that resolves after widget initialization
+ */
+async function initializeWidget(config: any): Promise<void> {
+  // Set config BEFORE import (widget IIFE runs on import)
+  (global.window as any).ChatWidgetConfig = config;
+
+  // Load widget code (IIFE runs immediately)
+  await import('../../../widget/src/index');
+
+  // Wait for widget to initialize
+  await new Promise(resolve => setTimeout(resolve, WIDGET_INIT_TIMEOUT));
+}
+
+/**
+ * Send a message through the widget
+ *
+ * Opens the chat (if not open), types message, clicks send button,
+ * and waits for fetch to complete.
+ *
+ * @param text - Message text to send
+ */
+async function sendMessage(text: string): Promise<void> {
+  const document = global.document;
+
+  // Click bubble to open chat
+  const bubble = document.querySelector('#n8n-chat-bubble') as HTMLButtonElement;
+  expect(bubble).toBeTruthy();
+  bubble?.click();
+
+  // Wait for chat to open
+  await new Promise(resolve => setTimeout(resolve, WIDGET_INIT_TIMEOUT));
+
+  // Find input and send button
+  const input = document.querySelector('#n8n-chat-input') as HTMLInputElement;
+  const sendBtn = document.querySelector('#n8n-chat-send') as HTMLButtonElement;
+
+  expect(input).toBeTruthy();
+  expect(sendBtn).toBeTruthy();
+
+  // Type and send message
+  input.value = text;
+  sendBtn.click();
+
+  // Wait for fetch to be called
+  await new Promise(resolve => setTimeout(resolve, MESSAGE_SEND_TIMEOUT));
+}
+
+/**
+ * Extract the last payload sent to the webhook
+ *
+ * @param fetchSpy - Vitest mock spy for fetch
+ * @returns Parsed JSON payload from the last fetch call
+ */
+function getLastPayload(fetchSpy: any): any {
+  const fetchCall = fetchSpy.mock.calls[fetchSpy.mock.calls.length - 1];
+  return JSON.parse(fetchCall[1].body);
+}
+
+/**
+ * Reset DOM environment with new URL and title
+ *
+ * Used by tests that need to test different URL scenarios.
+ * Recreates JSDOM, resets globals, and applies navigator fix.
+ *
+ * @param url - Full URL for the new environment
+ * @param title - Page title
+ * @returns Object with new dom, window, and document references
+ */
+function resetDomEnvironment(url: string, title: string) {
+  const dom = new JSDOM(`
+    <!DOCTYPE html>
+    <html>
+      <head><title>${title}</title></head>
+      <body></body>
+    </html>
+  `, { url });
+
+  const window = dom.window as any;
+  const document = window.document;
+
+  global.window = window;
+  global.document = document;
+
+  // Apply navigator fix
+  setupNavigatorFix(window);
+
+  return { dom, window, document };
+}
+
+// ============================================================
+// TEST SUITE
+// ============================================================
+
 describe('Widget Context Passing', () => {
   let dom: JSDOM;
   let window: Window & typeof globalThis;
@@ -15,7 +158,11 @@ describe('Widget Context Passing', () => {
   let fetchSpy: any;
 
   beforeEach(() => {
-    // Setup JSDOM environment
+    // Reset module cache to prevent interference between tests
+    // (widget IIFE must re-run for each test)
+    vi.resetModules();
+
+    // Setup JSDOM environment with default test URL
     dom = new JSDOM(`
       <!DOCTYPE html>
       <html>
@@ -37,7 +184,9 @@ describe('Widget Context Passing', () => {
     // Setup global mocks
     global.window = window as any;
     global.document = document as any;
-    global.navigator = window.navigator as any;
+
+    // Apply navigator fix for read-only property
+    setupNavigatorFix(window);
 
     // Mock fetch
     fetchSpy = vi.fn().mockResolvedValue({
@@ -52,51 +201,25 @@ describe('Widget Context Passing', () => {
   });
 
   it('should capture full page context by default', async () => {
-    // Load widget code
-    const widgetCode = await import('../../../widget/src/index');
-
-    // Configure widget
-    (window as any).ChatWidgetConfig = {
+    // Initialize widget with captureContext explicitly enabled
+    await initializeWidget({
       branding: {
         companyName: 'Test Company',
       },
       connection: {
-        webhookUrl: 'https://test.n8n.cloud/webhook/test123',
+        webhookUrl: TEST_WEBHOOK_URL,
         captureContext: true, // Explicitly enabled
       },
-    };
+    });
 
-    // Wait for widget to initialize
-    await new Promise(resolve => setTimeout(resolve, 100));
-
-    // Find and click chat bubble
-    const bubble = document.querySelector('#n8n-chat-bubble') as HTMLButtonElement;
-    expect(bubble).toBeTruthy();
-    bubble?.click();
-
-    // Wait for chat to open
-    await new Promise(resolve => setTimeout(resolve, 100));
-
-    // Find input and send button
-    const input = document.querySelector('#n8n-chat-input') as HTMLInputElement;
-    const sendBtn = document.querySelector('#n8n-chat-send') as HTMLButtonElement;
-
-    expect(input).toBeTruthy();
-    expect(sendBtn).toBeTruthy();
-
-    // Type and send message
-    input.value = 'Test message';
-    sendBtn.click();
-
-    // Wait for fetch to be called
-    await new Promise(resolve => setTimeout(resolve, 100));
+    // Send message through the widget
+    await sendMessage('Test message');
 
     // Verify fetch was called
     expect(fetchSpy).toHaveBeenCalled();
 
     // Get the payload sent to N8n
-    const fetchCall = fetchSpy.mock.calls[0];
-    const payload = JSON.parse(fetchCall[1].body);
+    const payload = getLastPayload(fetchSpy);
 
     // Verify context is included
     expect(payload).toHaveProperty('context');
@@ -114,33 +237,20 @@ describe('Widget Context Passing', () => {
   });
 
   it('should capture context when captureContext is undefined (default behavior)', async () => {
-    const widgetCode = await import('../../../widget/src/index');
-
-    (window as any).ChatWidgetConfig = {
+    // Initialize widget with captureContext not specified (defaults to true)
+    await initializeWidget({
       branding: {
         companyName: 'Test Company',
       },
       connection: {
-        webhookUrl: 'https://test.n8n.cloud/webhook/test123',
+        webhookUrl: TEST_WEBHOOK_URL,
         // captureContext not specified - should default to true
       },
-    };
+    });
 
-    await new Promise(resolve => setTimeout(resolve, 100));
+    await sendMessage('Test message');
 
-    const bubble = document.querySelector('#n8n-chat-bubble') as HTMLButtonElement;
-    bubble?.click();
-    await new Promise(resolve => setTimeout(resolve, 100));
-
-    const input = document.querySelector('#n8n-chat-input') as HTMLInputElement;
-    const sendBtn = document.querySelector('#n8n-chat-send') as HTMLButtonElement;
-
-    input.value = 'Test message';
-    sendBtn.click();
-
-    await new Promise(resolve => setTimeout(resolve, 100));
-
-    const payload = JSON.parse(fetchSpy.mock.calls[0][1].body);
+    const payload = getLastPayload(fetchSpy);
 
     // Should still include context
     expect(payload).toHaveProperty('context');
@@ -148,33 +258,20 @@ describe('Widget Context Passing', () => {
   });
 
   it('should NOT capture context when captureContext is false', async () => {
-    const widgetCode = await import('../../../widget/src/index');
-
-    (window as any).ChatWidgetConfig = {
+    // Initialize widget with captureContext explicitly disabled
+    await initializeWidget({
       branding: {
         companyName: 'Test Company',
       },
       connection: {
-        webhookUrl: 'https://test.n8n.cloud/webhook/test123',
+        webhookUrl: TEST_WEBHOOK_URL,
         captureContext: false, // Explicitly disabled
       },
-    };
+    });
 
-    await new Promise(resolve => setTimeout(resolve, 100));
+    await sendMessage('Test message');
 
-    const bubble = document.querySelector('#n8n-chat-bubble') as HTMLButtonElement;
-    bubble?.click();
-    await new Promise(resolve => setTimeout(resolve, 100));
-
-    const input = document.querySelector('#n8n-chat-input') as HTMLInputElement;
-    const sendBtn = document.querySelector('#n8n-chat-send') as HTMLButtonElement;
-
-    input.value = 'Test message';
-    sendBtn.click();
-
-    await new Promise(resolve => setTimeout(resolve, 100));
-
-    const payload = JSON.parse(fetchSpy.mock.calls[0][1].body);
+    const payload = getLastPayload(fetchSpy);
 
     // Should NOT include context
     expect(payload).not.toHaveProperty('context');
@@ -183,46 +280,22 @@ describe('Widget Context Passing', () => {
   });
 
   it('should handle URLs without query parameters', async () => {
-    // Create new DOM with simple URL
-    dom = new JSDOM(`
-      <!DOCTYPE html>
-      <html>
-        <head><title>Simple Page</title></head>
-        <body></body>
-      </html>
-    `, {
-      url: 'http://example.com/about',
-    });
+    // Reset DOM environment with simple URL (no query params)
+    const env = resetDomEnvironment('http://example.com/about', 'Simple Page');
+    dom = env.dom;
+    window = env.window;
+    document = env.document;
 
-    window = dom.window as any;
-    document = window.document;
-    global.window = window as any;
-    global.document = document as any;
-
-    const widgetCode = await import('../../../widget/src/index');
-
-    (window as any).ChatWidgetConfig = {
+    await initializeWidget({
       branding: { companyName: 'Test Company' },
       connection: {
-        webhookUrl: 'https://test.n8n.cloud/webhook/test123',
+        webhookUrl: TEST_WEBHOOK_URL,
       },
-    };
+    });
 
-    await new Promise(resolve => setTimeout(resolve, 100));
+    await sendMessage('Test');
 
-    const bubble = document.querySelector('#n8n-chat-bubble') as HTMLButtonElement;
-    bubble?.click();
-    await new Promise(resolve => setTimeout(resolve, 100));
-
-    const input = document.querySelector('#n8n-chat-input') as HTMLInputElement;
-    const sendBtn = document.querySelector('#n8n-chat-send') as HTMLButtonElement;
-
-    input.value = 'Test';
-    sendBtn.click();
-
-    await new Promise(resolve => setTimeout(resolve, 100));
-
-    const payload = JSON.parse(fetchSpy.mock.calls[0][1].body);
+    const payload = getLastPayload(fetchSpy);
 
     expect(payload.context).toMatchObject({
       pageUrl: 'http://example.com/about',
@@ -234,35 +307,21 @@ describe('Widget Context Passing', () => {
   });
 
   it('should include custom context when provided', async () => {
-    const widgetCode = await import('../../../widget/src/index');
-
-    (window as any).ChatWidgetConfig = {
+    await initializeWidget({
       branding: { companyName: 'Test Company' },
       connection: {
-        webhookUrl: 'https://test.n8n.cloud/webhook/test123',
+        webhookUrl: TEST_WEBHOOK_URL,
         customContext: {
           userId: '12345',
           tier: 'premium',
           experimentVariant: 'B',
         },
       },
-    };
+    });
 
-    await new Promise(resolve => setTimeout(resolve, 100));
+    await sendMessage('Test');
 
-    const bubble = document.querySelector('#n8n-chat-bubble') as HTMLButtonElement;
-    bubble?.click();
-    await new Promise(resolve => setTimeout(resolve, 100));
-
-    const input = document.querySelector('#n8n-chat-input') as HTMLInputElement;
-    const sendBtn = document.querySelector('#n8n-chat-send') as HTMLButtonElement;
-
-    input.value = 'Test';
-    sendBtn.click();
-
-    await new Promise(resolve => setTimeout(resolve, 100));
-
-    const payload = JSON.parse(fetchSpy.mock.calls[0][1].body);
+    const payload = getLastPayload(fetchSpy);
 
     // Should include both context and customContext
     expect(payload).toHaveProperty('context');
@@ -275,45 +334,25 @@ describe('Widget Context Passing', () => {
   });
 
   it('should handle special characters in query parameters', async () => {
-    dom = new JSDOM(`
-      <!DOCTYPE html>
-      <html>
-        <head><title>Test</title></head>
-        <body></body>
-      </html>
-    `, {
-      url: 'http://example.com/search?q=hello%20world&filter=price%3E100',
-    });
+    // Reset DOM environment with URL-encoded query params
+    const env = resetDomEnvironment(
+      'http://example.com/search?q=hello%20world&filter=price%3E100',
+      'Test'
+    );
+    dom = env.dom;
+    window = env.window;
+    document = env.document;
 
-    window = dom.window as any;
-    document = window.document;
-    global.window = window as any;
-    global.document = document as any;
-
-    const widgetCode = await import('../../../widget/src/index');
-
-    (window as any).ChatWidgetConfig = {
+    await initializeWidget({
       branding: { companyName: 'Test Company' },
       connection: {
-        webhookUrl: 'https://test.n8n.cloud/webhook/test123',
+        webhookUrl: TEST_WEBHOOK_URL,
       },
-    };
+    });
 
-    await new Promise(resolve => setTimeout(resolve, 100));
+    await sendMessage('Test');
 
-    const bubble = document.querySelector('#n8n-chat-bubble') as HTMLButtonElement;
-    bubble?.click();
-    await new Promise(resolve => setTimeout(resolve, 100));
-
-    const input = document.querySelector('#n8n-chat-input') as HTMLInputElement;
-    const sendBtn = document.querySelector('#n8n-chat-send') as HTMLButtonElement;
-
-    input.value = 'Test';
-    sendBtn.click();
-
-    await new Promise(resolve => setTimeout(resolve, 100));
-
-    const payload = JSON.parse(fetchSpy.mock.calls[0][1].body);
+    const payload = getLastPayload(fetchSpy);
 
     // URL encoding should be handled correctly
     expect(payload.context.queryParams).toMatchObject({
@@ -323,30 +362,16 @@ describe('Widget Context Passing', () => {
   });
 
   it('should not include sensitive fields (userAgent, referrer)', async () => {
-    const widgetCode = await import('../../../widget/src/index');
-
-    (window as any).ChatWidgetConfig = {
+    await initializeWidget({
       branding: { companyName: 'Test Company' },
       connection: {
-        webhookUrl: 'https://test.n8n.cloud/webhook/test123',
+        webhookUrl: TEST_WEBHOOK_URL,
       },
-    };
+    });
 
-    await new Promise(resolve => setTimeout(resolve, 100));
+    await sendMessage('Test');
 
-    const bubble = document.querySelector('#n8n-chat-bubble') as HTMLButtonElement;
-    bubble?.click();
-    await new Promise(resolve => setTimeout(resolve, 100));
-
-    const input = document.querySelector('#n8n-chat-input') as HTMLInputElement;
-    const sendBtn = document.querySelector('#n8n-chat-send') as HTMLButtonElement;
-
-    input.value = 'Test';
-    sendBtn.click();
-
-    await new Promise(resolve => setTimeout(resolve, 100));
-
-    const payload = JSON.parse(fetchSpy.mock.calls[0][1].body);
+    const payload = getLastPayload(fetchSpy);
 
     // Privacy-sensitive fields should NOT be included
     expect(payload.context).not.toHaveProperty('userAgent');
