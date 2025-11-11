@@ -1,0 +1,430 @@
+'use client';
+
+/**
+ * Widget Configurator Page
+ *
+ * Visual configuration interface for customizing chat widgets.
+ * Module 3: Visual Configurator Core - MVP Implementation
+ *
+ * Features:
+ * - Branding configuration (company name, welcome text, first message)
+ * - Theme & color customization
+ * - Position and corner radius
+ * - Connection settings (webhook URL)
+ * - Real-time preview (placeholder for Module 4)
+ * - Auto-save with unsaved changes indicator
+ */
+
+import { useEffect, useState } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
+import { useAuthStore } from '@/stores/auth-store';
+import { useLicenseStore } from '@/stores/license-store';
+import { useWidgetStore } from '@/stores/widget-store';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Alert, AlertDescription } from '@/components/ui/alert';
+
+/**
+ * Configurator page component
+ */
+export default function ConfiguratorPage() {
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  const widgetId = searchParams?.get('widgetId');
+
+  const { user, isAuthenticated, isLoading: authLoading } = useAuthStore();
+  const { licenses } = useLicenseStore();
+  const {
+    currentWidget,
+    currentConfig,
+    isLoading,
+    isSaving,
+    error,
+    hasUnsavedChanges,
+    getWidget,
+    createWidget,
+    updateConfig,
+    saveConfig,
+    clearError,
+  } = useWidgetStore();
+
+  const [widgetName, setWidgetName] = useState('');
+  const [showCreateForm, setShowCreateForm] = useState(false);
+
+  // Load widget if widgetId is provided
+  useEffect(() => {
+    if (widgetId && !currentWidget) {
+      getWidget(widgetId).catch(console.error);
+    }
+  }, [widgetId, currentWidget, getWidget]);
+
+  // Handle creating a new widget
+  const handleCreateWidget = async () => {
+    if (!widgetName.trim()) {
+      return;
+    }
+
+    const firstLicense = licenses[0];
+    if (!firstLicense) {
+      alert('You need a license to create a widget');
+      router.push('/dashboard');
+      return;
+    }
+
+    try {
+      const widget = await createWidget({
+        licenseId: firstLicense.id,
+        name: widgetName,
+        config: currentConfig,
+      });
+
+      setShowCreateForm(false);
+      setWidgetName('');
+      router.push(`/configurator?widgetId=${widget.id}`);
+    } catch (error) {
+      console.error('Failed to create widget:', error);
+    }
+  };
+
+  // Handle saving configuration
+  const handleSave = async () => {
+    try {
+      await saveConfig();
+    } catch (error) {
+      console.error('Failed to save configuration:', error);
+    }
+  };
+
+  // Loading state
+  if (authLoading || isLoading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <p className="text-muted-foreground">Loading...</p>
+      </div>
+    );
+  }
+
+  // Not authenticated
+  if (!isAuthenticated || !user) {
+    router.push('/auth/login');
+    return null;
+  }
+
+  // No widget selected - show create form
+  if (!currentWidget && !showCreateForm) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100 dark:from-slate-900 dark:to-slate-800">
+        <div className="container mx-auto px-4 py-8">
+          <Card className="max-w-md mx-auto">
+            <CardHeader>
+              <CardTitle>Create New Widget</CardTitle>
+              <CardDescription>
+                Configure your chat widget
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <Button onClick={() => setShowCreateForm(true)} className="w-full">
+                Create Widget
+              </Button>
+              <Button
+                variant="outline"
+                onClick={() => router.push('/dashboard')}
+                className="w-full mt-2"
+              >
+                Back to Dashboard
+              </Button>
+            </CardContent>
+          </Card>
+        </div>
+      </div>
+    );
+  }
+
+  // Create widget form
+  if (showCreateForm) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100 dark:from-slate-900 dark:to-slate-800">
+        <div className="container mx-auto px-4 py-8">
+          <Card className="max-w-md mx-auto">
+            <CardHeader>
+              <CardTitle>Create New Widget</CardTitle>
+              <CardDescription>
+                Enter a name for your widget
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div>
+                <Label htmlFor="widget-name">Widget Name</Label>
+                <Input
+                  id="widget-name"
+                  placeholder="My Chat Widget"
+                  value={widgetName}
+                  onChange={(e) => setWidgetName(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') {
+                      handleCreateWidget();
+                    }
+                  }}
+                />
+              </div>
+              <div className="flex gap-2">
+                <Button onClick={handleCreateWidget} disabled={!widgetName.trim() || isSaving}>
+                  {isSaving ? 'Creating...' : 'Create'}
+                </Button>
+                <Button variant="outline" onClick={() => setShowCreateForm(false)}>
+                  Cancel
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+      </div>
+    );
+  }
+
+  // Configurator interface
+  return (
+    <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100 dark:from-slate-900 dark:to-slate-800">
+      {/* Header */}
+      <header className="border-b bg-white dark:bg-slate-900">
+        <div className="container mx-auto px-4 py-4 flex items-center justify-between">
+          <div>
+            <h1 className="text-2xl font-bold">Widget Configurator</h1>
+            <p className="text-sm text-muted-foreground">
+              {currentWidget?.name || 'Untitled Widget'}
+              {hasUnsavedChanges && ' (Unsaved changes)'}
+            </p>
+          </div>
+          <div className="flex items-center gap-2">
+            <Button
+              variant="outline"
+              onClick={() => router.push('/dashboard')}
+            >
+              Back to Dashboard
+            </Button>
+            <Button
+              onClick={handleSave}
+              disabled={!hasUnsavedChanges || isSaving}
+            >
+              {isSaving ? 'Saving...' : 'Save Changes'}
+            </Button>
+          </div>
+        </div>
+      </header>
+
+      {/* Main Content */}
+      <main className="container mx-auto px-4 py-8">
+        <div className="grid lg:grid-cols-2 gap-6">
+          {/* Configuration Panel */}
+          <div className="space-y-6">
+            {/* Error Alert */}
+            {error && (
+              <Alert variant="destructive">
+                <AlertDescription className="flex items-center justify-between">
+                  <span>{error}</span>
+                  <Button variant="ghost" size="sm" onClick={clearError}>
+                    Dismiss
+                  </Button>
+                </AlertDescription>
+              </Alert>
+            )}
+
+            {/* Branding Section */}
+            <Card>
+              <CardHeader>
+                <CardTitle>Branding</CardTitle>
+                <CardDescription>
+                  Customize your widget's branding and messages
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div>
+                  <Label htmlFor="companyName">Company Name</Label>
+                  <Input
+                    id="companyName"
+                    value={currentConfig.branding.companyName || ''}
+                    onChange={(e) =>
+                      updateConfig({
+                        branding: { ...currentConfig.branding, companyName: e.target.value },
+                      })
+                    }
+                    placeholder="My Company"
+                  />
+                </div>
+                <div>
+                  <Label htmlFor="welcomeText">Welcome Text</Label>
+                  <Input
+                    id="welcomeText"
+                    value={currentConfig.branding.welcomeText || ''}
+                    onChange={(e) =>
+                      updateConfig({
+                        branding: { ...currentConfig.branding, welcomeText: e.target.value },
+                      })
+                    }
+                    placeholder="How can we help you today?"
+                  />
+                </div>
+                <div>
+                  <Label htmlFor="firstMessage">First Message</Label>
+                  <Input
+                    id="firstMessage"
+                    value={currentConfig.branding.firstMessage || ''}
+                    onChange={(e) =>
+                      updateConfig({
+                        branding: { ...currentConfig.branding, firstMessage: e.target.value },
+                      })
+                    }
+                    placeholder="Hello! I'm your AI assistant."
+                  />
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* Theme & Colors Section */}
+            <Card>
+              <CardHeader>
+                <CardTitle>Theme & Colors</CardTitle>
+                <CardDescription>
+                  Customize the visual appearance
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div>
+                  <Label htmlFor="theme">Theme</Label>
+                  <select
+                    id="theme"
+                    value={currentConfig.style.theme}
+                    onChange={(e) =>
+                      updateConfig({
+                        style: { ...currentConfig.style, theme: e.target.value as any },
+                      })
+                    }
+                    className="w-full px-3 py-2 border rounded-md"
+                  >
+                    <option value="light">Light</option>
+                    <option value="dark">Dark</option>
+                    <option value="auto">Auto</option>
+                  </select>
+                </div>
+                <div>
+                  <Label htmlFor="primaryColor">Primary Color</Label>
+                  <div className="flex gap-2">
+                    <Input
+                      id="primaryColor"
+                      type="color"
+                      value={currentConfig.style.primaryColor}
+                      onChange={(e) =>
+                        updateConfig({
+                          style: { ...currentConfig.style, primaryColor: e.target.value },
+                        })
+                      }
+                      className="w-20"
+                    />
+                    <Input
+                      value={currentConfig.style.primaryColor}
+                      onChange={(e) =>
+                        updateConfig({
+                          style: { ...currentConfig.style, primaryColor: e.target.value },
+                        })
+                      }
+                      placeholder="#00bfff"
+                    />
+                  </div>
+                </div>
+                <div>
+                  <Label htmlFor="position">Position</Label>
+                  <select
+                    id="position"
+                    value={currentConfig.style.position}
+                    onChange={(e) =>
+                      updateConfig({
+                        style: { ...currentConfig.style, position: e.target.value as any },
+                      })
+                    }
+                    className="w-full px-3 py-2 border rounded-md"
+                  >
+                    <option value="bottom-right">Bottom Right</option>
+                    <option value="bottom-left">Bottom Left</option>
+                    <option value="top-right">Top Right</option>
+                    <option value="top-left">Top Left</option>
+                  </select>
+                </div>
+                <div>
+                  <Label htmlFor="cornerRadius">Corner Radius: {currentConfig.style.cornerRadius}px</Label>
+                  <input
+                    id="cornerRadius"
+                    type="range"
+                    min="0"
+                    max="24"
+                    value={currentConfig.style.cornerRadius || 12}
+                    onChange={(e) =>
+                      updateConfig({
+                        style: { ...currentConfig.style, cornerRadius: Number(e.target.value) },
+                      })
+                    }
+                    className="w-full"
+                  />
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* Connection Section */}
+            <Card>
+              <CardHeader>
+                <CardTitle>Connection</CardTitle>
+                <CardDescription>
+                  Connect to your N8n workflow
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div>
+                  <Label htmlFor="webhookUrl">N8n Webhook URL *</Label>
+                  <Input
+                    id="webhookUrl"
+                    value={currentConfig.connection.webhookUrl}
+                    onChange={(e) =>
+                      updateConfig({
+                        connection: { ...currentConfig.connection, webhookUrl: e.target.value },
+                      })
+                    }
+                    placeholder="https://your-n8n.com/webhook/your-id"
+                  />
+                  <p className="text-xs text-muted-foreground mt-1">
+                    Must be an HTTPS URL from your N8n instance
+                  </p>
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+
+          {/* Preview Panel (Placeholder) */}
+          <div className="space-y-6">
+            <Card>
+              <CardHeader>
+                <CardTitle>Live Preview</CardTitle>
+                <CardDescription>
+                  Preview your widget in real-time
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="bg-gradient-to-br from-slate-100 to-slate-200 dark:from-slate-800 dark:to-slate-900 rounded-lg p-8 min-h-[600px] flex items-center justify-center border-2 border-dashed">
+                  <div className="text-center">
+                    <p className="text-lg font-semibold mb-2">Preview Coming Soon</p>
+                    <p className="text-sm text-muted-foreground">
+                      Module 4: Real-Time Preview Engine
+                    </p>
+                    <p className="text-xs text-muted-foreground mt-4">
+                      Current configuration will be rendered here
+                    </p>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+        </div>
+      </main>
+    </div>
+  );
+}
