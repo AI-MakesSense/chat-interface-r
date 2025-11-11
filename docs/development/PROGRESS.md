@@ -537,22 +537,56 @@ The `deployWidget()` function uses SQL `COALESCE(deployed_at, NOW())` to ensure 
 9. ✅ Theme support (light/dark/auto)
 
 **Functionality:**
-- ✅ SSE streaming for real-time responses (EventSource)
+- ✅ POST webhook integration (N8n compatible)
+- ✅ Page context capture (URL, query params, title, domain)
+- ✅ Privacy-safe context (excludes userAgent, referrer)
+- ✅ Configurable context capture (opt-in/opt-out)
+- ✅ Custom context support
 - ✅ Markdown rendering for assistant messages
 - ✅ Custom styling (colors, corner radius, fonts)
 - ✅ Configuration via `window.ChatWidgetConfig`
-- ⚠️ **KNOWN ISSUE:** Widget uses SSE (GET) but N8n requires POST webhooks
 
-### Next Steps
-- 🔲 **PENDING:** Install Playwright MCP for browser testing (requires restart)
-- 🔲 **PENDING:** Test widget loading in browser with Playwright
-- 🔲 **PENDING:** Fix N8n integration (replace EventSource with fetch POST)
+### Context-Passing Feature ✅
+- ✅ Complete TDD cycle (RED → GREEN → REFACTOR)
+- ✅ 7 comprehensive tests (100% passing)
+- ✅ Privacy-compliant (no sensitive data)
+- ✅ Configurable via `captureContext` option
+- ✅ URL parameter decoding
+- ✅ Special character handling
+- ✅ Agent-based workflow (Architect → TDD-QA-Lead → Implementer → Refactorer)
+
+**Test Coverage:**
+- Capture full context by default
+- Capture when captureContext undefined
+- NOT capture when captureContext false
+- Handle URLs without query params
+- Include custom context
+- Handle special characters
+- No sensitive fields (userAgent, referrer)
+
+**Test Results:** 7/7 passing (3.32s execution)
+
+**Files Created:**
+- `tests/integration/widget/context-passing.test.ts` - 7 comprehensive tests with helper functions
+- `docs/planning/WIDGET_CONTEXT_TESTS_PLAN.md` - Complete test planning
+- `docs/planning/IMPLEMENTATION_BRIEF_CONTEXT_TESTS.md` - Implementation guide
+- `docs/testing/RED_PHASE_CONTEXT_TESTS.md` - RED phase analysis
+- `docs/testing/GREEN_PHASE_CONTEXT_TESTS.md` - GREEN phase fixes
+- `docs/testing/REFACTOR_PHASE_CONTEXT_TESTS.md` - REFACTOR improvements
+
+**Dependencies Added:**
+- `jsdom@^27.1.0` - DOM testing
+- `@types/jsdom@27.0.0` - TypeScript types
+
+### Next Steps - Phase 3 Module 3 Completion
 - 🔲 **PENDING:** Add widget serving integration tests
 - 🔲 **PENDING:** Document widget embedding instructions
+- 🔲 **PENDING:** Create widget deployment guide
+- 🔲 **PENDING:** Add widget configuration examples
 
 ---
 
-**Status:** Phase 3 Module 3 - Widget serving route created, test page ready, awaiting browser verification
-**Next Action:** Restart Claude Code to enable Playwright MCP, then test widget in browser
-**Updated:** November 10, 2025 - Widget Serving Route Complete
-**Note:** Playwright MCP installed but requires Claude Code restart to activate. Widget currently uses SSE which is incompatible with N8n POST webhooks - will need refactoring.
+**Status:** Phase 3 Module 3 - Widget context-passing COMPLETE with full TDD cycle
+**Next Action:** Add widget serving integration tests
+**Updated:** November 10, 2025 - Context-Passing Tests Complete (RED→GREEN→REFACTOR)
+**Note:** Widget fully integrated with N8n POST webhooks, page context captured and sent with each message, all tests passing.
