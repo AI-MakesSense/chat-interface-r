@@ -80,12 +80,12 @@ export async function verifyJWT(token: string): Promise<JWTPayload> {
  * Extract JWT from cookie string
  *
  * @param cookieHeader - Cookie header value
- * @param cookieName - Name of the auth cookie (default: 'auth_token')
+ * @param cookieName - Name of the auth cookie (default: 'auth-token')
  * @returns JWT token or null if not found
  */
 export function extractTokenFromCookie(
   cookieHeader: string | null,
-  cookieName = 'auth_token'
+  cookieName = 'auth-token'
 ): string | null {
   if (!cookieHeader) return null;
 

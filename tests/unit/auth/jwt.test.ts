@@ -150,7 +150,7 @@ describe('JWT Utilities', () => {
     it('should extract token from cookie header with default name', () => {
       // Arrange
       const token = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.test.signature';
-      const cookieHeader = `auth_token=${token}`;
+      const cookieHeader = `auth-token=${token}`;
 
       // Act
       const extracted = extractTokenFromCookie(cookieHeader);
@@ -162,7 +162,7 @@ describe('JWT Utilities', () => {
     it('should extract token from cookie header with multiple cookies', () => {
       // Arrange
       const token = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.test.signature';
-      const cookieHeader = `other_cookie=value; auth_token=${token}; another=cookie`;
+      const cookieHeader = `other_cookie=value; auth-token=${token}; another=cookie`;
 
       // Act
       const extracted = extractTokenFromCookie(cookieHeader);
@@ -213,7 +213,7 @@ describe('JWT Utilities', () => {
     it('should handle cookies with no spaces after semicolon', () => {
       // Arrange
       const token = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.test.signature';
-      const cookieHeader = `other=value;auth_token=${token};another=cookie`;
+      const cookieHeader = `other=value;auth-token=${token};another=cookie`;
 
       // Act
       const extracted = extractTokenFromCookie(cookieHeader);
@@ -225,7 +225,7 @@ describe('JWT Utilities', () => {
     it('should handle cookies with spaces around equals sign', () => {
       // Arrange
       const token = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.test.signature';
-      const cookieHeader = `auth_token = ${token}`;
+      const cookieHeader = `auth-token = ${token}`;
 
       // Act
       const extracted = extractTokenFromCookie(cookieHeader);
@@ -233,14 +233,14 @@ describe('JWT Utilities', () => {
       // Assert
       // This should actually return null because the cookie name won't match exactly
       // but let's test the current implementation behavior
-      expect(extracted).toBeNull(); // Cookie name "auth_token " (with space) won't match
+      expect(extracted).toBeNull(); // Cookie name "auth-token " (with space) won't match
     });
 
     it('should extract first matching cookie if multiple exist', () => {
       // Arrange
       const token1 = 'token1';
       const token2 = 'token2';
-      const cookieHeader = `auth_token=${token1}; other=value; auth_token=${token2}`;
+      const cookieHeader = `auth-token=${token1}; other=value; auth-token=${token2}`;
 
       // Act
       const extracted = extractTokenFromCookie(cookieHeader);

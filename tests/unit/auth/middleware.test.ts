@@ -39,7 +39,7 @@ describe('Auth Middleware', () => {
       // Arrange
       const payload = { sub: 'user-123', email: 'test@example.com' };
       const token = await signJWT(payload);
-      const request = createMockRequest(`auth_token=${token}`);
+      const request = createMockRequest(`auth-token=${token}`);
 
       // Act
       const result = await requireAuth(request);
@@ -54,7 +54,7 @@ describe('Auth Middleware', () => {
       // Arrange
       const payload = { sub: 'user-456', email: 'multi@example.com' };
       const token = await signJWT(payload);
-      const request = createMockRequest(`other=value; auth_token=${token}; another=cookie`);
+      const request = createMockRequest(`other=value; auth-token=${token}; another=cookie`);
 
       // Act
       const result = await requireAuth(request);
@@ -72,7 +72,7 @@ describe('Auth Middleware', () => {
       await expect(requireAuth(request)).rejects.toThrow('Authentication required');
     });
 
-    it('should throw error when auth_token cookie is missing', async () => {
+    it('should throw error when auth-token cookie is missing', async () => {
       // Arrange
       const request = createMockRequest('other=value; session=abc123');
 
@@ -82,7 +82,7 @@ describe('Auth Middleware', () => {
 
     it('should throw error for invalid token', async () => {
       // Arrange
-      const request = createMockRequest('auth_token=invalid-token-format');
+      const request = createMockRequest('auth-token=invalid-token-format');
 
       // Act & Assert
       await expect(requireAuth(request)).rejects.toThrow('Invalid or expired token');
@@ -90,7 +90,7 @@ describe('Auth Middleware', () => {
 
     it('should throw error for malformed token', async () => {
       // Arrange
-      const request = createMockRequest('auth_token=not.a.jwt');
+      const request = createMockRequest('auth-token=not.a.jwt');
 
       // Act & Assert
       await expect(requireAuth(request)).rejects.toThrow('Invalid or expired token');
@@ -98,7 +98,7 @@ describe('Auth Middleware', () => {
 
     it('should throw error for empty token', async () => {
       // Arrange
-      const request = createMockRequest('auth_token=');
+      const request = createMockRequest('auth-token=');
 
       // Act & Assert
       await expect(requireAuth(request)).rejects.toThrow('Authentication required');
@@ -111,7 +111,7 @@ describe('Auth Middleware', () => {
         email: 'detailed@example.com',
       };
       const token = await signJWT(payload);
-      const request = createMockRequest(`auth_token=${token}`);
+      const request = createMockRequest(`auth-token=${token}`);
 
       // Act
       const result = await requireAuth(request);
@@ -129,7 +129,7 @@ describe('Auth Middleware', () => {
       // Arrange
       const payload = { sub: 'user-123', email: 'test@example.com' };
       const token = await signJWT(payload);
-      const request = createMockRequest(`auth_token=${token}`);
+      const request = createMockRequest(`auth-token=${token}`);
 
       // Act
       const result = await optionalAuth(request);
@@ -151,7 +151,7 @@ describe('Auth Middleware', () => {
       expect(result).toBeNull();
     });
 
-    it('should return null when auth_token cookie is missing', async () => {
+    it('should return null when auth-token cookie is missing', async () => {
       // Arrange
       const request = createMockRequest('other=value; session=abc123');
 
@@ -164,7 +164,7 @@ describe('Auth Middleware', () => {
 
     it('should return null for invalid token', async () => {
       // Arrange
-      const request = createMockRequest('auth_token=invalid-token');
+      const request = createMockRequest('auth-token=invalid-token');
 
       // Act
       const result = await optionalAuth(request);
@@ -175,7 +175,7 @@ describe('Auth Middleware', () => {
 
     it('should return null for empty token', async () => {
       // Arrange
-      const request = createMockRequest('auth_token=');
+      const request = createMockRequest('auth-token=');
 
       // Act
       const result = await optionalAuth(request);
@@ -186,7 +186,7 @@ describe('Auth Middleware', () => {
 
     it('should not throw errors', async () => {
       // Arrange
-      const request = createMockRequest('auth_token=will-cause-error');
+      const request = createMockRequest('auth-token=will-cause-error');
 
       // Act & Assert
       // Should not throw, just return null
@@ -205,7 +205,7 @@ describe('Auth Middleware', () => {
       const cookie = createAuthCookie(token);
 
       // Assert
-      expect(cookie).toContain('auth_token=');
+      expect(cookie).toContain('auth-token=');
       expect(cookie).toContain(token);
       expect(cookie).toContain('HttpOnly');
       expect(cookie).toContain('Secure');
@@ -258,9 +258,9 @@ describe('Auth Middleware', () => {
       const cookie = createAuthCookie(token);
 
       // Assert
-      // Should be: auth_token=formatted-token; HttpOnly; Secure; SameSite=Strict; Path=/; Max-Age=604800
+      // Should be: auth-token=formatted-token; HttpOnly; Secure; SameSite=Strict; Path=/; Max-Age=604800
       const parts = cookie.split('; ');
-      expect(parts[0]).toBe('auth_token=formatted-token');
+      expect(parts[0]).toBe('auth-token=formatted-token');
       expect(parts).toContain('HttpOnly');
       expect(parts).toContain('Secure');
       expect(parts).toContain('SameSite=Strict');
@@ -297,7 +297,7 @@ describe('Auth Middleware', () => {
       const cookie = clearAuthCookie();
 
       // Assert
-      expect(cookie).toContain('auth_token=');
+      expect(cookie).toContain('auth-token=');
       expect(cookie).toContain('Max-Age=0');
     });
 
@@ -316,8 +316,8 @@ describe('Auth Middleware', () => {
       const cookie = clearAuthCookie();
 
       // Assert
-      // Should start with auth_token= (empty value)
-      expect(cookie).toMatch(/^auth_token=;/);
+      // Should start with auth-token= (empty value)
+      expect(cookie).toMatch(/^auth-token=;/);
     });
 
     it('should set Max-Age to 0', () => {
@@ -342,7 +342,7 @@ describe('Auth Middleware', () => {
 
       // Assert
       const parts = cookie.split('; ');
-      expect(parts[0]).toBe('auth_token=');
+      expect(parts[0]).toBe('auth-token=');
       expect(parts).toContain('HttpOnly');
       expect(parts).toContain('Secure');
       expect(parts).toContain('SameSite=Strict');
@@ -361,11 +361,11 @@ describe('Auth Middleware', () => {
       const setCookie = createAuthCookie(token);
 
       // Extract token from cookie string (simulate browser storing it)
-      const tokenMatch = setCookie.match(/auth_token=([^;]+)/);
+      const tokenMatch = setCookie.match(/auth-token=([^;]+)/);
       const storedToken = tokenMatch ? tokenMatch[1] : '';
 
       // Simulate subsequent request with cookie
-      const request = createMockRequest(`auth_token=${storedToken}`);
+      const request = createMockRequest(`auth-token=${storedToken}`);
       const authenticatedUser = await requireAuth(request);
 
       // Assert
@@ -379,7 +379,7 @@ describe('Auth Middleware', () => {
       const token = await signJWT(payload);
 
       // Act - User is authenticated
-      const request1 = createMockRequest(`auth_token=${token}`);
+      const request1 = createMockRequest(`auth-token=${token}`);
       const user = await requireAuth(request1);
       expect(user).toBeDefined();
 
@@ -396,7 +396,7 @@ describe('Auth Middleware', () => {
       // Arrange - Authenticated user
       const payload = { sub: 'user-optional', email: 'optional@example.com' };
       const token = await signJWT(payload);
-      const requestAuth = createMockRequest(`auth_token=${token}`);
+      const requestAuth = createMockRequest(`auth-token=${token}`);
 
       // Arrange - Anonymous user
       const requestAnon = createMockRequest();

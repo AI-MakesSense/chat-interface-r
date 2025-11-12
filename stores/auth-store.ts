@@ -2,19 +2,21 @@
  * Authentication Store
  *
  * Zustand store for managing authentication state throughout the application.
- * Handles login, signup, logout, and session validation with automatic
- * persistence to localStorage.
+ * Handles login, signup, logout, and session validation.
  *
  * Features:
  * - JWT token authentication (HTTP-only cookies)
- * - Automatic session restoration on mount
+ * - Automatic session restoration on mount via checkAuth()
  * - Error state management
  * - Loading states for async operations
- * - Persisted user data (excluding sensitive information)
+ *
+ * SECURITY NOTE:
+ * User data is NOT persisted to localStorage to comply with GDPR/privacy requirements.
+ * Session is restored on mount by validating the HTTP-only cookie via checkAuth().
+ * This prevents XSS attacks and malicious browser extensions from accessing user data.
  */
 
 import { create } from 'zustand';
-import { persist } from 'zustand/middleware';
 
 /**
  * User object returned from authentication endpoints
@@ -58,17 +60,16 @@ interface AuthState {
 /**
  * Authentication store
  *
- * Manages user authentication state with automatic persistence.
- * User data (excluding password) is persisted to localStorage.
+ * Manages user authentication state.
+ * User data is NOT persisted to localStorage for security/privacy compliance.
+ * Session is restored on mount via checkAuth() which validates the HTTP-only cookie.
  */
-export const useAuthStore = create<AuthState>()(
-  persist(
-    (set, get) => ({
-      // Initial state
-      user: null,
-      isAuthenticated: false,
-      isLoading: false,
-      error: null,
+export const useAuthStore = create<AuthState>((set, get) => ({
+  // Initial state
+  user: null,
+  isAuthenticated: false,
+  isLoading: false,
+  error: null,
 
       /**
        * Login user with email and password
@@ -163,7 +164,7 @@ export const useAuthStore = create<AuthState>()(
        * Logout current user
        *
        * Calls POST /api/auth/logout to clear HTTP-only cookie,
-       * then clears local state.
+       * then clears local state and any persisted data.
        */
       logout: async () => {
         set({ isLoading: true, error: null });
@@ -184,14 +185,20 @@ export const useAuthStore = create<AuthState>()(
             isLoading: false,
             error: null,
           });
+
+          // SECURITY: Clear any persisted auth data from localStorage
+          localStorage.removeItem('auth-storage');
         } catch (error) {
-          // Even if logout fails, clear local state
+          // Even if logout fails, clear local state and storage
           set({
             user: null,
             isAuthenticated: false,
             isLoading: false,
             error: error instanceof Error ? error.message : 'Logout failed',
           });
+
+          // SECURITY: Clear localStorage even on error
+          localStorage.removeItem('auth-storage');
         }
       },
 
@@ -258,14 +265,4 @@ export const useAuthStore = create<AuthState>()(
           isAuthenticated: user !== null,
         });
       },
-    }),
-    {
-      name: 'auth-storage', // localStorage key
-      partialize: (state) => ({
-        // Only persist user data (not loading/error states)
-        user: state.user,
-        isAuthenticated: state.isAuthenticated,
-      }),
-    }
-  )
-);
+}));

@@ -27,10 +27,21 @@ import { jwtVerify } from 'jose';
 /**
  * JWT secret key for token verification
  * Must match the key used in app/api/auth/* routes
+ *
+ * SECURITY: JWT_SECRET must be set in environment variables
+ * and must be at least 32 characters for adequate security.
  */
-const JWT_SECRET = new TextEncoder().encode(
-  process.env.JWT_SECRET || 'fallback-secret-key-change-in-production'
-);
+const JWT_SECRET_STRING = process.env.JWT_SECRET;
+
+if (!JWT_SECRET_STRING) {
+  throw new Error('JWT_SECRET environment variable is required');
+}
+
+if (JWT_SECRET_STRING.length < 32) {
+  throw new Error('JWT_SECRET must be at least 32 characters');
+}
+
+const JWT_SECRET = new TextEncoder().encode(JWT_SECRET_STRING);
 
 /**
  * Protected route patterns

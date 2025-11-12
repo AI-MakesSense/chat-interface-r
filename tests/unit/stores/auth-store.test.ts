@@ -264,72 +264,58 @@ describe('Auth Store', () => {
     });
   });
 
-  describe('localStorage Persistence', () => {
-    it('should fail - user data should persist to localStorage', async () => {
-      // WHY THIS SHOULD FAIL: Need to verify persistence works
+  describe('localStorage Security', () => {
+    it('should fail - user data should NOT persist to localStorage for GDPR compliance', async () => {
+      // WHY THIS TEST: Verify user data is NOT stored in localStorage (security/privacy)
       const { login } = useAuthStore.getState();
 
       await login('test@example.com', 'Password123');
 
-      // Check localStorage
+      // Check localStorage - should NOT contain auth data
       const stored = localStorage.getItem('auth-storage');
-      expect(stored).not.toBeNull();
-
-      const parsed = JSON.parse(stored!);
-      expect(parsed.state.user).not.toBeNull();
-      expect(parsed.state.user.email).toBe('test@example.com');
-      expect(parsed.state.isAuthenticated).toBe(true);
+      expect(stored).toBeNull();
     });
 
-    it('should fail - loading and error states should NOT persist', async () => {
-      // WHY THIS SHOULD FAIL: Need to verify only relevant state persists
-      const { login } = useAuthStore.getState();
+    it('should fail - logout should clear localStorage if it exists', async () => {
+      // WHY THIS TEST: Defense in depth - clear any legacy localStorage data
+      const { login, logout } = useAuthStore.getState();
 
-      // Try to login with invalid credentials
-      try {
-        await login('wrong@example.com', 'wrong');
-      } catch (e) {
-        // Expected to fail
-      }
+      // Login first
+      await login('test@example.com', 'Password123');
 
+      // Manually add something to localStorage (simulating legacy data)
+      localStorage.setItem('auth-storage', JSON.stringify({ legacy: 'data' }));
+
+      // Logout
+      await logout();
+
+      // Verify localStorage was cleared
       const stored = localStorage.getItem('auth-storage');
-      if (stored) {
-        const parsed = JSON.parse(stored);
-        expect(parsed.state.isLoading).toBeUndefined();
-        expect(parsed.state.error).toBeUndefined();
-      }
+      expect(stored).toBeNull();
     });
 
-    it('should fail - state should restore from localStorage on mount', () => {
-      // WHY THIS SHOULD FAIL: Need to verify state restoration
-      const mockUser = {
-        id: 'user-123',
-        email: 'test@example.com',
-        name: 'Test User',
-        emailVerified: false,
-        createdAt: '2025-01-01T00:00:00.000Z',
-      };
+    it('should fail - state should restore via checkAuth, not localStorage', async () => {
+      // WHY THIS TEST: Verify session restoration happens via HTTP-only cookie validation
+      const { checkAuth } = useAuthStore.getState();
 
-      // Manually set localStorage
-      localStorage.setItem(
-        'auth-storage',
-        JSON.stringify({
-          state: {
-            user: mockUser,
-            isAuthenticated: true,
-          },
-          version: 0,
-        })
-      );
+      // Clear any store state
+      useAuthStore.setState({
+        user: null,
+        isAuthenticated: false,
+      });
 
-      // Create new store instance (simulates remount)
-      // Note: This test may fail because Zustand persist doesn't auto-hydrate in tests
-      // We'll need to trigger hydration manually or use a different approach
+      // Call checkAuth (should validate cookie and restore session)
+      await checkAuth();
+
       const state = useAuthStore.getState();
 
-      // This might fail initially if hydration isn't working
-      expect(state.user).toEqual(mockUser);
+      // User should be restored from server-side cookie validation
+      expect(state.user).not.toBeNull();
       expect(state.isAuthenticated).toBe(true);
+
+      // But localStorage should still be empty
+      const stored = localStorage.getItem('auth-storage');
+      expect(stored).toBeNull();
     });
   });
 
