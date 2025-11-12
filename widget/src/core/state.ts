@@ -26,6 +26,7 @@ export interface WidgetState {
   error: string | null;
   currentStreamingMessage: string | null;
   currentTheme?: 'light' | 'dark';
+  attachedFile?: File | null;
 }
 
 /**

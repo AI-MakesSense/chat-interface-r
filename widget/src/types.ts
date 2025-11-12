@@ -51,8 +51,8 @@ export interface LicenseConfig {
 
 export interface Message {
   id: string;
-  text: string;
-  sender: 'user' | 'bot';
+  content: string;
+  role: 'user' | 'assistant';
   timestamp: number;
 }
 
@@ -63,4 +63,5 @@ export interface WidgetState {
   error: string | null;
   currentStreamingMessage: string | null;
   currentTheme?: 'light' | 'dark';
+  attachedFile?: File | null;
 }
