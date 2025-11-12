@@ -13,10 +13,12 @@
     "@types/markdown-it": "^14.1.2",
     "@vitest/ui": "^4.0.8",
     "happy-dom": "^20.0.10",
+    "javascript-obfuscator": "^4.1.1",
     "jsdom": "^27.1.0",
     "terser": "^5.44.1",
     "typescript": "^5.3.3",
     "vite": "^5.0.0",
+    "vite-plugin-javascript-obfuscator": "^3.1.0",
     "vitest": "^4.0.8"
   },
   "dependencies": {
