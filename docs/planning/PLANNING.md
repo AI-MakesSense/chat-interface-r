@@ -1,8 +1,8 @@
 # N8n Widget Designer Platform - Planning Documentation
 
-**Last Updated:** November 10, 2025
-**Phase:** Phase 3 - Widget Serving API Tests
-**Status:** Test Plan Complete, Ready for RED Phase Execution
+**Last Updated:** November 12, 2025
+**Phase:** Week 4 - Markdown Integration Architecture
+**Status:** Architecture Design Complete, Ready for Implementation
 
 ---
 
@@ -1143,6 +1143,224 @@ RED (Current) → GREEN (Next) → REFACTOR (Later)
 - Implementation briefs for TDD-QA-Lead and Implementer
 - Risk assessment
 - Success criteria
+
+---
+
+**End of Planning Document**
+
+---
+
+## November 12, 2025 - Markdown Integration Architecture Plan
+
+### Problem Statement
+
+Five markdown utilities are complete (96 tests GREEN, 47KB bundle) but **not integrated into the message rendering flow**. The `MessageList` component currently renders all messages as plain text (escaped), missing the opportunity for rich markdown formatting in assistant responses.
+
+**Goal**: Connect markdown modules to `MessageList` with lazy loading, caching, graceful degradation, and backward compatibility.
+
+### Architecture Overview
+
+**Integration Approach**: Create `MarkdownPipeline` orchestrator class to coordinate:
+- Lazy loading (markdown-it, Prism.js)
+- Caching (MarkdownCache for duplicate messages)
+- Rendering (MarkdownRenderer with XSS sanitization)
+- Error handling (fallback to plain text)
+
+**Modified Files**:
+1. `widget/src/ui/message-list.ts` - Integrate MarkdownPipeline
+2. `widget/src/core/config.ts` - Add enableMarkdown flag
+3. `widget/src/types.ts` - Add markdown config types
+
+**New Files**:
+4. `widget/src/utils/markdown-pipeline.ts` - Orchestrator (250 LOC)
+5. `widget/tests/integration/markdown-pipeline.test.ts` - 20 integration tests
+
+### Message Flow
+
+```
+User Message Received
+        ↓
+StateManager.addMessage()
+        ↓
+MessageList.renderMessages()
+        ↓
+Check: message.role === 'assistant' && enableMarkdown?
+        ↓ YES                             ↓ NO
+MarkdownPipeline.renderAsync()    textContent = message
+        ↓
+Check MarkdownCache (60-80% hit rate)
+        ↓ MISS
+Lazy load modules (first call only, 50-100ms)
+        ↓
+MarkdownRenderer.render() (25ms)
+        ↓
+Cache result (1ms)
+        ↓
+Display HTML in DOM
+```
+
+### Configuration Design
+
+**Default Behavior** (markdown enabled out-of-box):
+```typescript
+features: {
+  enableMarkdown: true,  // Master toggle
+  markdownConfig: {
+    enableTables: true,
+    enableCodeBlocks: true,
+    enableBlockquotes: true,
+    enableLinks: true,
+    enableImages: true,
+    enableLineBreaks: true,
+    maxNesting: 20,
+  },
+  cacheConfig: {
+    maxEntries: 100,
+    maxMemory: 10485760,  // 10MB
+    ttl: 300000,          // 5 minutes
+  },
+}
+```
+
+**Users can disable**: `window.ChatWidgetConfig.features.enableMarkdown = false`
+
+### Performance Strategy
+
+**Bundle Impact**:
+- Before: 17KB initial (lazy markdown: +25KB, +6KB for syntax)
+- After: 18KB initial (+1KB for MarkdownPipeline integration)
+- Total on first markdown: 43KB
+- Total with code blocks: 49KB
+- **Within 50KB budget** ✅
+
+**Timing Analysis**:
+- First markdown (cold): ~107ms (includes lazy load)
+- Second markdown (same): ~1ms (cache hit, 107x faster)
+- Second markdown (different): ~27ms (warm render)
+- Plain text: <1ms (no overhead)
+
+**Cache Performance**:
+- Expected hit rate: 60-80% (typical chat patterns)
+- Cache hit: <1ms (98% faster than re-parsing)
+- Memory limit: 10MB (LRU eviction)
+
+### Error Handling Strategy
+
+**Graceful Degradation Hierarchy**:
+1. Full markdown rendering with syntax highlighting
+2. Markdown rendering without syntax highlighting (if Prism.js fails)
+3. HTML-escaped plain text (if markdown-it fails)
+4. Raw text (last resort)
+
+**Principle**: Widget NEVER crashes due to markdown failures.
+
+**Error Scenarios**:
+- Lazy loading fails → Fallback to plain text, log error
+- Rendering fails → Fallback to escaped text, log error
+- Cache fails → Continue without cache (performance impact only)
+
+### Testing Plan
+
+**20 Integration Tests** (`markdown-pipeline.test.ts`):
+- Lazy loading: 4 tests
+- Caching: 5 tests
+- Rendering: 4 tests
+- Configuration: 3 tests
+- Error handling: 4 tests
+
+**5 E2E Scenarios** (`markdown-rendering.spec.ts`):
+- First message lazy load
+- Code block highlighting
+- Cache performance
+- Disable markdown
+- Error handling
+
+**Performance Benchmarks**:
+- Lazy load time (<100ms)
+- Render performance (cold/warm/cached)
+- Cache lookup (<1ms)
+
+### Implementation Checklist (2-day plan)
+
+**Day 9**:
+- [ ] Phase 1: Update type definitions (15 min)
+- [ ] Phase 2: Add config defaults (20 min)
+- [ ] Phase 3: Create MarkdownPipeline orchestrator (4 hours)
+  - [ ] Write 20 integration tests (RED)
+  - [ ] Implement MarkdownPipeline (GREEN)
+  - [ ] Refactor and optimize (REFACTOR)
+
+**Day 10**:
+- [ ] Phase 4: Integrate into MessageList (2 hours)
+  - [ ] Update MessageList tests (RED)
+  - [ ] Modify renderMessages() (GREEN)
+- [ ] Phase 5: Integration testing (2 hours)
+  - [ ] Run all unit tests
+  - [ ] Manual testing (5 scenarios)
+  - [ ] Bundle size check (<50KB)
+- [ ] Phase 6: Documentation & cleanup (1 hour)
+  - [ ] Update docs
+  - [ ] Code review
+  - [ ] Git commit
+
+**Total Time**: 9-10 hours
+
+### Success Criteria
+
+**Functional**:
+- ✅ Assistant messages render as markdown by default
+- ✅ User messages render as plain text always
+- ✅ Code blocks have syntax highlighting
+- ✅ Markdown configurable and disableable
+
+**Performance**:
+- ✅ Initial bundle: <20KB gzipped (target: 18KB)
+- ✅ First markdown: <150ms (includes lazy load)
+- ✅ Cached markdown: <1ms
+- ✅ Cache hit rate: >60%
+- ✅ Total bundle: <50KB gzipped
+
+**Reliability**:
+- ✅ No crashes on markdown errors (graceful degradation)
+- ✅ XSS prevention maintained
+- ✅ Memory limits enforced (cache eviction)
+
+**Testing**:
+- ✅ 20 integration tests GREEN
+- ✅ All existing tests still GREEN (no regressions)
+- ✅ 5 E2E scenarios pass
+
+### Key Architectural Decisions
+
+**ADR-015: Create MarkdownPipeline Orchestrator**
+- **Why**: Separation of concerns, centralized error handling, easy testing
+- **Alternative**: Direct integration from MessageList (rejected: too complex)
+
+**ADR-016: Always Enable Markdown by Default**
+- **Why**: User expectation, competitive parity, minimal cost (lazy load)
+- **Alternative**: Opt-in (rejected: poor out-of-box experience)
+
+**ADR-017: Render Only Assistant Messages as Markdown**
+- **Why**: Security (user input untrusted), performance, industry standard
+- **Alternative**: All messages (rejected: security risk)
+
+### Documentation
+
+**Architecture Plan**: `docs/modules/WEEK_4_DAY_9-10_MARKDOWN_INTEGRATION_ARCHITECTURE.md`
+
+**Plan Includes**:
+- Complete architecture overview with text diagrams
+- Detailed message flow with timing analysis
+- Configuration design (3 levels)
+- Error handling strategy (graceful degradation)
+- Performance strategy (bundle impact, caching)
+- Testing plan (20 integration + 5 E2E tests)
+- Implementation checklist (step-by-step)
+- Full code examples (MarkdownPipeline, MessageList integration)
+- Decision log (3 ADRs)
+- Risk mitigation strategies
+
+**Next Steps**: Begin implementation (Day 9 morning)
 
 ---
 

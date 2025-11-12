@@ -693,3 +693,223 @@ async render(markdown: string): string {
 
 **Last Updated:** 2025-11-12
 **Total Decisions:** 14
+
+## ADR-015: Create MarkdownPipeline Orchestrator (2025-11-12)
+
+**Status:** Accepted
+**Context:** Week 4 Day 9-10 - Markdown integration architecture. Need to connect five completed markdown modules (XssSanitizer, MarkdownRenderer, SyntaxHighlighter, LazyLoader, MarkdownCache) into the existing MessageList component.
+
+**Decision:** Create **MarkdownPipeline orchestrator class** to coordinate all markdown modules
+
+**Approach:**
+```typescript
+export class MarkdownPipeline {
+  private renderer: MarkdownRenderer | null = null;
+  private cache: MarkdownCache;
+  private isInitialized: boolean = false;
+
+  async renderAsync(markdown: string): Promise<string> {
+    // 1. Check cache
+    const cached = this.cache.get(markdown);
+    if (cached) return cached;
+
+    // 2. Lazy load modules (first call only)
+    if (!this.isInitialized) {
+      await this.initialize();
+    }
+
+    // 3. Render markdown
+    const html = this.renderer!.render(markdown);
+
+    // 4. Cache result
+    this.cache.set(markdown, html);
+
+    return html;
+  }
+}
+```
+
+**Rationale:**
+
+### Separation of Concerns
+- MessageList shouldn't know about lazy loading internals
+- MessageList shouldn't manage cache state
+- MessageList shouldn't handle markdown errors
+- Single responsibility: MessageList renders UI, MarkdownPipeline renders markdown
+
+### Centralized Error Handling
+- One place to implement graceful degradation (fallback to plain text)
+- Consistent error logging and reporting
+- Prevents cascade failures (one module error doesn't break widget)
+
+### Testability
+- Easy to mock MarkdownPipeline in MessageList tests
+- Integration tests focus on pipeline behavior (not UI concerns)
+- Clear interface: `renderAsync(markdown) → html`
+
+### Single Entry Point
+- One class to import in MessageList
+- One constructor to configure (markdown + cache config)
+- One method to call (renderAsync)
+
+**Alternatives Considered:**
+
+1. **Direct integration in MessageList:**
+   - Too much complexity in MessageList (violates single responsibility)
+   - Hard to test (mocking LazyLoader, MarkdownRenderer, MarkdownCache)
+   - Error handling scattered (multiple try-catch blocks)
+   - MessageList exceeds 400 LOC (module size violation)
+
+2. **Use MarkdownRenderer directly (no orchestrator):**
+   - No lazy loading (bundle size impact)
+   - No caching (performance impact)
+   - No centralized error handling
+   - MessageList still has too much logic
+
+**Trade-offs:**
+- Clean architecture (separation of concerns)
+- Easy to test (mockable interface)
+- Centralized error handling
+- Keeps MessageList under 400 LOC
+- One additional file (250 LOC)
+- One additional abstraction layer
+
+**Impact:**
+- Code quality: High positive (clean separation of concerns)
+- Testability: High positive (easy to mock, clear interface)
+- Module size: Positive (250 LOC, within ideal range)
+- Performance: Neutral (orchestration overhead negligible)
+- Maintainability: High positive (single place to change markdown logic)
+
+**References:**
+- Full plan: docs/modules/WEEK_4_DAY_9-10_MARKDOWN_INTEGRATION_ARCHITECTURE.md
+
+---
+
+## ADR-016: Always Enable Markdown by Default (2025-11-12)
+
+**Status:** Accepted
+**Context:** Week 4 Day 9-10 - Markdown integration. Need to decide default behavior: markdown enabled or disabled by default.
+
+**Decision:** **Enable markdown rendering by default** (enableMarkdown: true)
+
+**Rationale:**
+
+### User Expectation
+- Most modern chat widgets support markdown (Intercom, Drift, Zendesk)
+- Developers expect code blocks to have syntax highlighting
+- Users expect bold, italic, links to work
+- No markdown = poor out-of-box experience
+
+### Competitive Parity
+- Intercom: Markdown enabled by default
+- Drift: Markdown enabled by default
+- Zendesk: Markdown enabled by default
+- Slack: Markdown enabled by default
+- Not supporting markdown = competitive disadvantage
+
+### Minimal Cost (Lazy Loading)
+- Initial bundle: 18KB (markdown NOT loaded)
+- First markdown: +25KB (lazy loaded on first assistant message)
+- Users without markdown: 0KB cost (never loads)
+- Lazy loading makes "always on" acceptable
+
+### Easy to Disable
+- One-line config: enableMarkdown: false
+- No code changes required
+- Instant effect (no re-build needed)
+
+**Alternatives Considered:**
+
+1. **Opt-in markdown (disabled by default):**
+   - Poor out-of-box experience (users must discover feature)
+   - Higher support burden ("How do I enable markdown?")
+   - Lower feature adoption (users don't know it exists)
+   - Competitive disadvantage (other widgets have it enabled)
+
+2. **Auto-detect markdown (parse only if syntax detected):**
+   - Regex overhead (1-2ms per message)
+   - May miss edge case markdown syntax
+   - Complex logic (regex patterns must be maintained)
+   - User confusion ("Why isn't my markdown working?")
+
+**Trade-offs:**
+- Best out-of-box experience (works immediately)
+- Competitive with other chat widgets
+- Easy to disable (one config flag)
+- Lazy loading mitigates bundle cost
+- Users who don't want markdown must opt-out
+- Slight initial bundle increase (+1KB for MarkdownPipeline)
+
+**Impact:**
+- User experience: Very high positive (works out-of-box)
+- Feature adoption: High positive (discoverable, expected)
+- Bundle size: Neutral (lazy loading mitigates cost)
+- Support burden: Positive (fewer "how do I enable?" questions)
+
+---
+
+## ADR-017: Render Only Assistant Messages as Markdown (2025-11-12)
+
+**Status:** Accepted
+**Context:** Week 4 Day 9-10 - Markdown integration. Need to decide which messages should render as markdown: all messages, assistant only, user only, or per-message flag.
+
+**Decision:** Render **only assistant messages** as markdown (user messages always plain text)
+
+**Rationale:**
+
+### Security (XSS Prevention)
+- User messages are untrusted input (user controls content)
+- Rendering user input as HTML creates XSS vector
+- Even with sanitization, user HTML should be escaped (defense in depth)
+- Assistant messages are server-controlled (N8n workflow)
+
+### Industry Standard
+- Slack: User messages plain text, bot messages support markdown
+- Discord: User messages plain text (unless explicitly formatted)
+- GitHub: Comments support markdown (trusted users)
+- Stack Overflow: Markdown for questions/answers (not chat)
+
+### Performance
+- User messages rarely contain markdown (mostly short questions)
+- Parsing user messages wastes CPU cycles (25ms per message)
+- Expected markdown usage: <5% of user messages, >80% of assistant messages
+- Skipping user messages saves ~95% of unnecessary parsing
+
+### Consistency with Chat Patterns
+- Users type plain text naturally ("How do I reset my password?")
+- Assistants provide rich responses (code examples, formatted lists)
+- Markdown in user messages feels unexpected/awkward
+
+**Alternatives Considered:**
+
+1. **Render all messages as markdown:**
+   - Security risk (user input rendered as HTML)
+   - Performance impact (parse every user message)
+   - May break existing plain text user messages
+
+2. **Per-message flag (server/client control):**
+   - Maximum flexibility (decide per-message)
+   - Supports rich user messages (if needed)
+   - Adds complexity to Message interface
+   - Requires N8n workflow changes
+   - Can be added later without breaking changes (future enhancement)
+
+**Trade-offs:**
+- Security: User input never rendered as HTML (XSS prevention)
+- Performance: Skip ~95% of unnecessary markdown parsing
+- Industry standard: Matches user expectations (Slack, Discord)
+- Simple rule: Easy to understand and maintain
+- No markdown in user messages (can't send bold as user)
+- Future: Can add per-message flag if needed (not breaking)
+
+**Impact:**
+- Security: Very high positive (XSS prevention for user input)
+- Performance: High positive (skip ~95% of parsing)
+- User experience: Neutral (users rarely use markdown in chat)
+- Maintainability: High positive (simple rule, easy to reason about)
+
+---
+
+**Last Updated:** 2025-11-12
+**Total Decisions:** 17
