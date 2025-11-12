@@ -25,6 +25,11 @@ import { classifyError, NetworkError } from '../../utils/network-error-handler';
 import { N8nWebhookPayload, FileAttachment } from './types';
 
 /**
+ * Default timeout for HTTP requests in milliseconds (30 seconds)
+ */
+const DEFAULT_TIMEOUT_MS = 30000;
+
+/**
  * Options for sending a message
  */
 export interface SendMessageOptions {
@@ -97,7 +102,7 @@ export class MessageSender {
    * }
    */
   async sendMessage(options: SendMessageOptions): Promise<SendMessageResult> {
-    const { text, attachments, timeoutMs = 30000 } = options;
+    const { text, attachments, timeoutMs = DEFAULT_TIMEOUT_MS } = options;
 
     // Set busy flag
     this.isBusyFlag = true;
