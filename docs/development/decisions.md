@@ -476,5 +476,220 @@ render(markdown: string): string {
 
 ---
 
+---
+
+## ADR-012: Lazy Load Markdown Modules (2025-11-12)
+
+**Status:** Accepted
+**Context:** Week 4 Day 7-8 - Performance optimization phase. Current bundle is 48.23KB (96% of 50KB limit). All markdown modules (DOMPurify, markdown-it, Prism.js) are bundled in main chunk, totaling 31KB.
+
+**Problem:** Initial bundle is too large. Users pay 31KB upfront even if they never see markdown messages.
+
+**Decision:** Use **dynamic imports** to lazy-load markdown modules on first use
+
+**Implementation:**
+
+```typescript
+// Dynamic import creates separate chunk
+const { MarkdownRenderer } = await import(
+  /* webpackChunkName: "markdown" */
+  './markdown-renderer'
+);
+```
+
+**Bundle Impact:**
+
+**Before:**
+- main.js: 48.23 KB (everything bundled)
+
+**After:**
+- main.js: ~17KB (core widget only) ← **64% reduction**
+- markdown.js: ~31KB (loaded on first markdown message)
+
+**Rationale:**
+
+1. **Massive initial load reduction:** 48KB → 17KB (instant page load)
+2. **Progressive enhancement:** Widget loads instantly, markdown loads on demand
+3. **User behavior:** Most users see widget before any markdown messages
+4. **Browser support:** Dynamic imports well-supported (Chrome 63+, Firefox 67+, Safari 11.1+)
+5. **UX acceptable:** 100ms load time for first markdown message is imperceptible
+
+**Trade-offs:**
+- ✅ 64% faster initial load (48KB → 17KB)
+- ✅ Stays within bundle budget (no changes needed)
+- ✅ Better Time to Interactive (TTI)
+- ✅ Better First Contentful Paint (FCP)
+- ❌ Slight delay on first markdown message (~100ms)
+- ❌ More async complexity (promises everywhere)
+- ❌ Requires network request for markdown chunk
+
+**Impact:**
+- Performance: **High positive** (64% faster initial load)
+- User Experience: **High positive** (instant widget, slight delay on first message)
+- Bundle Size: **High positive** (maintains 50KB limit with room to grow)
+- Code Complexity: **Medium negative** (async loading adds complexity)
+
+**References:**
+- Full Plan: `docs/modules/WEEK_4_DAY_7-8_PERFORMANCE_OPTIMIZATION_PLAN.md`
+- Vite Code Splitting: https://vitejs.dev/guide/build.html#chunking-strategy
+
+---
+
+## ADR-013: LRU Cache with TTL for Markdown Rendering (2025-11-12)
+
+**Status:** Accepted
+**Context:** Week 4 Day 7-8 - Performance optimization. Duplicate markdown messages are re-parsed every time, wasting CPU. Typical chat has 60-80% duplicate content (common messages, greetings, etc.).
+
+**Problem:** Every markdown render re-parses from scratch (25ms per message). No caching strategy.
+
+**Decision:** Implement **LRU (Least Recently Used) cache** with TTL and memory limits
+
+**Configuration:**
+
+```typescript
+const DEFAULT_CACHE_CONFIG = {
+  maxEntries: 100,           // Max 100 cached messages
+  maxMemory: 10 * 1024 * 1024,  // 10MB memory limit
+  ttl: 5 * 60 * 1000,        // 5-minute TTL (stale eviction)
+};
+```
+
+**Architecture:**
+
+```typescript
+class MarkdownCache {
+  private cache = new Map<string, CacheEntry>();
+
+  get(markdown: string): string | null {
+    // 1. Check if cached
+    // 2. Check TTL (evict if stale)
+    // 3. Update access count (for LRU)
+    // 4. Return cached HTML
+  }
+
+  set(markdown: string, html: string): void {
+    // 1. Check memory limit (evict LRU if needed)
+    // 2. Check entry limit (evict LRU if needed)
+    // 3. Store in cache
+  }
+}
+```
+
+**Performance Impact:**
+
+**Before (no caching):**
+- First render: 25ms
+- Second render (same message): 25ms ← **wasted work**
+- Third render (same message): 25ms ← **wasted work**
+
+**After (with cache):**
+- First render (cache miss): 25ms
+- Second render (cache hit): <1ms ← **25x faster!**
+- Third render (cache hit): <1ms ← **98% reduction**
+
+**Expected Cache Hit Rate:** 60-80% (based on typical chat patterns)
+
+**Rationale:**
+
+1. **LRU eviction:** Automatically removes least-used entries when limit reached
+2. **TTL eviction:** Prevents serving stale content (5-minute freshness)
+3. **Memory limit:** Prevents unbounded growth (10MB max)
+4. **Entry limit:** Prevents excessive cache entries (100 max)
+5. **Hash-based keys:** Fast lookup with string hashing
+
+**Eviction Strategy:**
+
+1. **On memory pressure:** Evict 50% of cache (sorted by access count)
+2. **On TTL expiry:** Remove stale entries (>5 minutes old)
+3. **On entry limit:** Evict least recently used entry
+
+**Trade-offs:**
+- ✅ 98% faster for cached messages (1ms vs 25ms)
+- ✅ Reduced CPU usage (better battery life on mobile)
+- ✅ Better perceived performance
+- ✅ Cache hits scale with message volume
+- ❌ Added memory usage (5-10MB for cache)
+- ❌ Cache management complexity (eviction logic)
+- ❌ Potential stale content (mitigated by TTL)
+
+**Impact:**
+- Performance: **Very high positive** (98% reduction for cache hits)
+- User Experience: **Very high positive** (instant renders for common messages)
+- Memory: **Medium negative** (5-10MB cache overhead)
+- Code Complexity: **Medium negative** (cache management logic)
+
+**References:**
+- LRU Cache Pattern: https://en.wikipedia.org/wiki/Cache_replacement_policies#Least_recently_used_(LRU)
+- Full Plan: `docs/modules/WEEK_4_DAY_7-8_PERFORMANCE_OPTIMIZATION_PLAN.md`
+
+---
+
+## ADR-014: Split Prism.js into Separate Chunk (2025-11-12)
+
+**Status:** Accepted
+**Context:** Week 4 Day 7-8 - Bundle optimization. Prism.js is 6KB but only used when code blocks are present in messages. Not all messages contain code blocks.
+
+**Problem:** Users pay 6KB cost for Prism.js even if they never see code blocks.
+
+**Decision:** Split Prism.js into **separate lazy-loaded chunk** (apart from markdown-it chunk)
+
+**Bundle Structure:**
+
+**Before:**
+- main.js: 17KB
+- markdown.js: 31KB (markdown-it + DOMPurify + Prism.js)
+
+**After:**
+- main.js: 17KB (unchanged)
+- markdown.js: 25KB (markdown-it + DOMPurify only)
+- syntax.js: 6KB (Prism.js only) ← **NEW**
+
+**Rationale:**
+
+1. **Optional feature:** Not all messages contain code blocks
+2. **6KB savings:** Users without code don't pay Prism.js cost
+3. **Progressive enhancement:** Syntax highlighting loads on first code block
+4. **Easy implementation:** Already using dynamic imports for markdown
+5. **Better separation:** Code highlighting is distinct from markdown parsing
+
+**Loading Strategy:**
+
+```typescript
+// markdown-renderer.ts
+async render(markdown: string): string {
+  const html = this.md.render(markdown);
+  const safeHtml = this.sanitizer.sanitize(html);
+
+  // Only load syntax highlighter if code blocks present
+  if (html.includes('<code class="language-')) {
+    const { SyntaxHighlighter } = await import('./syntax-highlighter');
+    return SyntaxHighlighter.highlight(safeHtml);
+  }
+
+  return safeHtml;
+}
+```
+
+**Trade-offs:**
+- ✅ 6KB savings for users without code
+- ✅ Better separation of concerns
+- ✅ Smaller markdown chunk (25KB instead of 31KB)
+- ✅ Optional feature properly isolated
+- ❌ Two network requests instead of one (if code present)
+- ❌ Slightly more complex loading logic
+- ❌ Minimal delay for first code block (~50ms)
+
+**Impact:**
+- Performance: **Medium positive** (6KB savings for most users)
+- Bundle Size: **Medium positive** (better chunk granularity)
+- User Experience: **Neutral** (slight delay only for first code block)
+- Code Complexity: **Low negative** (minor additional async logic)
+
+**References:**
+- Vite Manual Chunks: https://rollupjs.org/configuration-options/#output-manualchunks
+- Full Plan: `docs/modules/WEEK_4_DAY_7-8_PERFORMANCE_OPTIMIZATION_PLAN.md`
+
+---
+
 **Last Updated:** 2025-11-12
-**Total Decisions:** 11
+**Total Decisions:** 14
