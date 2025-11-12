@@ -83,8 +83,14 @@ class MockEventSource {
 describe('SSEClient - RED Tests', () => {
   let stateManager: StateManager;
   let sseClient: SSEClient;
+  let originalEventSource: any;
 
   beforeEach(() => {
+    // Save original EventSource
+    originalEventSource = (global as any).EventSource;
+    // Reset to MockEventSource
+    (global as any).EventSource = MockEventSource;
+
     // Initialize state manager
     const initialState: WidgetState = {
       isOpen: true,
@@ -106,6 +112,9 @@ describe('SSEClient - RED Tests', () => {
     if (sseClient) {
       sseClient.disconnect();
     }
+
+    // Restore original EventSource
+    (global as any).EventSource = originalEventSource;
   });
 
   // ============================================================
@@ -149,9 +158,8 @@ describe('SSEClient - RED Tests', () => {
     await new Promise((resolve) => setTimeout(resolve, 50));
 
     // ACT
-    // Simulate receiving message chunks
-    const eventSource = (global as any).EventSource.prototype;
-    const mockEventSource = new MockEventSource(sseUrl);
+    // Get the EventSource instance created by connect()
+    const mockEventSource = sseClient.getEventSource() as any;
 
     mockEventSource.simulateMessage('Hello');
     mockEventSource.simulateMessage(' world');
@@ -182,7 +190,8 @@ describe('SSEClient - RED Tests', () => {
     await new Promise((resolve) => setTimeout(resolve, 50));
 
     // ACT
-    const mockEventSource = new MockEventSource(sseUrl);
+    // Get the EventSource instance created by connect()
+    const mockEventSource = sseClient.getEventSource() as any;
 
     // Simulate receiving messages followed by [DONE] signal
     mockEventSource.simulateMessage('Hello');
@@ -221,7 +230,8 @@ describe('SSEClient - RED Tests', () => {
     await new Promise((resolve) => setTimeout(resolve, 50));
 
     // ACT
-    const mockEventSource = new MockEventSource(sseUrl);
+    // Get the EventSource instance created by connect()
+    const mockEventSource = sseClient.getEventSource() as any;
 
     // Simulate connection error
     mockEventSource.simulateError();
@@ -256,19 +266,45 @@ describe('SSEClient - RED Tests', () => {
     // Configure max reconnect attempts (e.g., 3)
     // This should be configurable in SSEClient constructor
 
-    sseClient.connect(sseUrl);
+    // Mock EventSource to always fail
+    const eventSourceInstances: MockEventSource[] = [];
 
-    // Wait for initial connection
-    await new Promise((resolve) => setTimeout(resolve, 50));
+    (global as any).EventSource = class {
+      url: string;
+      readyState: number;
+      onopen: ((event: Event) => void) | null = null;
+      onmessage: ((event: MessageEvent) => void) | null = null;
+      onerror: ((event: Event) => void) | null = null;
+
+      static CONNECTING = 0;
+      static OPEN = 1;
+      static CLOSED = 2;
+
+      constructor(url: string) {
+        this.url = url;
+        this.readyState = (global as any).EventSource.CONNECTING;
+        eventSourceInstances.push(this);
+
+        // Simulate immediate error instead of successful connection
+        setTimeout(() => {
+          if (this.onerror) {
+            this.onerror(new Event('error'));
+          }
+        }, 10);
+      }
+
+      close() {
+        this.readyState = (global as any).EventSource.CLOSED;
+      }
+    };
 
     // ACT
-    const mockEventSource = new MockEventSource(sseUrl);
+    sseClient.connect(sseUrl);
 
-    // Simulate repeated connection errors
-    for (let i = 0; i < 5; i++) {
-      mockEventSource.simulateError();
-      await new Promise((resolve) => setTimeout(resolve, 500));
-    }
+    // Wait for all reconnection attempts to complete
+    // With exponential backoff: 1000, 2000, 4000, 8000, 16000 ms
+    // Total: ~31000ms, but we can check earlier
+    await new Promise((resolve) => setTimeout(resolve, 8000));
 
     // ASSERT
     // After max attempts, should stop reconnecting
@@ -277,7 +313,8 @@ describe('SSEClient - RED Tests', () => {
     expect(['error', 'closed']).toContain(finalState);
 
     // Error callback should be called multiple times (but not indefinitely)
-    expect(errorSpy.mock.calls.length).toBeLessThanOrEqual(5);
+    // Should be called at most maxReconnectAttempts + 1 times (initial + retries)
+    expect(errorSpy.mock.calls.length).toBeLessThanOrEqual(6);
   }, 15000);
 
   // ============================================================
@@ -336,7 +373,8 @@ describe('SSEClient - RED Tests', () => {
     // Wait for connection to open
     await new Promise((resolve) => setTimeout(resolve, 50));
 
-    const mockEventSource = new MockEventSource(sseUrl);
+    // Get the EventSource instance created by connect()
+    const mockEventSource = sseClient.getEventSource() as any;
 
     // Verify connection is active
     expect(sseClient.getState()).toBe('connected');
@@ -374,7 +412,8 @@ describe('SSEClient - RED Tests', () => {
     await new Promise((resolve) => setTimeout(resolve, 50));
 
     // ACT
-    const mockEventSource = new MockEventSource(sseUrl);
+    // Get the EventSource instance created by connect()
+    const mockEventSource = sseClient.getEventSource() as any;
     mockEventSource.simulateMessage('Test message');
 
     // ASSERT
@@ -398,7 +437,8 @@ describe('SSEClient - RED Tests', () => {
     await new Promise((resolve) => setTimeout(resolve, 50));
 
     // ACT
-    const mockEventSource = new MockEventSource(sseUrl);
+    // Get the EventSource instance created by connect()
+    const mockEventSource = sseClient.getEventSource() as any;
 
     mockEventSource.simulateMessage('Chunk 1');
     mockEventSource.simulateMessage(' Chunk 2');

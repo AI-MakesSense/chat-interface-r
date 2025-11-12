@@ -129,9 +129,8 @@ export class MessageSender {
 
       // Construct payload
       const payload: N8nWebhookPayload = {
-        action: 'sendMessage',
+        text,
         sessionId,
-        chatInput: text,
         ...(fileAttachments && { attachments: fileAttachments }),
       };
 
@@ -253,7 +252,7 @@ export class MessageSender {
 
         resolve({
           name: file.name,
-          mimeType: file.type,
+          type: file.type,
           data: base64Data,
           size: file.size,
         });

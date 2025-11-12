@@ -24,7 +24,7 @@ export interface FileAttachment {
   /** Original filename */
   name: string;
   /** MIME type (e.g., "image/png", "application/pdf") */
-  mimeType: string;
+  type: string;
   /** Base64-encoded file data (without data:... prefix) */
   data: string;
   /** File size in bytes */
@@ -37,12 +37,10 @@ export interface FileAttachment {
  * Sent to the N8n webhook endpoint when user sends a message.
  */
 export interface N8nWebhookPayload {
-  /** Action identifier (always 'sendMessage' for chat) */
-  action: 'sendMessage';
+  /** User's message text */
+  text: string;
   /** Session ID for conversation continuity */
   sessionId: string;
-  /** User's message text */
-  chatInput: string;
   /** Optional file attachments (base64-encoded) */
   attachments?: FileAttachment[];
 }

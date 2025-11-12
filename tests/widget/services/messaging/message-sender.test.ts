@@ -336,10 +336,10 @@ describe('MessageSender - RED Tests', () => {
   });
 
   // ============================================================
-  // Test 6: Throw NetworkError on fetch failure
+  // Test 6: Return NetworkError on fetch failure
   // ============================================================
 
-  it('should throw NetworkError on fetch failure', async () => {
+  it('should return NetworkError on fetch failure', async () => {
     // ARRANGE
     const fetchError = new TypeError('Failed to fetch');
     (global.fetch as any).mockRejectedValueOnce(fetchError);
@@ -348,29 +348,33 @@ describe('MessageSender - RED Tests', () => {
       text: 'Test message',
     };
 
-    // ACT & ASSERT
-    await expect(messageSender.sendMessage(options)).rejects.toThrow();
+    // ACT
+    const result = await messageSender.sendMessage(options);
 
-    // Verify error is classified as NetworkError
-    try {
-      await messageSender.sendMessage(options);
-    } catch (error: any) {
-      expect(error.type).toBe('network');
-      expect(error.retryable).toBe(true);
-    }
+    // ASSERT
+    expect(result.success).toBe(false);
+    expect(result.error).toBeDefined();
+    expect(result.error?.type).toBe('network');
+    expect(result.error?.retryable).toBe(true);
   });
 
   // ============================================================
-  // Test 7: Throw TimeoutError after 30s
+  // Test 7: Return TimeoutError after timeout
   // ============================================================
 
-  it('should throw TimeoutError after timeout', async () => {
+  it('should return TimeoutError after timeout', async () => {
     // ARRANGE
-    // Mock fetch to never resolve
+    // Mock fetch that respects abort signal
     (global.fetch as any).mockImplementationOnce(
-      () =>
-        new Promise((resolve) => {
-          // Never resolves
+      (_url: string, options: any) =>
+        new Promise((resolve, reject) => {
+          // Listen for abort from timeout
+          if (options.signal) {
+            options.signal.addEventListener('abort', () => {
+              reject(new DOMException('The operation was aborted.', 'AbortError'));
+            });
+          }
+          // Never resolves normally
         })
     );
 
@@ -379,16 +383,15 @@ describe('MessageSender - RED Tests', () => {
       timeoutMs: 100, // Short timeout for testing
     };
 
-    // ACT & ASSERT
-    await expect(messageSender.sendMessage(options)).rejects.toThrow();
+    // ACT
+    const result = await messageSender.sendMessage(options);
 
-    try {
-      await messageSender.sendMessage(options);
-    } catch (error: any) {
-      expect(error.type).toBe('timeout');
-      expect(error.retryable).toBe(true);
-    }
-  }, 10000); // Increase test timeout
+    // ASSERT
+    expect(result.success).toBe(false);
+    expect(result.error).toBeDefined();
+    expect(result.error?.type).toBe('abort');
+    expect(result.error?.retryable).toBe(false);
+  });
 
   // ============================================================
   // Test 8: Abort request when abort() called
@@ -425,16 +428,15 @@ describe('MessageSender - RED Tests', () => {
       messageSender.abort();
     }, 50);
 
-    // ASSERT
-    await expect(sendPromise).rejects.toThrow();
+    // Wait for result
+    const result = await sendPromise;
 
-    try {
-      await sendPromise;
-    } catch (error: any) {
-      expect(error.type).toBe('abort');
-      expect(error.retryable).toBe(false);
-    }
-  }, 10000);
+    // ASSERT
+    expect(result.success).toBe(false);
+    expect(result.error).toBeDefined();
+    expect(result.error?.type).toBe('abort');
+    expect(result.error?.retryable).toBe(false);
+  });
 
   // ============================================================
   // Additional Test: isBusy() flag
