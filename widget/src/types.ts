@@ -6,24 +6,36 @@
  */
 
 export interface WidgetConfig {
-  branding?: BrandingConfig;
-  style?: StyleConfig;
+  branding: BrandingConfig;
+  style: StyleConfig;
+  features: FeaturesConfig;
   connection: ConnectionConfig;
   license?: LicenseConfig; // Injected by server at serve time
 }
 
 export interface BrandingConfig {
-  companyName?: string;
+  companyName: string;
   logoUrl?: string;
-  welcomeText?: string;
-  firstMessage?: string;
+  welcomeText: string;
+  firstMessage: string;
 }
 
 export interface StyleConfig {
-  theme?: 'light' | 'dark' | 'auto';
-  primaryColor?: string;
-  position?: 'bottom-right' | 'bottom-left';
-  cornerRadius?: number;
+  theme: 'light' | 'dark' | 'auto';
+  primaryColor: string;
+  backgroundColor: string;
+  textColor: string;
+  position: 'bottom-right' | 'bottom-left' | 'top-right' | 'top-left';
+  cornerRadius: number;
+  fontFamily: string;
+  fontSize: number;
+  customFontUrl?: string;
+}
+
+export interface FeaturesConfig {
+  fileAttachmentsEnabled: boolean;
+  allowedExtensions: string[];
+  maxFileSizeKB: number;
 }
 
 export interface ConnectionConfig {
@@ -39,7 +51,16 @@ export interface LicenseConfig {
 
 export interface Message {
   id: string;
-  role: 'user' | 'assistant';
-  content: string;
+  text: string;
+  sender: 'user' | 'bot';
   timestamp: number;
+}
+
+export interface WidgetState {
+  isOpen: boolean;
+  messages: Message[];
+  isLoading: boolean;
+  error: string | null;
+  currentStreamingMessage: string | null;
+  currentTheme?: 'light' | 'dark';
 }
