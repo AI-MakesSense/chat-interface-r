@@ -202,6 +202,19 @@ describe('GET /api/widgets/[id]/download - Download Widget Package', () => {
       expect(response.headers.get('Content-Disposition')).toContain('download-test-widget-portal.zip');
     });
 
+    it('should download extension package successfully', async () => {
+      const url = new URL(`http://localhost/api/widgets/${activeWidget.id}/download?type=extension`);
+      const request = new Request(url, {
+        headers: { Cookie: `auth-token=${authToken}` },
+      });
+
+      const response = await GET(request, { params: Promise.resolve({ id: activeWidget.id }) });
+
+      expect(response.status).toBe(200);
+      expect(response.headers.get('Content-Type')).toBe('application/zip');
+      expect(response.headers.get('Content-Disposition')).toContain('download-test-widget-extension.zip');
+    });
+
     it('should default to website package when type not specified', async () => {
       const url = new URL(`http://localhost/api/widgets/${activeWidget.id}/download`);
       const request = new Request(url, {
@@ -350,6 +363,33 @@ describe('GET /api/widgets/[id]/download - Download Widget Package', () => {
       // Verify file count
       const fileNames = Object.keys(zip.files).filter(name => !name.endsWith('/'));
       expect(fileNames.length).toBe(3);
+    });
+
+    it('should contain valid zip with correct files for extension package', async () => {
+      const url = new URL(`http://localhost/api/widgets/${activeWidget.id}/download?type=extension`);
+      const request = new Request(url, {
+        headers: { Cookie: `auth-token=${authToken}` },
+      });
+
+      const response = await GET(request, { params: Promise.resolve({ id: activeWidget.id }) });
+      const zipBuffer = Buffer.from(await response.arrayBuffer());
+
+      // Verify it's a valid zip
+      const zip = await JSZip.loadAsync(zipBuffer);
+
+      // Check extension files exist
+      expect(zip.files['manifest.json']).toBeDefined();
+      expect(zip.files['sidepanel.html']).toBeDefined();
+      expect(zip.files['background.js']).toBeDefined();
+      expect(zip.files['chat-widget.js']).toBeDefined();
+      expect(zip.files['README.md']).toBeDefined();
+      expect(zip.files['icons/icon-16.png']).toBeDefined();
+      expect(zip.files['icons/icon-48.png']).toBeDefined();
+      expect(zip.files['icons/icon-128.png']).toBeDefined();
+
+      // Verify file count (at least 8 files)
+      const fileNames = Object.keys(zip.files).filter(name => !name.endsWith('/'));
+      expect(fileNames.length).toBeGreaterThanOrEqual(8);
     });
   });
 });

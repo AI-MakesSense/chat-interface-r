@@ -26,7 +26,7 @@ import { z } from 'zod';
 // =============================================================================
 
 const DownloadQuerySchema = z.object({
-  type: z.enum(['website', 'portal']).default('website'),
+  type: z.enum(['website', 'portal', 'extension']).default('website'),
 });
 
 // =============================================================================
@@ -98,7 +98,10 @@ export async function GET(
     let zipBuffer: Buffer;
     let filename: string;
 
-    if (type === 'portal') {
+    if (type === 'extension') {
+      zipBuffer = await generator.generateExtensionPackage(config, widgetId);
+      filename = `${widget.name.replace(/[^a-z0-9]/gi, '-').toLowerCase()}-extension.zip`;
+    } else if (type === 'portal') {
       zipBuffer = await generator.generatePortalPackage(config, widgetId);
       filename = `${widget.name.replace(/[^a-z0-9]/gi, '-').toLowerCase()}-portal.zip`;
     } else {
