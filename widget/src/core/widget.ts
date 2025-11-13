@@ -12,8 +12,8 @@
  */
 
 import { WidgetConfig, Message } from '../types';
-import { createChatWidget } from '../widget';
 import { PortalRenderer } from './portal-renderer';
+import { NormalRenderer } from './normal-renderer';
 import { ConfigValidator } from './config-validator';
 
 export type WidgetMode = 'normal' | 'portal' | 'embedded';
@@ -76,19 +76,20 @@ export class Widget {
   }
 
   /**
-   * Render embedded mode - chat in container (no bubble)
+   * Render embedded mode - chat in container with fullscreen toggle
    */
   private renderEmbeddedMode(): void {
-    // TODO: Implement embedded mode
-    // For now, use portal mode rendering
-    this.renderPortalMode();
+    const renderer = new NormalRenderer(this.config);
+    const { chatWindow } = renderer.render();
+    this.chatWindow = chatWindow;
   }
 
   /**
-   * Render normal mode - bubble + chat window (existing behavior)
+   * Render normal mode - bubble + chat window with fullscreen toggle
    */
   private renderNormalMode(): void {
-    // Use existing createChatWidget function
-    createChatWidget(this.config);
+    const renderer = new NormalRenderer(this.config);
+    const { chatWindow } = renderer.render();
+    this.chatWindow = chatWindow;
   }
 }
