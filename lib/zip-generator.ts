@@ -12,6 +12,7 @@ import path from 'path';
 import type { WidgetConfig } from '@/widget/src/types';
 import { HTMLTemplates } from './zip-generator/html-templates';
 import { READMETemplates } from './zip-generator/readme-templates';
+import { ExtensionTemplates, IconGenerator } from './zip-generator/extension-templates';
 
 export type PackageType = 'website' | 'portal' | 'extension';
 
@@ -71,6 +72,51 @@ export class ZipGenerator {
 
     // Add README
     const readme = READMETemplates.generatePortalREADME(widgetId);
+    zip.file('README.md', readme);
+
+    // Generate zip buffer
+    return await zip.generateAsync({
+      type: 'nodebuffer',
+      compression: 'DEFLATE',
+      compressionOptions: { level: 9 }
+    });
+  }
+
+  /**
+   * Generate Chrome extension package
+   * Contains: manifest.json, sidepanel.html, background.js, chat-widget.js, icons/, README.md
+   */
+  async generateExtensionPackage(config: WidgetConfig, widgetId: string): Promise<Buffer> {
+    this.validateConfig(config);
+
+    const zip = new JSZip();
+
+    // Add widget script
+    const widgetScript = await this.getWidgetScript();
+    zip.file('chat-widget.js', widgetScript);
+
+    // Add manifest.json
+    const manifest = ExtensionTemplates.generateManifest(config);
+    zip.file('manifest.json', JSON.stringify(manifest, null, 2));
+
+    // Add sidepanel.html
+    const sidepanelHtml = ExtensionTemplates.generateSidepanel(config, widgetId);
+    zip.file('sidepanel.html', sidepanelHtml);
+
+    // Add background.js (service worker)
+    const backgroundScript = ExtensionTemplates.generateBackground();
+    zip.file('background.js', backgroundScript);
+
+    // Add icon files
+    const iconColor = { r: 0, g: 191, b: 255 }; // Primary blue color
+    const iconSizes = [16, 48, 128];
+    for (const size of iconSizes) {
+      const iconBuffer = await IconGenerator.generate(size, iconColor);
+      zip.file(`icons/icon-${size}.png`, iconBuffer);
+    }
+
+    // Add README
+    const readme = ExtensionTemplates.generateREADME(widgetId);
     zip.file('README.md', readme);
 
     // Generate zip buffer
