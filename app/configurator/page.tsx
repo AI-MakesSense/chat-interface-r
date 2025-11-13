@@ -27,6 +27,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { PreviewFrame } from '@/components/configurator/preview-frame';
 import { DeviceSwitcher } from '@/components/configurator/device-switcher';
+import { WidgetDownloadButtons } from '@/components/dashboard/widget-download-buttons';
 
 /**
  * Configurator page component
@@ -399,6 +400,14 @@ export default function ConfiguratorPage() {
                 </div>
               </CardContent>
             </Card>
+
+            {/* Download Packages Section */}
+            {currentWidget && (
+              <WidgetDownloadButtons
+                widgetId={currentWidget.id}
+                widgetName={currentWidget.name}
+              />
+            )}
           </div>
 
           {/* Preview Panel */}
