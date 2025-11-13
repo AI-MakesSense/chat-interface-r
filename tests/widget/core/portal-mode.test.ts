@@ -10,8 +10,8 @@
 
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { JSDOM } from 'jsdom';
+import { Widget } from '../../../widget/src/core/widget';
 
-// Test will fail - Widget class doesn't have portal mode yet
 describe('Widget Portal Mode', () => {
   let dom: JSDOM;
   let document: Document;
@@ -36,16 +36,13 @@ describe('Widget Portal Mode', () => {
 
   describe('Mode Detection', () => {
     it('should detect portal mode from config', () => {
-      // This will fail - Widget doesn't exist yet
-      const { Widget } = require('../../../widget/src/core/widget');
-      const config = { mode: 'portal', license: 'abc123' };
+      const config = { mode: 'portal' as const, license: 'abc123' };
       const widget = new Widget(config);
 
       expect(widget.isPortalMode()).toBe(true);
     });
 
     it('should default to normal mode if not specified', () => {
-      const { Widget } = require('../../../widget/src/core/widget');
       const config = { license: 'abc123' };
       const widget = new Widget(config);
 
@@ -53,8 +50,7 @@ describe('Widget Portal Mode', () => {
     });
 
     it('should handle embedded mode separately', () => {
-      const { Widget } = require('../../../widget/src/core/widget');
-      const config = { mode: 'embedded', license: 'abc123' };
+      const config = { mode: 'embedded' as const, license: 'abc123' };
       const widget = new Widget(config);
 
       expect(widget.isEmbeddedMode()).toBe(true);
@@ -64,7 +60,7 @@ describe('Widget Portal Mode', () => {
 
   describe('Portal Rendering', () => {
     it('should NOT render bubble button in portal mode', () => {
-      const { Widget } = require('../../../widget/src/core/widget');
+      
       const config = { mode: 'portal', license: 'abc123', webhookUrl: 'https://test.com' };
       const widget = new Widget(config);
       widget.render();
@@ -74,7 +70,7 @@ describe('Widget Portal Mode', () => {
     });
 
     it('should render chat window immediately in portal mode', () => {
-      const { Widget } = require('../../../widget/src/core/widget');
+      
       const config = { mode: 'portal', license: 'abc123', webhookUrl: 'https://test.com' };
       const widget = new Widget(config);
       widget.render();
@@ -85,7 +81,7 @@ describe('Widget Portal Mode', () => {
     });
 
     it('should apply fullscreen styles in portal mode', () => {
-      const { Widget } = require('../../../widget/src/core/widget');
+      
       const config = { mode: 'portal', license: 'abc123', webhookUrl: 'https://test.com' };
       const widget = new Widget(config);
       widget.render();
@@ -95,12 +91,12 @@ describe('Widget Portal Mode', () => {
       expect(chatWindow.style.width).toBe('100%');
       expect(chatWindow.style.height).toBe('100%');
       expect(chatWindow.style.position).toBe('fixed');
-      expect(chatWindow.style.top).toBe('0');
-      expect(chatWindow.style.left).toBe('0');
+      expect(chatWindow.style.top).toBe('0px');
+      expect(chatWindow.style.left).toBe('0px');
     });
 
     it('should NOT show minimize button in portal mode', () => {
-      const { Widget } = require('../../../widget/src/core/widget');
+      
       const config = { mode: 'portal', license: 'abc123', webhookUrl: 'https://test.com' };
       const widget = new Widget(config);
       widget.render();
@@ -110,7 +106,7 @@ describe('Widget Portal Mode', () => {
     });
 
     it('should auto-focus input field in portal mode', async () => {
-      const { Widget } = require('../../../widget/src/core/widget');
+      
       const config = { mode: 'portal', license: 'abc123', webhookUrl: 'https://test.com' };
       const widget = new Widget(config);
       widget.render();
@@ -125,7 +121,7 @@ describe('Widget Portal Mode', () => {
 
   describe('Portal Header Configuration', () => {
     it('should show header by default in portal mode', () => {
-      const { Widget } = require('../../../widget/src/core/widget');
+      
       const config = { mode: 'portal', license: 'abc123', webhookUrl: 'https://test.com' };
       const widget = new Widget(config);
       widget.render();
@@ -135,7 +131,7 @@ describe('Widget Portal Mode', () => {
     });
 
     it('should hide header if portal.showHeader = false', () => {
-      const { Widget } = require('../../../widget/src/core/widget');
+      
       const config = {
         mode: 'portal',
         license: 'abc123',
@@ -150,7 +146,7 @@ describe('Widget Portal Mode', () => {
     });
 
     it('should show custom header title in portal mode', () => {
-      const { Widget } = require('../../../widget/src/core/widget');
+      
       const config = {
         mode: 'portal',
         license: 'abc123',
@@ -171,7 +167,7 @@ describe('Widget Portal Mode', () => {
       Object.defineProperty(window, 'innerWidth', { value: 375, writable: true });
       Object.defineProperty(window, 'innerHeight', { value: 667, writable: true });
 
-      const { Widget } = require('../../../widget/src/core/widget');
+      
       const config = { mode: 'portal', license: 'abc123', webhookUrl: 'https://test.com' };
       const widget = new Widget(config);
       widget.render();
@@ -185,7 +181,7 @@ describe('Widget Portal Mode', () => {
       Object.defineProperty(window, 'innerWidth', { value: 667, writable: true });
       Object.defineProperty(window, 'innerHeight', { value: 375, writable: true });
 
-      const { Widget } = require('../../../widget/src/core/widget');
+      
       const config = { mode: 'portal', license: 'abc123', webhookUrl: 'https://test.com' };
       const widget = new Widget(config);
       widget.render();
@@ -197,18 +193,18 @@ describe('Widget Portal Mode', () => {
 
   describe('Error Handling', () => {
     it('should throw error if license missing in portal mode', () => {
-      const { Widget } = require('../../../widget/src/core/widget');
+      
       const config = { mode: 'portal' };
 
       expect(() => new Widget(config)).toThrow('License required');
     });
 
     it('should show error message if webhook URL invalid', () => {
-      const { Widget } = require('../../../widget/src/core/widget');
+
       const config = {
         mode: 'portal',
         license: 'abc123',
-        webhookUrl: 'invalid-url'
+        connection: { webhookUrl: 'invalid-url' }
       };
 
       // Should not throw, but log error
@@ -216,7 +212,8 @@ describe('Widget Portal Mode', () => {
       const widget = new Widget(config);
 
       expect(consoleErrorSpy).toHaveBeenCalledWith(
-        expect.stringContaining('Invalid webhook URL')
+        expect.stringContaining('Invalid webhook URL'),
+        'invalid-url'
       );
 
       consoleErrorSpy.mockRestore();
