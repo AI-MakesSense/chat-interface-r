@@ -4,11 +4,12 @@
  * Widget Download Buttons Component
  *
  * Purpose: Provides download buttons for widget packages
- * Supports: Website widget and Portal page packages
+ * Supports: Website widget, Portal page, and Chrome Extension packages
  *
  * Features:
  * - Download website widget package (HTML + JS + README)
  * - Download portal page package (fullscreen HTML + JS + README)
+ * - Download Chrome extension package (manifest + sidepanel + icons + README)
  * - Loading states during download
  * - Error handling with user feedback
  * - Beautiful UI with icons
@@ -18,7 +19,7 @@ import { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Alert, AlertDescription } from '@/components/ui/alert';
-import { Download, Globe, ExternalLink, Loader2 } from 'lucide-react';
+import { Download, Globe, ExternalLink, Puzzle, Loader2 } from 'lucide-react';
 
 interface WidgetDownloadButtonsProps {
   widgetId: string;
@@ -28,13 +29,18 @@ interface WidgetDownloadButtonsProps {
 export function WidgetDownloadButtons({ widgetId, widgetName }: WidgetDownloadButtonsProps) {
   const [isDownloadingWebsite, setIsDownloadingWebsite] = useState(false);
   const [isDownloadingPortal, setIsDownloadingPortal] = useState(false);
+  const [isDownloadingExtension, setIsDownloadingExtension] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   /**
    * Download package from API
    */
-  const downloadPackage = async (type: 'website' | 'portal') => {
-    const setLoading = type === 'website' ? setIsDownloadingWebsite : setIsDownloadingPortal;
+  const downloadPackage = async (type: 'website' | 'portal' | 'extension') => {
+    const setLoading = type === 'website'
+      ? setIsDownloadingWebsite
+      : type === 'portal'
+        ? setIsDownloadingPortal
+        : setIsDownloadingExtension;
 
     try {
       setLoading(true);
@@ -91,7 +97,7 @@ export function WidgetDownloadButtons({ widgetId, widgetName }: WidgetDownloadBu
           Download Widget Packages
         </CardTitle>
         <CardDescription>
-          Download ready-to-use code packages for your website or portal
+          Download ready-to-use code packages for your website, portal, or browser extension
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
@@ -114,7 +120,7 @@ export function WidgetDownloadButtons({ widgetId, widgetName }: WidgetDownloadBu
             </p>
             <Button
               onClick={() => downloadPackage('website')}
-              disabled={isDownloadingWebsite || isDownloadingPortal}
+              disabled={isDownloadingWebsite || isDownloadingPortal || isDownloadingExtension}
               size="sm"
               className="gap-2"
             >
@@ -145,7 +151,7 @@ export function WidgetDownloadButtons({ widgetId, widgetName }: WidgetDownloadBu
             </p>
             <Button
               onClick={() => downloadPackage('portal')}
-              disabled={isDownloadingWebsite || isDownloadingPortal}
+              disabled={isDownloadingWebsite || isDownloadingPortal || isDownloadingExtension}
               size="sm"
               variant="secondary"
               className="gap-2"
@@ -165,9 +171,41 @@ export function WidgetDownloadButtons({ widgetId, widgetName }: WidgetDownloadBu
           </div>
         </div>
 
+        {/* Chrome Extension Package */}
+        <div className="flex items-start gap-4 p-4 border rounded-lg">
+          <div className="flex-shrink-0 w-10 h-10 bg-green-100 dark:bg-green-900 rounded-lg flex items-center justify-center">
+            <Puzzle className="h-5 w-5 text-green-600 dark:text-green-300" />
+          </div>
+          <div className="flex-1 min-w-0">
+            <h4 className="font-semibold text-sm mb-1">Chrome Extension</h4>
+            <p className="text-sm text-muted-foreground mb-3">
+              Browser extension with side panel. Access your chat assistant from any webpage.
+            </p>
+            <Button
+              onClick={() => downloadPackage('extension')}
+              disabled={isDownloadingWebsite || isDownloadingPortal || isDownloadingExtension}
+              size="sm"
+              variant="outline"
+              className="gap-2"
+            >
+              {isDownloadingExtension ? (
+                <>
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                  Downloading...
+                </>
+              ) : (
+                <>
+                  <Download className="h-4 w-4" />
+                  Download Extension Package
+                </>
+              )}
+            </Button>
+          </div>
+        </div>
+
         {/* Help Text */}
         <p className="text-xs text-muted-foreground pt-2">
-          Each package includes everything you need: HTML files, widget script, and detailed installation instructions.
+          Each package includes everything you need: configured files, widget script, icons, and detailed installation instructions.
         </p>
       </CardContent>
     </Card>
