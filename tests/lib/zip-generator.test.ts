@@ -15,45 +15,28 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import JSZip from 'jszip';
 import { ZipGenerator, PackageType } from '@/lib/zip-generator';
-import type { PublicWidgetRuntimeConfig } from '@/lib/widget/runtime-config';
+import type { WidgetConfig } from '@/widget/src/types';
 
 describe('ZipGenerator', () => {
   let generator: ZipGenerator;
-  let mockConfig: PublicWidgetRuntimeConfig;
+  let mockConfig: WidgetConfig;
 
   beforeEach(() => {
     generator = new ZipGenerator();
 
     mockConfig = {
-      uiConfig: {
-        branding: {
-          companyName: 'Test Company',
-          logoUrl: 'https://example.com/logo.png',
-          welcomeText: 'Need help?',
-          firstMessage: 'Welcome to our chat!',
-        },
-        style: {
-          theme: 'light',
-          primaryColor: '#00bfff',
-          backgroundColor: '#ffffff',
-          textColor: '#111111',
-          position: 'bottom-right',
-          cornerRadius: 12,
-          fontFamily: 'Inter',
-          fontSize: 14,
-        },
-        features: {
-          fileAttachmentsEnabled: false,
-          allowedExtensions: [],
-          maxFileSizeKB: 5120,
-        },
-        connection: {},
-        license: { brandingEnabled: true },
+      license: 'test-license-key-123',
+      branding: {
+        companyName: 'Test Company',
+        logoUrl: 'https://example.com/logo.png',
+        firstMessage: 'Welcome to our chat!',
       },
-      relay: {
-        widgetId: 'widget-test',
-        licenseKey: 'test-license-key-123',
-        relayUrl: 'https://app.example.com/api/chat-relay',
+      style: {
+        primaryColor: '#00bfff',
+        theme: 'light',
+      },
+      connection: {
+        webhookUrl: 'https://n8n.example.com/webhook/test',
       },
     };
   });
@@ -93,8 +76,8 @@ describe('ZipGenerator', () => {
 
       const htmlContent = await zip.files['index.html'].async('string');
 
-      expect(htmlContent).toContain(mockConfig.relay.licenseKey);
-      expect(htmlContent).toContain(mockConfig.uiConfig.branding?.companyName || '');
+      expect(htmlContent).toContain(mockConfig.license);
+      expect(htmlContent).toContain(mockConfig.branding?.companyName || '');
       expect(htmlContent).toContain('chat-widget.js');
     });
 
@@ -154,7 +137,7 @@ describe('ZipGenerator', () => {
       const htmlContent = await zip.files['portal.html'].async('string');
 
       expect(htmlContent).toContain('"mode": "portal"');
-      expect(htmlContent).toContain(mockConfig.relay.licenseKey);
+      expect(htmlContent).toContain(mockConfig.license);
       expect(htmlContent).toContain(widgetId);
     });
 
@@ -208,10 +191,7 @@ describe('ZipGenerator', () => {
 
   describe('Config Validation', () => {
     it('should throw error if license key missing', async () => {
-      const invalidConfig = {
-        ...mockConfig,
-        relay: { ...mockConfig.relay, licenseKey: '' },
-      };
+      const invalidConfig = { ...mockConfig, license: '' };
 
       await expect(
         generator.generateWebsitePackage(invalidConfig)
