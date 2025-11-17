@@ -15,7 +15,7 @@
  * - Auto-save with unsaved changes indicator
  */
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useAuthStore } from '@/stores/auth-store';
 import { useLicenseStore } from '@/stores/license-store';
@@ -29,9 +29,21 @@ import { PreviewFrame } from '@/components/configurator/preview-frame';
 import { DeviceSwitcher } from '@/components/configurator/device-switcher';
 
 /**
+ * Suspense wrapper for the configurator page
+ * Handles the useSearchParams() requirement for Next.js 16
+ */
+function ConfiguratorPageWrapper() {
+  return (
+    <Suspense fallback={<div>Loading configurator...</div>}>
+      <ConfiguratorPage />
+    </Suspense>
+  );
+}
+
+/**
  * Configurator page component
  */
-export default function ConfiguratorPage() {
+function ConfiguratorPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const widgetId = searchParams?.get('widgetId');
@@ -428,3 +440,5 @@ export default function ConfiguratorPage() {
     </div>
   );
 }
+
+export default ConfiguratorPageWrapper;

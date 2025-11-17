@@ -25,10 +25,7 @@ import { z } from 'zod';
 const UpdateWidgetSchema = z.object({
   name: z.string().min(1).max(100).optional(),
   config: z.any().optional(),
-  status: z.enum(['active', 'paused']).optional()
-    .refine(val => val !== 'deleted', {
-      message: 'Cannot set status to deleted. Use DELETE endpoint instead',
-    }),
+  status: z.enum(['active', 'paused']).optional(),
 });
 
 // =============================================================================
@@ -37,15 +34,18 @@ const UpdateWidgetSchema = z.object({
 
 export async function GET(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    // Extract widget ID from route params (await for Next.js 16)
+    const { id } = await params;
+    
     // 1. Authenticate user
     const user = await requireAuth(request);
 
     // 2. Validate widget ID format
     const idSchema = z.string().uuid();
-    const widgetId = idSchema.parse(params.id);
+    const widgetId = idSchema.parse(id);
 
     // 3. Get widget with license information
     const widget = await getWidgetWithLicense(widgetId);
@@ -85,15 +85,18 @@ export async function GET(
 
 export async function PATCH(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    // Extract widget ID from route params (await for Next.js 16)
+    const { id } = await params;
+    
     // 1. Authenticate user
     const user = await requireAuth(request);
 
     // 2. Validate widget ID format
     const idSchema = z.string().uuid();
-    const widgetId = idSchema.parse(params.id);
+    const widgetId = idSchema.parse(id);
 
     // 3. Parse and validate request body
     const body = await request.json();
@@ -130,7 +133,7 @@ export async function PATCH(
       const mergedConfig = deepMerge(widget.config, updates.config);
 
       // Validate merged config against tier restrictions
-      const configSchema = createWidgetConfigSchema(widget.license.tier, true);
+      const configSchema = createWidgetConfigSchema(widget.license.tier as any, true);
       configSchema.parse(mergedConfig);
 
       updateData.config = mergedConfig;
@@ -147,9 +150,9 @@ export async function PATCH(
   } catch (error) {
     if (error instanceof z.ZodError) {
       // Extract the first error message for user-friendly response
-      const firstError = error.errors?.[0];
+      const firstError = (error as any).errors?.[0];
       const errorMessage = firstError?.message || 'Validation failed';
-      return NextResponse.json({ error: errorMessage, details: error.errors }, { status: 400 });
+      return NextResponse.json({ error: errorMessage, details: (error as any).errors }, { status: 400 });
     }
 
     // Handle auth errors
@@ -170,15 +173,18 @@ export async function PATCH(
 
 export async function DELETE(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    // Extract widget ID from route params (await for Next.js 16)
+    const { id } = await params;
+    
     // 1. Authenticate user
     const user = await requireAuth(request);
 
     // 2. Validate widget ID format
     const idSchema = z.string().uuid();
-    const widgetId = idSchema.parse(params.id);
+    const widgetId = idSchema.parse(id);
 
     // 3. Get widget with license information
     const widget = await getWidgetWithLicense(widgetId);

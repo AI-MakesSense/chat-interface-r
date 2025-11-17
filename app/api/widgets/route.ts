@@ -73,14 +73,14 @@ export async function POST(request: NextRequest) {
     let finalConfig;
     if (userConfig) {
       // Deep merge user config with defaults
-      const defaults = createDefaultConfig(license.tier);
+      const defaults = createDefaultConfig(license.tier as any);
       finalConfig = deepMerge(defaults, userConfig);
     } else {
-      finalConfig = createDefaultConfig(license.tier);
+      finalConfig = createDefaultConfig(license.tier as any);
     }
 
     // 6. Validate final config against tier restrictions
-    const configSchema = createWidgetConfigSchema(license.tier, true);
+    const configSchema = createWidgetConfigSchema(license.tier as any, true);
     configSchema.parse(finalConfig);
 
     // 7. Create widget in database
@@ -95,7 +95,7 @@ export async function POST(request: NextRequest) {
 
   } catch (error) {
     if (error instanceof z.ZodError) {
-      return NextResponse.json({ error: 'Validation failed', details: error.errors }, { status: 400 });
+      return NextResponse.json({ error: 'Validation failed', details: (error as any).errors }, { status: 400 });
     }
 
     // Handle auth errors

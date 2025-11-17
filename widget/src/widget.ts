@@ -11,13 +11,21 @@
  * - Markdown rendering for assistant messages
  */
 
-import { WidgetConfig, Message } from './types';
+import { WidgetRuntimeConfig, WidgetConfig, Message } from './types';
 import { renderMarkdown } from './markdown';
+import { buildRelayPayload } from './services/messaging/payload';
+import { SessionManager } from './services/messaging/session-manager';
+import type { FileAttachment } from './services/messaging/types';
 
-export function createChatWidget(config: WidgetConfig): void {
+export function createChatWidget(runtimeConfig: WidgetRuntimeConfig): void {
   const messages: Message[] = [];
   let isOpen = false;
   let messageIdCounter = 0;
+  let selectedFiles: File[] = [];
+  const config = runtimeConfig.uiConfig || ({} as WidgetConfig);
+
+  // Initialize SessionManager for session continuity
+  const sessionManager = new SessionManager(runtimeConfig.relay.licenseKey || 'default');
 
   // Apply default config
   const mergedConfig: WidgetConfig = {
@@ -30,8 +38,17 @@ export function createChatWidget(config: WidgetConfig): void {
     style: {
       theme: config.style?.theme || 'light',
       primaryColor: config.style?.primaryColor || '#00bfff',
+      backgroundColor: config.style?.backgroundColor || '#ffffff',
+      textColor: config.style?.textColor || '#333333',
+      fontFamily: config.style?.fontFamily || '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
+      fontSize: config.style?.fontSize || 14,
       position: config.style?.position || 'bottom-right',
       cornerRadius: config.style?.cornerRadius || 12,
+    },
+    features: {
+      fileAttachmentsEnabled: config.features?.fileAttachmentsEnabled || false,
+      allowedExtensions: config.features?.allowedExtensions || ['jpg', 'jpeg', 'png', 'gif', 'pdf', 'doc', 'docx'],
+      maxFileSizeKB: config.features?.maxFileSizeKB || 5000,
     },
     connection: config.connection,
     license: config.license,
@@ -158,6 +175,34 @@ export function createChatWidget(config: WidgetConfig): void {
         font-size: 14px;
       "
     />
+    ${mergedConfig.features.fileAttachmentsEnabled ? `
+    <input
+      type="file"
+      id="n8n-chat-file-input"
+      multiple
+      accept="${mergedConfig.features.allowedExtensions.join(',')}"
+      style="display: none;"
+    />
+    <button
+      id="n8n-chat-attach"
+      style="
+        background: transparent;
+        color: ${mergedConfig.style.primaryColor};
+        border: 1px solid ${mergedConfig.style.primaryColor};
+        border-radius: 50%;
+        width: 40px;
+        height: 40px;
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 16px;
+      "
+      title="Attach files"
+    >
+      📎
+    </button>
+    ` : ''}
     <button
       id="n8n-chat-send"
       style="
@@ -198,6 +243,8 @@ export function createChatWidget(config: WidgetConfig): void {
   // Input and send button handlers
   const input = inputContainer.querySelector('#n8n-chat-input') as HTMLInputElement;
   const sendBtn = inputContainer.querySelector('#n8n-chat-send') as HTMLButtonElement;
+  const attachBtn = inputContainer.querySelector('#n8n-chat-attach') as HTMLButtonElement;
+  const fileInput = inputContainer.querySelector('#n8n-chat-file-input') as HTMLInputElement;
 
   sendBtn.addEventListener('click', () => handleSendMessage());
   input.addEventListener('keypress', (e) => {
@@ -205,6 +252,21 @@ export function createChatWidget(config: WidgetConfig): void {
       handleSendMessage();
     }
   });
+
+  // File attachment handlers
+  if (attachBtn && fileInput) {
+    attachBtn.addEventListener('click', () => {
+      fileInput.click();
+    });
+
+    fileInput.addEventListener('change', (e) => {
+      const files = (e.target as HTMLInputElement).files;
+      if (files) {
+        selectedFiles = Array.from(files);
+        console.log(`[N8n Chat Widget] Selected ${selectedFiles.length} file(s)`);
+      }
+    });
+  }
 
   // Toggle chat window
   function toggleChat() {
@@ -336,35 +398,64 @@ export function createChatWidget(config: WidgetConfig): void {
     }
   }
 
-  // Send message to N8n webhook using POST
-  async function streamResponse(userMessage: string, assistantMessageId: string) {
-    const webhookUrl = mergedConfig.connection.webhookUrl;
+  // Encode file as base64 for transmission
+  async function encodeFile(file: File): Promise<FileAttachment> {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
 
-    // Append route param if specified
-    const url = mergedConfig.connection.routeParam
-      ? `${webhookUrl}${webhookUrl.includes('?') ? '&' : '?'}${mergedConfig.connection.routeParam}`
-      : webhookUrl;
+      reader.onload = () => {
+        const result = reader.result as string;
+        // Remove data URL prefix (data:...;base64,)
+        const base64Data = result.split(',')[1];
 
-    try {
-      // Build request payload
-      const payload: any = {
-        message: userMessage,
-        sessionId: `session-${Date.now()}`, // Simple session ID for N8n workflows
+        resolve({
+          name: file.name,
+          type: file.type,
+          data: base64Data,
+          size: file.size,
+        });
       };
 
-      // Add page context if enabled (default: true)
-      const shouldCaptureContext = mergedConfig.connection.captureContext !== false;
-      if (shouldCaptureContext) {
-        payload.context = capturePageContext();
+      reader.onerror = () => {
+        reject(new Error(`Failed to read file: ${file.name}`));
+      };
+
+      reader.readAsDataURL(file);
+    });
+  }
+
+  // Send message to N8n webhook using POST
+  async function streamResponse(userMessage: string, assistantMessageId: string) {
+    const relayUrl = runtimeConfig.relay.relayUrl;
+    const sessionId = sessionManager.getSessionId();
+
+    try {
+      const shouldCaptureContext = mergedConfig.connection?.captureContext !== false;
+      
+      // Encode file attachments if present
+      let fileAttachments: FileAttachment[] | undefined;
+      if (selectedFiles.length > 0 && mergedConfig.features.fileAttachmentsEnabled) {
+        fileAttachments = await Promise.all(
+          selectedFiles.map((file) => encodeFile(file))
+        );
+        // Clear selected files after encoding
+        selectedFiles = [];
+        if (fileInput) {
+          fileInput.value = '';
+        }
       }
 
-      // Add custom context if provided
-      if (mergedConfig.connection.customContext) {
-        payload.customContext = mergedConfig.connection.customContext;
-      }
+      const payload = buildRelayPayload(runtimeConfig, {
+        message: userMessage,
+        sessionId,
+        context: shouldCaptureContext ? capturePageContext() : undefined,
+        customContext: mergedConfig.connection?.customContext,
+        extraInputs: mergedConfig.connection?.extraInputs,
+        attachments: fileAttachments,
+      });
 
-      // Send POST request to N8n webhook
-      const response = await fetch(url, {
+      // Send POST request to relay endpoint
+      const response = await fetch(relayUrl, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

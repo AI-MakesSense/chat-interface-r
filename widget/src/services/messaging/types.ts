@@ -32,20 +32,6 @@ export interface FileAttachment {
 }
 
 /**
- * N8n webhook POST payload structure
- *
- * Sent to the N8n webhook endpoint when user sends a message.
- */
-export interface N8nWebhookPayload {
-  /** User's message text */
-  text: string;
-  /** Session ID for conversation continuity */
-  sessionId: string;
-  /** Optional file attachments (base64-encoded) */
-  attachments?: FileAttachment[];
-}
-
-/**
  * N8n webhook response structure
  *
  * Response from N8n webhook after processing the message.

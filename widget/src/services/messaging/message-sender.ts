@@ -18,11 +18,12 @@
  */
 
 import { StateManager, Message } from '../../core/state';
-import { WidgetConfig } from '../../types';
+import { WidgetRuntimeConfig } from '../../types';
 import { SessionManager } from './session-manager';
 import { RetryPolicy } from './retry-policy';
 import { classifyError, NetworkError } from '../../utils/network-error-handler';
-import { N8nWebhookPayload, FileAttachment } from './types';
+import { FileAttachment } from './types';
+import { buildRelayPayload } from './payload';
 
 /**
  * Default timeout for HTTP requests in milliseconds (30 seconds)
@@ -59,7 +60,7 @@ export interface SendMessageResult {
  * Handles sending user messages to N8n webhook with error handling and retries.
  */
 export class MessageSender {
-  private config: WidgetConfig;
+  private runtimeConfig: WidgetRuntimeConfig;
   private stateManager: StateManager;
   private sessionManager: SessionManager;
   private retryPolicy: RetryPolicy;
@@ -69,18 +70,18 @@ export class MessageSender {
   /**
    * Creates a new MessageSender instance
    *
-   * @param config - Widget configuration
+   * @param runtimeConfig - Widget runtime configuration
    * @param stateManager - State manager for UI updates
    * @param sessionManager - Session manager for session ID
    * @param retryPolicy - Retry policy for error handling
    */
   constructor(
-    config: WidgetConfig,
+    runtimeConfig: WidgetRuntimeConfig,
     stateManager: StateManager,
     sessionManager: SessionManager,
     retryPolicy: RetryPolicy
   ) {
-    this.config = config;
+    this.runtimeConfig = runtimeConfig;
     this.stateManager = stateManager;
     this.sessionManager = sessionManager;
     this.retryPolicy = retryPolicy;
@@ -132,12 +133,16 @@ export class MessageSender {
         );
       }
 
-      // Construct payload
-      const payload: N8nWebhookPayload = {
-        text,
+      const shouldCaptureContext =
+        this.runtimeConfig.uiConfig.connection?.captureContext !== false;
+
+      // Construct payload for relay
+      const payload = buildRelayPayload(this.runtimeConfig, {
+        message: text,
         sessionId,
-        ...(fileAttachments && { attachments: fileAttachments }),
-      };
+        attachments: fileAttachments,
+        context: shouldCaptureContext ? this.capturePageContext() : undefined,
+      });
 
       // Create abort controller for timeout
       this.abortController = new AbortController();
@@ -147,7 +152,7 @@ export class MessageSender {
 
       try {
         // Send POST request
-        const response = await fetch(this.config.connection.webhookUrl, {
+        const response = await fetch(this.runtimeConfig.relay.relayUrl, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
@@ -237,6 +242,30 @@ export class MessageSender {
    */
   isBusy(): boolean {
     return this.isBusyFlag;
+  }
+
+  /**
+   * Capture lightweight page context for relay payloads.
+   */
+  private capturePageContext() {
+    try {
+      const url = new URL(window.location.href);
+      return {
+        pageUrl: window.location.href,
+        pagePath: window.location.pathname,
+        pageTitle: document.title,
+        queryParams: Object.fromEntries(url.searchParams),
+        domain: window.location.hostname,
+      };
+    } catch {
+      return {
+        pageUrl: window.location.href,
+        pagePath: window.location.pathname,
+        pageTitle: document.title,
+        queryParams: {},
+        domain: window.location.hostname,
+      };
+    }
   }
 
   /**

@@ -90,11 +90,11 @@ function createErrorResponse(
  */
 export async function GET(
   request: NextRequest,
-  { params }: { params: { license: string } }
+  { params }: { params: Promise<{ license: string }> }
 ): Promise<NextResponse> {
   try {
-    // Extract license key from route params
-    const licenseKey = params.license;
+    // Extract license key from route params (await for Next.js 16)
+    const { license: licenseKey } = await params;
 
     // Step 1: Extract and validate referer header
     const referer = request.headers.get('referer');

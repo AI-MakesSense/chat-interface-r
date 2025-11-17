@@ -34,7 +34,7 @@
 
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { StateManager, WidgetState } from '@/widget/src/core/state';
-import { WidgetConfig } from '@/widget/src/types';
+import { WidgetRuntimeConfig } from '@/widget/src/types';
 // @ts-expect-error - Modules do not exist yet (RED phase)
 import { SessionManager } from '@/widget/src/services/messaging/session-manager';
 // @ts-expect-error - Modules do not exist yet (RED phase)
@@ -94,7 +94,8 @@ describe('N8n Messaging Integration - RED Tests', () => {
   let retryPolicy: RetryPolicy;
   let messageSender: MessageSender;
   let sseClient: SSEClient;
-  let mockConfig: WidgetConfig;
+  let mockConfig: WidgetRuntimeConfig;
+  const TEST_RELAY_URL = 'https://app.local/api/chat-relay';
 
   const originalFetch = global.fetch;
 
@@ -125,28 +126,36 @@ describe('N8n Messaging Integration - RED Tests', () => {
 
     // Widget config
     mockConfig = {
-      connection: {
-        webhookUrl: 'https://n8n.example.com/webhook/test123',
+      uiConfig: {
+        connection: {
+          captureContext: true,
+        },
+        features: {
+          fileAttachmentsEnabled: true,
+          allowedExtensions: ['.jpg', '.png', '.pdf'],
+          maxFileSizeKB: 5000,
+        },
+        branding: {
+          companyName: 'Test Company',
+          welcomeText: 'Hello',
+          firstMessage: 'How can I help?',
+        },
+        style: {
+          theme: 'light',
+          primaryColor: '#000',
+          backgroundColor: '#fff',
+          textColor: '#000',
+          position: 'bottom-right',
+          cornerRadius: 8,
+          fontFamily: 'Arial',
+          fontSize: 14,
+        },
+        license: { brandingEnabled: true },
       },
-      features: {
-        fileAttachmentsEnabled: true,
-        allowedExtensions: ['.jpg', '.png', '.pdf'],
-        maxFileSizeKB: 5000,
-      },
-      branding: {
-        companyName: 'Test Company',
-        welcomeText: 'Hello',
-        firstMessage: 'How can I help?',
-      },
-      style: {
-        theme: 'light',
-        primaryColor: '#000',
-        backgroundColor: '#fff',
-        textColor: '#000',
-        position: 'bottom-right',
-        cornerRadius: 8,
-        fontFamily: 'Arial',
-        fontSize: 14,
+      relay: {
+        relayUrl: TEST_RELAY_URL,
+        widgetId: 'widget-123',
+        licenseKey: 'license-123',
       },
     };
 

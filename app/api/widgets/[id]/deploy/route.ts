@@ -25,15 +25,18 @@ import { z } from 'zod';
 
 export async function POST(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    // Extract widget ID from route params (await for Next.js 16)
+    const { id } = await params;
+    
     // 1. Authenticate user
     const user = await requireAuth(request);
 
     // 2. Validate widget ID format
     const idSchema = z.string().uuid();
-    const widgetId = idSchema.parse(params.id);
+    const widgetId = idSchema.parse(id);
 
     // 3. Get widget with license information
     const widget = await getWidgetWithLicense(widgetId);
@@ -56,7 +59,7 @@ export async function POST(
     }
 
     // 6. Validate config is deployment-ready (strict validation - no defaults)
-    const configSchema = createWidgetConfigSchema(widget.license.tier, false);
+    const configSchema = createWidgetConfigSchema(widget.license.tier as any, false);
 
     try {
       configSchema.parse(widget.config);
@@ -65,7 +68,7 @@ export async function POST(
         return NextResponse.json(
           {
             error: 'Widget configuration is not ready for deployment',
-            details: error.errors,
+            details: (error as any).errors,
           },
           { status: 400 }
         );
@@ -74,7 +77,7 @@ export async function POST(
     }
 
     // 7. Additional deployment validation: webhookUrl must be HTTPS (or localhost)
-    const webhookUrl = widget.config?.connection?.webhookUrl;
+    const webhookUrl = (widget.config as any)?.connection?.webhookUrl;
     if (!webhookUrl) {
       return NextResponse.json(
         {

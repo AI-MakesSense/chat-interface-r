@@ -22,7 +22,7 @@ if (!process.env.JWT_SECRET) {
 if (!process.env.DATABASE_URL) {
   process.env.DATABASE_URL = process.env.TEST_DATABASE_URL || 'postgresql://test:test@localhost:5432/test_db';
 }
-process.env.NODE_ENV = 'test';
+(process.env as any).NODE_ENV = 'test';
 if (!process.env.NEXT_PUBLIC_URL) {
   process.env.NEXT_PUBLIC_URL = 'http://localhost:3000';
 }

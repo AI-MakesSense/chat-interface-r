@@ -22,27 +22,32 @@ import JavaScriptObfuscator from 'vite-plugin-javascript-obfuscator';
 
 export default defineConfig({
   plugins: [
-    // Only obfuscate in production builds
-    process.env.NODE_ENV === 'production'
-      ? JavaScriptObfuscator({
-          // Moderate obfuscation settings (balanced security/performance)
-          compact: true,
-          controlFlowFlattening: true,
-          controlFlowFlatteningThreshold: 0.25, // 25% (moderate)
-          deadCodeInjection: false, // Disabled to save bundle size
-          stringArray: true,
-          stringArrayThreshold: 0.65, // 65% of strings encrypted
-          stringArrayEncoding: ['rc4'], // Better compression than base64
-          splitStrings: true,
-          splitStringsChunkLength: 10,
-          rotateStringArray: true,
-          selfDefending: false, // Can cause issues, disabled
-          disableConsoleOutput: true,
-          identifierNamesGenerator: 'hexadecimal',
-          renameGlobals: false, // Safer for embedded widgets
-          transformObjectKeys: true,
-        })
-      : undefined,
+    // Obfuscation disabled temporarily to unblock Next.js 16 migration
+    // TODO: Re-enable with compatible configuration after migration
+    // process.env.NODE_ENV === 'production'
+    //   ? JavaScriptObfuscator({
+    //       // Moderate obfuscation settings (balanced security/performance)
+    //       controlFlowFlattening: true,
+    //       controlFlowFlatteningThreshold: 0.25, // 25% (moderate)
+    //       deadCodeInjection: false, // Disabled to save bundle size
+    //       stringArray: true,
+    //       stringArrayThreshold: 0.65, // 65% of strings encrypted
+    //       stringArrayEncoding: ['rc4'], // Better compression than base64
+    //       splitStrings: true,
+    //       splitStringsChunkLength: 10,
+    //       rotateStringArray: true,
+    //       selfDefending: false, // Can cause issues, disabled
+    //       stringArrayWrappersCount: 2, // Moderate wrapping
+    //       stringArrayWrappersChainedCalls: true,
+    //       stringArrayWrappersParametersMaxCount: 4,
+    //       stringArrayWrappersType: 'function',
+    //       renameGlobals: false, // Avoid breaking global APIs
+    //       simplify: true, // Simplify control flow
+    //       shuffleStringArray: true,
+    //       splitStrings: true,
+    //       unicodeEscapeSequence: false,
+    //     })
+    //   : null,
   ].filter(Boolean),
 
   build: {

@@ -2,7 +2,7 @@
  * Widget Context Passing Tests
  *
  * Tests that the widget correctly captures and sends page context
- * (URL, query params, title, domain) to the N8n webhook.
+ * (URL, query params, title, domain) to the chat relay endpoint.
  */
 
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
@@ -29,9 +29,11 @@ const WIDGET_INIT_TIMEOUT = 100;
 const MESSAGE_SEND_TIMEOUT = 100;
 
 /**
- * Test webhook URL used across all tests
+ * Test relay metadata used across all tests
  */
-const TEST_WEBHOOK_URL = 'https://test.n8n.cloud/webhook/test123';
+const TEST_RELAY_URL = 'https://app.localhost/api/chat-relay';
+const TEST_WIDGET_ID = 'widget-test-id';
+const TEST_LICENSE_KEY = 'license-test-key';
 
 // ============================================================
 // HELPER FUNCTIONS
@@ -52,6 +54,56 @@ function setupNavigatorFix(window: Window & typeof globalThis) {
 }
 
 /**
+ * Build a runtime config payload compatible with the widget bundle.
+ * Accepts either full runtime config overrides or legacy UI config overrides.
+ */
+function buildRuntimeConfig(overrides: any = {}) {
+  const uiOverrides = overrides.uiConfig ?? overrides;
+  const relayOverrides = overrides.relay ?? {};
+
+  return {
+    uiConfig: {
+      branding: {
+        companyName: 'Test Company',
+        welcomeText: 'Need help?',
+        firstMessage: 'Hello! Ask me anything.',
+        ...(uiOverrides.branding || {}),
+      },
+      style: {
+        theme: 'light',
+        primaryColor: '#00bfff',
+        backgroundColor: '#ffffff',
+        textColor: '#111111',
+        position: 'bottom-right',
+        cornerRadius: 12,
+        fontFamily: 'Inter',
+        fontSize: 14,
+        ...(uiOverrides.style || {}),
+      },
+      features: {
+        fileAttachmentsEnabled: false,
+        allowedExtensions: [],
+        maxFileSizeKB: 5120,
+        ...(uiOverrides.features || {}),
+      },
+      connection: {
+        captureContext: true,
+        ...(uiOverrides.connection || {}),
+      },
+      license: {
+        brandingEnabled: true,
+        ...(uiOverrides.license || {}),
+      },
+    },
+    relay: {
+      relayUrl: relayOverrides.relayUrl || TEST_RELAY_URL,
+      widgetId: relayOverrides.widgetId || TEST_WIDGET_ID,
+      licenseKey: relayOverrides.licenseKey || TEST_LICENSE_KEY,
+    },
+  };
+}
+
+/**
  * Initialize widget with given config
  *
  * IMPORTANT: Config must be set BEFORE import because the widget
@@ -62,7 +114,9 @@ function setupNavigatorFix(window: Window & typeof globalThis) {
  */
 async function initializeWidget(config: any): Promise<void> {
   // Set config BEFORE import (widget IIFE runs on import)
-  (global.window as any).ChatWidgetConfig = config;
+  const runtimeConfig =
+    config && config.uiConfig && config.relay ? config : buildRuntimeConfig(config);
+  (global.window as any).ChatWidgetConfig = runtimeConfig;
 
   // Load widget code (IIFE runs immediately)
   await import('../../../widget/src/index');
@@ -207,7 +261,6 @@ describe('Widget Context Passing', () => {
         companyName: 'Test Company',
       },
       connection: {
-        webhookUrl: TEST_WEBHOOK_URL,
         captureContext: true, // Explicitly enabled
       },
     });
@@ -217,9 +270,18 @@ describe('Widget Context Passing', () => {
 
     // Verify fetch was called
     expect(fetchSpy).toHaveBeenCalled();
+    expect(fetchSpy).toHaveBeenCalledWith(
+      TEST_RELAY_URL,
+      expect.objectContaining({
+        method: 'POST',
+      })
+    );
 
     // Get the payload sent to N8n
     const payload = getLastPayload(fetchSpy);
+
+    expect(payload.widgetId).toBe(TEST_WIDGET_ID);
+    expect(payload.licenseKey).toBe(TEST_LICENSE_KEY);
 
     // Verify context is included
     expect(payload).toHaveProperty('context');
@@ -243,7 +305,6 @@ describe('Widget Context Passing', () => {
         companyName: 'Test Company',
       },
       connection: {
-        webhookUrl: TEST_WEBHOOK_URL,
         // captureContext not specified - should default to true
       },
     });
@@ -264,7 +325,6 @@ describe('Widget Context Passing', () => {
         companyName: 'Test Company',
       },
       connection: {
-        webhookUrl: TEST_WEBHOOK_URL,
         captureContext: false, // Explicitly disabled
       },
     });
@@ -289,7 +349,6 @@ describe('Widget Context Passing', () => {
     await initializeWidget({
       branding: { companyName: 'Test Company' },
       connection: {
-        webhookUrl: TEST_WEBHOOK_URL,
       },
     });
 
@@ -310,7 +369,6 @@ describe('Widget Context Passing', () => {
     await initializeWidget({
       branding: { companyName: 'Test Company' },
       connection: {
-        webhookUrl: TEST_WEBHOOK_URL,
         customContext: {
           userId: '12345',
           tier: 'premium',
@@ -346,7 +404,6 @@ describe('Widget Context Passing', () => {
     await initializeWidget({
       branding: { companyName: 'Test Company' },
       connection: {
-        webhookUrl: TEST_WEBHOOK_URL,
       },
     });
 
@@ -365,7 +422,6 @@ describe('Widget Context Passing', () => {
     await initializeWidget({
       branding: { companyName: 'Test Company' },
       connection: {
-        webhookUrl: TEST_WEBHOOK_URL,
       },
     });
 

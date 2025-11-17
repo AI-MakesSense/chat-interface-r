@@ -166,7 +166,7 @@ export class XssSanitizer {
     // Remove hooks to avoid affecting other uses
     DOMPurify.removeAllHooks();
 
-    return sanitized;
+    return sanitized as unknown as string;
   }
 
   /**

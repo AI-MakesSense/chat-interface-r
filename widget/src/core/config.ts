@@ -33,7 +33,7 @@ const DEFAULT_CONFIG: WidgetConfig = {
     maxFileSizeKB: 5120,
   },
   connection: {
-    webhookUrl: '',
+    captureContext: true,
   },
 };
 
@@ -69,17 +69,6 @@ export function mergeConfig(userConfig: Partial<WidgetConfig>): WidgetConfig {
  * @throws Error if configuration is invalid
  */
 export function validateConfig(config: Partial<WidgetConfig>): void {
-  // Check webhook URL
-  if (config.connection) {
-    if (!config.connection.webhookUrl) {
-      throw new Error('webhookUrl is required');
-    }
-
-    if (!config.connection.webhookUrl.startsWith('https://')) {
-      throw new Error('webhookUrl must use HTTPS');
-    }
-  }
-
   // Check style configuration
   if (config.style) {
     // Validate primary color
@@ -117,13 +106,17 @@ export function readConfigFromWindow(): Partial<WidgetConfig> {
     return {};
   }
 
-  const config = (window as any).ChatWidgetConfig;
+  const runtimeConfig = (window as any).ChatWidgetConfig;
 
-  if (!config || typeof config !== 'object') {
+  if (!runtimeConfig || typeof runtimeConfig !== 'object') {
     return {};
   }
 
-  return config;
+  if (runtimeConfig.uiConfig) {
+    return runtimeConfig.uiConfig;
+  }
+
+  return runtimeConfig;
 }
 
 /**

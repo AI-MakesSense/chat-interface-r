@@ -9,8 +9,13 @@ export interface WidgetConfig {
   branding: BrandingConfig;
   style: StyleConfig;
   features: FeaturesConfig;
-  connection: ConnectionConfig;
+  connection?: ConnectionConfig;
   license?: LicenseConfig; // Injected by server at serve time
+}
+
+export interface WidgetRuntimeConfig {
+  uiConfig: WidgetConfig;
+  relay: RelayConfig;
 }
 
 export interface BrandingConfig {
@@ -39,14 +44,21 @@ export interface FeaturesConfig {
 }
 
 export interface ConnectionConfig {
-  webhookUrl: string;
   routeParam?: string;
+  webhookUrl?: string; // n8n webhook URL for sending messages
   captureContext?: boolean; // Capture page URL and query params
   customContext?: Record<string, any>; // User-defined metadata
+  extraInputs?: Record<string, any>;
 }
 
 export interface LicenseConfig {
   brandingEnabled: boolean;
+}
+
+export interface RelayConfig {
+  relayUrl: string;
+  widgetId: string;
+  licenseKey: string;
 }
 
 export interface Message {

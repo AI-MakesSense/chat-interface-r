@@ -7,7 +7,7 @@
  * Tests can override these handlers using server.use() for specific scenarios.
  */
 
-import { http, HttpResponse } from 'msw';
+import { rest } from 'msw';
 
 /**
  * Mock user data
@@ -74,136 +74,137 @@ const mockWidget = {
  */
 export const handlers = [
   // Authentication endpoints
-  http.post('/api/auth/login', async ({ request }) => {
-    const body = await request.json() as { email: string; password: string };
+  rest.post('/api/auth/login', async (req, res, ctx) => {
+    const body = await req.json() as { email: string; password: string };
 
     // Add small delay to simulate network request and make loading state observable
     await new Promise(resolve => setTimeout(resolve, 100));
 
     // Simulate failed login
     if (body.email === 'wrong@example.com') {
-      return HttpResponse.json(
-        { error: 'Invalid credentials' },
-        { status: 401 }
+      return res(
+        ctx.status(401),
+        ctx.json({ error: 'Invalid credentials' })
       );
     }
 
     // Simulate successful login
-    return HttpResponse.json(
-      { user: mockUser },
-      { status: 200 }
+    return res(
+      ctx.status(200),
+      ctx.json({ user: mockUser })
     );
   }),
 
-  http.post('/api/auth/signup', async ({ request }) => {
-    const body = await request.json() as { email: string; password: string; name?: string };
+  rest.post('/api/auth/signup', async (req, res, ctx) => {
+    const body = await req.json() as { email: string; password: string; name?: string };
 
     // Add small delay to simulate network request and make loading state observable
     await new Promise(resolve => setTimeout(resolve, 100));
 
     // Simulate email already exists
     if (body.email === 'existing@example.com') {
-      return HttpResponse.json(
-        { error: 'Email already exists' },
-        { status: 409 }
+      return res(
+        ctx.status(409),
+        ctx.json({ error: 'Email already exists' })
       );
     }
 
     // Simulate successful signup
-    return HttpResponse.json(
-      { user: { ...mockUser, email: body.email, name: body.name } },
-      { status: 201 }
+    return res(
+      ctx.status(201),
+      ctx.json({ user: { ...mockUser, email: body.email, name: body.name } })
+    );
+
+  }),
+
+  rest.post('/api/auth/logout', () => {
+    return res(
+      ctx.status(200),
+      ctx.json({ message: 'Logged out successfully' })
     );
   }),
 
-  http.post('/api/auth/logout', () => {
-    return HttpResponse.json(
-      { message: 'Logged out successfully' },
-      { status: 200 }
-    );
-  }),
-
-  http.get('/api/auth/me', () => {
+  rest.get('/api/auth/me', () => {
     // Simulate authenticated user
-    return HttpResponse.json(
+    return res(ctx.json(
       { user: mockUser },
       { status: 200 }
     );
   }),
 
   // License endpoints
-  http.get('/api/licenses', () => {
-    return HttpResponse.json(
+  rest.get('/api/licenses', () => {
+    return res(ctx.json(
       { licenses: [mockLicense] },
       { status: 200 }
     );
   }),
 
-  http.get('/api/licenses/:id', ({ params }) => {
-    return HttpResponse.json(
+  rest.get('/api/licenses/:id', ({ params }) => {
+    return res(ctx.json(
       { license: mockLicense },
       { status: 200 }
     );
   }),
 
-  http.put('/api/licenses/:id', async ({ request, params }) => {
+  rest.put('/api/licenses/:id', async ({ request, params }) => {
     const body = await request.json() as { domains: string[] };
 
-    return HttpResponse.json(
+    return res(ctx.json(
       { license: { ...mockLicense, domains: body.domains } },
       { status: 200 }
     );
   }),
 
-  http.delete('/api/licenses/:id', () => {
-    return HttpResponse.json(
+  rest.delete('/api/licenses/:id', () => {
+    return res(ctx.json(
       { message: 'License cancelled successfully' },
       { status: 200 }
     );
   }),
 
   // Widget endpoints
-  http.get('/api/widgets', () => {
-    return HttpResponse.json(
+  rest.get('/api/widgets', () => {
+    return res(ctx.json(
       { widgets: [mockWidget] },
       { status: 200 }
     );
   }),
 
-  http.post('/api/widgets', async ({ request }) => {
+  rest.post('/api/widgets', async ({ request }) => {
     const body = await request.json();
 
-    return HttpResponse.json(
+    return res(ctx.json(
       { widget: { ...mockWidget, ...body } },
       { status: 201 }
     );
   }),
 
-  http.get('/api/widgets/:id', ({ params }) => {
-    return HttpResponse.json(
+  rest.get('/api/widgets/:id', ({ params }) => {
+    return res(ctx.json(
       { widget: mockWidget },
       { status: 200 }
     );
   }),
 
-  http.put('/api/widgets/:id', async ({ request, params }) => {
+  rest.put('/api/widgets/:id', async ({ request, params }) => {
     const body = await request.json();
 
-    return HttpResponse.json(
+    return res(ctx.json(
       { widget: { ...mockWidget, ...body } },
       { status: 200 }
     );
   }),
 
-  http.delete('/api/widgets/:id', () => {
-    return HttpResponse.json(
+  rest.delete('/api/widgets/:id', () => {
+    return res(ctx.json(
       { message: 'Widget deleted successfully' },
       { status: 200 }
     );
   }),
 
-  http.post('/api/widgets/:id/deploy', ({ params }) => {
-    return HttpResponse.json(
+  rest.post('/api/widgets/:id/deploy', ({ params }) => {
+    return res(ctx.json(
       { deployUrl: `https://example.com/widget/${params.id}` },
       { status: 200 }
     );

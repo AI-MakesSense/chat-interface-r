@@ -69,7 +69,7 @@ export async function signJWT(payload: Omit<JWTPayload, 'iat' | 'exp'>): Promise
 export async function verifyJWT(token: string): Promise<JWTPayload> {
   try {
     const { payload } = await jwtVerify(token, secret);
-    return payload as JWTPayload;
+    return payload as unknown as JWTPayload;
   } catch (error) {
     // Token is invalid or expired
     throw new Error('Invalid or expired token');

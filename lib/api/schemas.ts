@@ -24,21 +24,15 @@ import { isValidDomain } from '@/lib/license/domain';
  */
 export const createLicenseSchema = z
   .object({
-    tier: z.enum(['basic', 'pro', 'agency'], {
-      errorMap: () => ({ message: 'Tier must be basic, pro, or agency' }),
-    }),
+    tier: z.enum(['basic', 'pro', 'agency']),
     domains: z
-      .array(z.string(), {
-        errorMap: () => ({ message: 'Domains must be an array of strings' }),
-      })
+      .array(z.string())
       .min(1, { message: 'At least one domain required' })
       .refine((domains) => domains.every((d) => isValidDomain(d)), {
         message: 'All domains must be valid',
       }),
     expiresInDays: z
-      .number({
-        errorMap: () => ({ message: 'expiresInDays must be a number' }),
-      })
+      .number()
       .int({ message: 'expiresInDays must be an integer' })
       .positive({ message: 'expiresInDays must be positive' })
       .default(365)
@@ -63,17 +57,13 @@ export const createLicenseSchema = z
  */
 export const validateLicenseSchema = z.object({
   licenseKey: z
-    .string({
-      errorMap: () => ({ message: 'License key must be a string' }),
-    })
+    .string()
     .length(32, { message: 'License key must be exactly 32 characters' })
     .regex(/^[0-9a-f]{32}$/, {
       message: 'License key must be lowercase hexadecimal',
     }),
   domain: z
-    .string({
-      errorMap: () => ({ message: 'Domain must be a string' }),
-    })
+    .string()
     .min(1, { message: 'Domain is required' }),
 });
 
@@ -91,16 +81,10 @@ export const updateLicenseSchema = z
       })
       .optional(),
     status: z
-      .enum(['active', 'cancelled', 'expired'], {
-        errorMap: () => ({
-          message: 'Status must be active, cancelled, or expired',
-        }),
-      })
+      .enum(['active', 'cancelled', 'expired'])
       .optional(),
     expiresAt: z
-      .string({
-        errorMap: () => ({ message: 'expiresAt must be a string' }),
-      })
+      .string()
       .datetime({ message: 'Must be valid ISO datetime' })
       .refine(
         (date) => new Date(date) > new Date(),

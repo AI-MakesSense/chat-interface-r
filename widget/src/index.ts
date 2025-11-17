@@ -12,8 +12,19 @@
  * - License flags injected at serve time
  */
 
+// __START_LICENSE_FLAGS__
+// __END_LICENSE_FLAGS__
+
 import { createChatWidget } from './widget';
-import { WidgetConfig } from './types';
+import { WidgetRuntimeConfig } from './types';
+import { Widget as WidgetConstructor } from './core/widget';
+
+// Expose the Widget constructor globally for portal/embedded modes.
+if (typeof window !== 'undefined') {
+  const globalWindow = window as any;
+  globalWindow.Widget = WidgetConstructor;
+  globalWindow.N8nWidget = WidgetConstructor;
+}
 
 (function() {
   'use strict';
@@ -27,17 +38,17 @@ import { WidgetConfig } from './types';
 
   function init() {
     // Get user configuration from window
-    const userConfig = (window as any).ChatWidgetConfig as WidgetConfig || {};
+    const runtimeConfig = (window as any).ChatWidgetConfig as WidgetRuntimeConfig || {};
 
     // Validate required config
-    if (!userConfig.connection?.webhookUrl) {
-      console.error('[N8n Chat Widget] Error: webhookUrl is required in ChatWidgetConfig');
+    if (!runtimeConfig.relay?.relayUrl || !runtimeConfig.relay.licenseKey || !runtimeConfig.relay.widgetId) {
+      console.error('[N8n Chat Widget] Error: relay configuration is missing (relayUrl, widgetId, licenseKey required)');
       return;
     }
 
     // Initialize widget
     try {
-      createChatWidget(userConfig);
+      createChatWidget(runtimeConfig);
     } catch (error) {
       console.error('[N8n Chat Widget] Initialization error:', error);
     }

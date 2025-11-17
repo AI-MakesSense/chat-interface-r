@@ -243,9 +243,7 @@ export class MarkdownPipeline {
     try {
       // Lazy load markdown-it using static method (for test spying)
       const MarkdownIt = await LazyLoader.getMarkdownIt();
-      if (MarkdownIt) {
-        this.renderer = new MarkdownRenderer(this.config);
-      }
+      this.renderer = new MarkdownRenderer(this.config);
 
       // Lazy load Prism.js (optional, only if syntax highlighting enabled)
       if (this.options.enableSyntaxHighlighting) {
