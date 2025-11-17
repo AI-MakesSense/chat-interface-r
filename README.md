@@ -38,7 +38,15 @@ pnpm db:generate
 
 # Run migrations
 pnpm db:migrate
+
+# Seed database with demo accounts (for local development)
+pnpm db:seed
 ```
+
+**Demo Accounts** (after running `pnpm db:seed`):
+- `demo@example.com` / `demo1234` (Pro tier)
+- `test@example.com` / `password123` (Basic tier)
+- `agency@example.com` / `agency1234` (Agency tier)
 
 4. **Start development server:**
 ```bash
@@ -50,6 +58,8 @@ Visit http://localhost:3000
 ## 📋 Development Status
 
 ✅ **Phase 1 Complete:** Foundation (Auth, Database, Core APIs)
+
+**Important**: For local development, run `pnpm db:seed` after database setup to populate demo accounts for testing.
 
 Next: Phase 2 - License system, Stripe integration, Email system
 
