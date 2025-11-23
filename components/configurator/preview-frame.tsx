@@ -649,6 +649,7 @@ export function PreviewFrame({ config, className = '' }: PreviewFrameProps) {
         document.addEventListener('DOMContentLoaded', () => widget.init());
       } else {
         widget.init();
+      }
 
       // Expose widget API
       window.ChatWidget = widget;
