@@ -19,15 +19,14 @@ const DownloadQuerySchema = z.object({
 
 export async function GET(
   request: NextRequest,
-  // FIX: Removed 'Promise' wrapper for Next.js 14 compatibility
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     // 1. Authenticate user
     const user = await requireAuth(request);
 
     // 2. Validate widget ID format
-    const { id } = params;
+    const { id } = await params;
     const widgetId = z.string().uuid().parse(id);
 
     // 3. Parse and validate query parameters
