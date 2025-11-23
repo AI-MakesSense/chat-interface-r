@@ -46,43 +46,48 @@ if (typeof window !== 'undefined') {
       }
     }
 
-    // 2. Auto-discovery mode (Pickaxe-style)
-    // Look for div with id starting with "n8n-chat-"
+    // 2. Determine License Key & API Base URL
+    let licenseKey = '';
+    let apiBaseUrl = '';
+
+    // Strategy A: Check for container with ID (Legacy/Manual Embed)
     const container = document.querySelector('div[id^="n8n-chat-"]');
-    if (!container) {
-      // No container found, and no legacy config. 
-      // This is expected if the script is loaded but the container isn't present yet,
-      // or if used in a different way. We just exit silently.
-      return;
+    if (container) {
+      const containerId = container.id;
+      licenseKey = containerId.replace('n8n-chat-', '');
+      console.log(`[N8n Chat Widget] Found container for license: ${licenseKey}`);
     }
 
-    const containerId = container.id;
-    const licenseKey = containerId.replace('n8n-chat-', '');
+    // Strategy B: Extract from Script Tag (Auto-Embed)
+    const scriptTag = document.querySelector('script[src*="/chat-widget.js"], script[src*="/bundle.js"]') as HTMLScriptElement;
+    if (scriptTag && scriptTag.src) {
+      const url = new URL(scriptTag.src);
+      apiBaseUrl = url.origin;
 
+      // Try to extract license key from URL if not found in container
+      // Pattern: /api/widget/[LICENSE_KEY]/chat-widget.js
+      if (!licenseKey) {
+        const match = url.pathname.match(/\/api\/widget\/([^\/]+)\/chat-widget\.js/);
+        if (match && match[1]) {
+          licenseKey = match[1];
+          console.log(`[N8n Chat Widget] Extracted license from script URL: ${licenseKey}`);
+        }
+      }
+    }
+
+    // If we still don't have a license key, we can't proceed
     if (!licenseKey) {
-      console.error('[N8n Chat Widget] Found container but no license key in ID');
+      console.warn('[N8n Chat Widget] Could not determine license key from container or script URL');
       return;
     }
 
-    console.log(`[N8n Chat Widget] Found container for license: ${licenseKey}`);
+    // Fallback for API Base URL if script tag wasn't found (unlikely)
+    if (!apiBaseUrl) {
+      apiBaseUrl = window.location.origin;
+    }
 
     // 3. Fetch configuration
     try {
-      // Determine API base URL from script source if possible, otherwise assume same origin or specific domain
-      // For now, we'll try to derive it from the script tag src
-      let apiBaseUrl = '';
-      const scriptTag = document.querySelector('script[src*="/chat-widget.js"], script[src*="/bundle.js"]') as HTMLScriptElement;
-      if (scriptTag && scriptTag.src) {
-        const url = new URL(scriptTag.src);
-        apiBaseUrl = url.origin;
-      }
-
-      // Fallback if script tag not found (shouldn't happen usually)
-      if (!apiBaseUrl) {
-        console.warn('[N8n Chat Widget] Could not determine API base URL from script tag');
-        return;
-      }
-
       const response = await fetch(`${apiBaseUrl}/api/widget/${licenseKey}/config`);
       if (!response.ok) {
         throw new Error(`Failed to fetch config: ${response.status} ${response.statusText}`);
@@ -91,8 +96,6 @@ if (typeof window !== 'undefined') {
       const config: WidgetConfig = await response.json();
 
       // 4. Construct Runtime Config
-      // Note: We cast to any first because WidgetRuntimeConfig is an intersection type
-      // and we're constructing it from the config object + relay object
       const runtimeConfig: WidgetRuntimeConfig = {
         ...config,
         relay: {
@@ -107,8 +110,10 @@ if (typeof window !== 'undefined') {
 
     } catch (error) {
       console.error('[N8n Chat Widget] Auto-discovery initialization error:', error);
-      // Optional: Render error state in container
-      container.innerHTML = '<div style="color: red; padding: 10px; border: 1px solid red;">Widget Error: Failed to load configuration</div>';
+      // Optional: Render error state in container if it exists
+      if (container) {
+        container.innerHTML = '<div style="color: red; padding: 10px; border: 1px solid red;">Widget Error: Failed to load configuration</div>';
+      }
     }
   }
 })();
