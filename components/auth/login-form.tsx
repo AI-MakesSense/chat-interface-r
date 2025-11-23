@@ -93,6 +93,9 @@ export function LoginForm({
       // Success callback
       onSuccess?.();
 
+      // Refresh router to update server components/middleware state
+      router.refresh();
+
       // Redirect to dashboard
       router.push(redirectTo);
     } catch (err) {
