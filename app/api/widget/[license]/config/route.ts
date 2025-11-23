@@ -1,13 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { prisma } from '@/lib/prisma';
-import { WidgetConfig } from '@/widget/src/types';
+import { getLicenseByKey, getWidgetsByLicenseId } from '@/lib/db/queries';
+import type { WidgetConfig } from '@/widget/src/types';
 
 export async function GET(
     request: NextRequest,
-    { params }: { params: { license: string } }
+    { params }: { params: Promise<{ license: string }> }
 ) {
     try {
-        const licenseKey = params.license;
+        const { license: licenseKey } = await params;
 
         if (!licenseKey) {
             return NextResponse.json(
@@ -16,20 +16,8 @@ export async function GET(
             );
         }
 
-        // Find the license and associated widget
-        const license = await prisma.license.findUnique({
-            where: { key: licenseKey },
-            include: {
-                user: {
-                    include: {
-                        widgets: {
-                            where: { active: true },
-                            take: 1, // Get the first active widget for this user
-                        },
-                    },
-                },
-            },
-        });
+        // Find the license
+        const license = await getLicenseByKey(licenseKey);
 
         if (!license) {
             return NextResponse.json(
@@ -47,9 +35,9 @@ export async function GET(
 
         // Check domain restrictions if applicable
         const origin = request.headers.get('origin');
-        if (origin && license.allowedDomains.length > 0) {
+        if (origin && license.domains.length > 0) {
             const domain = new URL(origin).hostname;
-            const isAllowed = license.allowedDomains.some((d: string) =>
+            const isAllowed = license.domains.some((d: string) =>
                 domain === d || domain.endsWith('.' + d)
             );
 
@@ -61,40 +49,36 @@ export async function GET(
             }
         }
 
-        // Get the widget configuration
-        const widget = license.user.widgets[0];
+        // Get the first active widget for this license
+        const widgets = await getWidgetsByLicenseId(license.id, false);
 
-        if (!widget) {
+        if (!widgets || widgets.length === 0) {
             return NextResponse.json(
                 { error: 'No active widget configuration found' },
                 { status: 404 }
             );
         }
 
-        // Construct the config object
+        const widget = widgets[0];
+        const widgetConfig = widget.config as any; // JSONB config from database
+
+        // Construct the config object from the widget
         const config: WidgetConfig = {
-            license: { key: licenseKey, active: true, plan: license.tier },
-            branding: {
-                companyName: widget.companyName,
-                logoUrl: widget.logoUrl || undefined,
-                welcomeText: widget.welcomeText || undefined,
-                firstMessage: widget.firstMessage || undefined,
+            license: {
+                key: licenseKey,
+                active: true,
+                plan: license.tier
             },
-            style: {
-                primaryColor: widget.primaryColor,
-                theme: widget.theme as 'light' | 'dark',
-                position: widget.position as 'bottom-right' | 'bottom-left',
-                cornerRadius: widget.cornerRadius,
-                // Default values for required fields that might be missing in DB
-                backgroundColor: '#ffffff',
-                textColor: '#000000',
-                fontFamily: 'Inter, sans-serif',
-                fontSize: 16,
+            branding: widgetConfig.branding || {
+                companyName: '',
             },
-            features: {
-                fileAttachmentsEnabled: true,
-                allowedExtensions: ['.jpg', '.png', '.pdf'],
-                maxFileSizeKB: 5120,
+            style: widgetConfig.style || {
+                theme: 'light',
+                primaryColor: '#0066FF',
+                position: 'bottom-right',
+            },
+            features: widgetConfig.features || {
+                fileAttachmentsEnabled: false,
             },
             connection: {
                 // We don't expose the raw webhook URL here for security
