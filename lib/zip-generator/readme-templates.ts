@@ -10,69 +10,43 @@ export class READMETemplates {
    * Generate website package README
    */
   static generateWebsiteREADME(): string {
-    return `# Chat Widget Installation
+    return `# Chat Widget - Website Embed
 
-This package contains everything you need to add the chat widget to your website.
+This package contains a reference implementation to help you get started.
 
-## Files Included
+## Recommended: Use Hosted Embed (Relay)
 
-- \`index.html\` - Example HTML page with the widget
-- \`chat-widget.js\` - Widget JavaScript bundle
-- \`README.md\` - This file
+**This is the easiest way to add the widget to your website:**
 
-## Installation
-
-### Option 1: Use the Example HTML
-
-1. Open \`index.html\` in a web browser to see the widget in action
-2. Customize the HTML to match your website's design
-3. Upload the files to your web server
-
-### Option 2: Integrate into Existing Website
-
-Add these lines to your HTML, just before the closing \`</body>\` tag:
+Add this single line to your HTML, just before the closing \`</body>\` tag:
 
 \`\`\`html
-<!-- Chat Widget Script -->
-<script src="./chat-widget.js"></script>
-
-<!-- Initialize Widget -->
-<script>
-  const widgetConfig = {
-    license: 'YOUR_LICENSE_KEY',
-    branding: {
-      companyName: 'Your Company',
-      logoUrl: 'https://example.com/logo.png',
-      firstMessage: 'Hello! How can we help you today?'
-    },
-    style: {
-      primaryColor: '#00bfff',
-      theme: 'light'
-    },
-    connection: {
-      webhookUrl: 'https://your-n8n-instance.com/webhook/chat'
-    }
-  };
-
-  if (typeof Widget !== 'undefined') {
-    const widget = new Widget(widgetConfig);
-    widget.render();
-  }
-</script>
+<!-- Chat Widget (Relay) - Zero Configuration Required -->
+<script src="https://YOUR-PLATFORM-URL.com/api/widget/YOUR-LICENSE-KEY/chat-widget.js"></script>
 \`\`\`
 
-## Configuration
+**That's it!** The widget will appear on your page automatically.
 
-Update the \`widgetConfig\` object in your HTML to customize:
+### Why use the hosted version?
 
-- **license**: Your widget license key
-- **branding**: Company name, logo, welcome message
-- **style**: Colors, theme (light/dark)
-- **connection**: N8n webhook URL
+✅ Zero configuration required
+✅ Automatic updates
+✅ Secure relay (no CORS issues)
+✅ Your N8n webhook URL stays private
+
+## Alternative: Self-Hosted (Advanced)
+
+If you need to host the widget files yourself:
+
+1. Upload \`chat-widget.js\` to your web server
+2. Add the initialization code to your HTML
+3. **Note:** You'll need to configure CORS on your N8n instance
+
+See \`index.html\` for a reference implementation.
 
 ## Support
 
-For more information, visit your dashboard or contact support.
+For your embed code and license key, visit your dashboard.
 `;
   }
 
@@ -80,37 +54,44 @@ For more information, visit your dashboard or contact support.
    * Generate portal package README
    */
   static generatePortalREADME(widgetId: string): string {
-    return `# Chat Portal Package
+    return `# Chat Widget - Portal Page
 
-This package contains a standalone full-screen chat portal.
+This package contains a full-page chat interface.
 
-## Files Included
+## Recommended: Use Hosted Embed (Relay)
 
-- \`portal.html\` - Full-screen chat portal page
-- \`chat-widget.js\` - Widget JavaScript bundle
-- \`README.md\` - This file
+**Easiest way to deploy your portal:**
 
-## Installation
+Simply create an HTML page with this single line:
 
-### Quick Start
+\`\`\`html
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Support Chat</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+</head>
+<body>
+  <!-- Chat Portal (Relay) - Zero Configuration Required -->
+  <script src="https://YOUR-PLATFORM-URL.com/api/widget/YOUR-LICENSE-KEY/chat-widget.js"></script>
+</body>
+</html>
+\`\`\`
 
-1. Open \`portal.html\` in a web browser to see the portal in action
-2. Upload the files to your web server
-3. Share the URL with your users
+**That's it!** Host this HTML file at your own domain (e.g., chat.yourcompany.com).
 
-### Customization
+### Why use the hosted version?
 
-Edit \`portal.html\` to customize:
-
-- Company name and branding
-- Portal colors and theme
-- Webhook URL for N8n integration
-- Header title and visibility
+✅ Zero configuration required
+✅ Automatic updates
+✅ Secure relay (no CORS issues)
+✅ Your N8n webhook URL stays private
+✅ Full-screen chat interface
 
 ### Portal Mode Features
 
 - **Full-screen chat interface** - No bubble button, always visible
-- **Clean URL** - Host at your own domain (e.g., chat.yourcompany.com)
+- **Clean URL** - Host at your own domain
 - **Mobile-friendly** - Responsive design for all devices
 - **Embeddable** - Use in iframes if needed
 
@@ -120,7 +101,7 @@ Your portal widget ID: \`${widgetId}\`
 
 ## Support
 
-For more information, visit your dashboard or contact support.
+For your embed code and license key, visit your dashboard.
 `;
   }
 }
