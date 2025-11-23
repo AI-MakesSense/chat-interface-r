@@ -14,6 +14,7 @@ export interface RelayRequestPayload {
   widgetId: string;
   licenseKey: string;
   message: string;
+  chatInput: string;
   sessionId: string;
   context?: Record<string, any>;
   customContext?: Record<string, any>;
@@ -36,6 +37,7 @@ export function buildRelayPayload(
     widgetId: relay.widgetId,
     licenseKey: relay.licenseKey,
     message: options.message,
+    chatInput: options.message, // Duplicate message as chatInput for n8n compatibility
     sessionId: options.sessionId,
     context: options.context,
     customContext: options.customContext ?? uiConnection?.customContext,

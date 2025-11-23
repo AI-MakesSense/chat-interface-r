@@ -35,6 +35,11 @@ export async function POST(request: NextRequest) {
 
     const { widgetId, licenseKey, previewWebhookUrl, ...payload } = validationResult.data;
 
+    // Ensure chatInput is present for n8n compatibility (some workflows expect this)
+    if (!payload.chatInput && payload.message) {
+      (payload as any).chatInput = payload.message;
+    }
+
     let targetWebhookUrl: string | null = null;
 
     // 2. Determine Webhook URL
