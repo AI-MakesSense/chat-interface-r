@@ -220,19 +220,20 @@ export function PreviewFrame({ config, className = '' }: PreviewFrameProps) {
     }, '*');
   </script>
 
-  <!-- Widget Script (placeholder - will be replaced with actual widget) -->
+  <!-- Widget Script -->
   <script>
-    // Placeholder widget implementation for preview
-    // In production, this would load the actual widget from /api/widget/:license/chat-widget.js
-
+    // Functional widget implementation for preview with real API integration
     (function() {
-      // Simple widget implementation for preview purposes
       const widget = {
         isOpen: false,
+        messages: [],
+        isLoading: false,
 
         init: function() {
           this.render();
           this.attachEventListeners();
+          // Add initial greeting message
+          this.addMessage('assistant', window.ChatWidgetConfig.branding.firstMessage || 'Hello! How can I help you today?');
         },
 
         render: function() {
@@ -301,7 +302,10 @@ export function PreviewFrame({ config, className = '' }: PreviewFrameProps) {
             ">
               <div>
                 <div style="font-weight: bold; font-size: 16px;">\${config.branding.companyName || 'Chat Widget'}</div>
-                <div style="font-size: 12px; opacity: 0.9;">\${config.branding.welcomeText || 'How can we help?'}</div>
+                <div style="font-size: 12px; opacity: 0.9;" id="connection-status">
+                  <span style="display: inline-block; width: 6px; height: 6px; border-radius: 50%; background: #4ade80; margin-right: 4px;"></span>
+                  Preview Mode - Testing Connection
+                </div>
               </div>
               <button id="chat-close-btn" style="
                 background: transparent;
@@ -314,34 +318,47 @@ export function PreviewFrame({ config, className = '' }: PreviewFrameProps) {
                 height: 30px;
               ">×</button>
             </div>
-            <div style="
+            <div id="messages-container" style="
               flex: 1;
               padding: 20px;
               overflow-y: auto;
               background: #f7fafc;
+              display: flex;
+              flex-direction: column;
+              gap: 12px;
             ">
-              <div style="
-                background: white;
-                padding: 12px 16px;
-                border-radius: 8px;
-                margin-bottom: 12px;
-                box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
-              ">
-                \${config.branding.firstMessage || 'Hello! How can I help you today?'}
-              </div>
             </div>
             <div style="
               padding: 16px;
               border-top: 1px solid #e2e8f0;
               background: white;
             ">
-              <input type="text" placeholder="Type a message..." style="
-                width: 100%;
-                padding: 12px;
-                border: 1px solid #e2e8f0;
-                border-radius: 8px;
-                font-size: 14px;
-              ">
+              <div style="display: flex; gap: 8px;">
+                <input 
+                  id="message-input" 
+                  type="text" 
+                  placeholder="Type a message..." 
+                  style="
+                    flex: 1;
+                    padding: 12px;
+                    border: 1px solid #e2e8f0;
+                    border-radius: 8px;
+                    font-size: 14px;
+                  "
+                >
+                <button 
+                  id="send-btn"
+                  style="
+                    padding: 12px 20px;
+                    background-color: \${config.style.primaryColor};
+                    color: white;
+                    border: none;
+                    border-radius: 8px;
+                    cursor: pointer;
+                    font-weight: 500;
+                  "
+                >Send</button>
+              </div>
             </div>
           \`;
 
@@ -350,6 +367,157 @@ export function PreviewFrame({ config, className = '' }: PreviewFrameProps) {
 
           this.button = button;
           this.chatWindow = chatWindow;
+          this.messagesContainer = chatWindow.querySelector('#messages-container');
+          this.messageInput = chatWindow.querySelector('#message-input');
+          this.sendBtn = chatWindow.querySelector('#send-btn');
+        },
+
+        addMessage: function(role, content) {
+          const message = { role, content, timestamp: new Date() };
+          this.messages.push(message);
+          this.renderMessage(message);
+        },
+
+        renderMessage: function(message) {
+          const messageEl = document.createElement('div');
+          const isUser = message.role === 'user';
+          
+          messageEl.style.cssText = \`
+            display: flex;
+            justify-content: \${isUser ? 'flex-end' : 'flex-start'};
+          \`;
+
+          const bubble = document.createElement('div');
+          bubble.style.cssText = \`
+            max-width: 70%;
+            padding: 12px 16px;
+            border-radius: 12px;
+            background: \${isUser ? window.ChatWidgetConfig.style.primaryColor : 'white'};
+            color: \${isUser ? 'white' : '#1a202c'};
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+            word-wrap: break-word;
+          \`;
+          bubble.textContent = message.content;
+
+          messageEl.appendChild(bubble);
+          this.messagesContainer.appendChild(messageEl);
+          
+          // Scroll to bottom
+          this.messagesContainer.scrollTop = this.messagesContainer.scrollHeight;
+        },
+
+        showLoading: function() {
+          const loadingEl = document.createElement('div');
+          loadingEl.id = 'loading-indicator';
+          loadingEl.style.cssText = \`
+            display: flex;
+            justify-content: flex-start;
+          \`;
+
+          loadingEl.innerHTML = \`
+            <div style="
+              background: white;
+              padding: 12px 16px;
+              border-radius: 12px;
+              box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+            ">
+              <div style="display: flex; gap: 4px;">
+                <div style="width: 8px; height: 8px; border-radius: 50%; background: #cbd5e0; animation: bounce 1.4s infinite ease-in-out;"></div>
+                <div style="width: 8px; height: 8px; border-radius: 50%; background: #cbd5e0; animation: bounce 1.4s infinite ease-in-out 0.2s;"></div>
+                <div style="width: 8px; height: 8px; border-radius: 50%; background: #cbd5e0; animation: bounce 1.4s infinite ease-in-out 0.4s;"></div>
+              </div>
+            </div>
+          \`;
+
+          this.messagesContainer.appendChild(loadingEl);
+          this.messagesContainer.scrollTop = this.messagesContainer.scrollHeight;
+        },
+
+        hideLoading: function() {
+          const loadingEl = document.getElementById('loading-indicator');
+          if (loadingEl) loadingEl.remove();
+        },
+
+        updateConnectionStatus: function(status, message) {
+          const statusEl = document.getElementById('connection-status');
+          if (!statusEl) return;
+
+          const colors = {
+            success: '#4ade80',
+            error: '#f87171',
+            warning: '#fbbf24'
+          };
+
+          statusEl.innerHTML = \`
+            <span style="display: inline-block; width: 6px; height: 6px; border-radius: 50%; background: \${colors[status] || colors.warning}; margin-right: 4px;"></span>
+            \${message}
+          \`;
+        },
+
+        sendMessage: async function() {
+          const text = this.messageInput.value.trim();
+          if (!text || this.isLoading) return;
+
+          // Add user message
+          this.addMessage('user', text);
+          this.messageInput.value = '';
+          this.isLoading = true;
+          this.sendBtn.disabled = true;
+          this.showLoading();
+
+          try {
+            // Get current widget config
+            const config = window.ChatWidgetConfig;
+            
+            // Check if webhook URL is configured
+            if (!config.connection?.webhookUrl && !config.connection?.relayEndpoint) {
+              throw new Error('No webhook URL configured');
+            }
+
+            // Send message via relay API
+            const relayUrl = '/api/chat-relay';
+            const response = await fetch(relayUrl, {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+              },
+              body: JSON.stringify({
+                sessionId: 'preview-' + Date.now(),
+                action: 'sendMessage',
+                chatInput: text,
+                licenseKey: config.license?.key || 'preview',
+              }),
+            });
+
+            this.hideLoading();
+
+            if (!response.ok) {
+              const errorData = await response.json().catch(() => ({}));
+              throw new Error(errorData.error || \`HTTP \${response.status}: \${response.statusText}\`);
+            }
+
+            const data = await response.json();
+            
+            // Add assistant response
+            if (data.output) {
+              this.addMessage('assistant', data.output);
+              this.updateConnectionStatus('success', 'Connected to n8n');
+            } else {
+              throw new Error('No response from webhook');
+            }
+
+          } catch (error) {
+            this.hideLoading();
+            console.error('Chat error:', error);
+            
+            // Show error message
+            const errorMsg = error.message || 'Failed to send message';
+            this.addMessage('assistant', \`❌ Error: \${errorMsg}\`);
+            this.updateConnectionStatus('error', 'Connection failed');
+          } finally {
+            this.isLoading = false;
+            this.sendBtn.disabled = false;
+          }
         },
 
         getPositionStyles: function(position, isWindow = false) {
@@ -376,6 +544,15 @@ export function PreviewFrame({ config, className = '' }: PreviewFrameProps) {
           if (closeBtn) {
             closeBtn.addEventListener('click', () => this.close());
           }
+
+          this.sendBtn.addEventListener('click', () => this.sendMessage());
+          
+          this.messageInput.addEventListener('keypress', (e) => {
+            if (e.key === 'Enter' && !e.shiftKey) {
+              e.preventDefault();
+              this.sendMessage();
+            }
+          });
         },
 
         open: function() {
@@ -383,6 +560,7 @@ export function PreviewFrame({ config, className = '' }: PreviewFrameProps) {
             this.chatWindow.style.display = 'flex';
             this.button.style.display = 'none';
             this.isOpen = true;
+            this.messageInput.focus();
           }
         },
 
@@ -403,17 +581,28 @@ export function PreviewFrame({ config, className = '' }: PreviewFrameProps) {
 
           // Re-render with new config
           window.ChatWidgetConfig = newConfig;
+          this.messages = []; // Reset messages
           this.render();
           this.attachEventListeners();
+          this.addMessage('assistant', newConfig.branding.firstMessage || 'Hello! How can I help you today?');
         }
       };
+
+      // Add CSS for bounce animation
+      const style = document.createElement('style');
+      style.textContent = \`
+        @keyframes bounce {
+          0%, 80%, 100% { transform: scale(0); }
+          40% { transform: scale(1); }
+        }
+      \`;
+      document.head.appendChild(style);
 
       // Initialize widget
       if (document.readyState === 'loading') {
         document.addEventListener('DOMContentLoaded', () => widget.init());
       } else {
         widget.init();
-      }
 
       // Expose widget API
       window.ChatWidget = widget;
