@@ -39,7 +39,7 @@ export async function GET(
   try {
     // Extract widget ID from route params (await for Next.js 16)
     const { id } = await params;
-    
+
     // 1. Authenticate user
     const user = await requireAuth(request);
 
@@ -90,7 +90,7 @@ export async function PATCH(
   try {
     // Extract widget ID from route params (await for Next.js 16)
     const { id } = await params;
-    
+
     // 1. Authenticate user
     const user = await requireAuth(request);
 
@@ -163,8 +163,22 @@ export async function PATCH(
 
     // Log unexpected errors
     console.error('Widget update error:', error);
-    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
+    return NextResponse.json({
+      error: 'Internal server error',
+      details: error instanceof Error ? error.message : String(error)
+    }, { status: 500 });
   }
+}
+
+// =============================================================================
+// PUT /api/widgets/[id] - Update Widget (Alias for PATCH)
+// =============================================================================
+
+export async function PUT(
+  request: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  return PATCH(request, { params });
 }
 
 // =============================================================================
@@ -178,7 +192,7 @@ export async function DELETE(
   try {
     // Extract widget ID from route params (await for Next.js 16)
     const { id } = await params;
-    
+
     // 1. Authenticate user
     const user = await requireAuth(request);
 
