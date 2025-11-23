@@ -11,6 +11,13 @@ export interface WidgetConfig {
   features: FeaturesConfig;
   connection?: ConnectionConfig;
   license?: LicenseConfig; // Injected by server at serve time
+  portal?: PortalConfig;
+}
+
+export interface PortalConfig {
+  showHeader?: boolean;
+  headerTitle?: string;
+  [key: string]: any;
 }
 
 export interface WidgetRuntimeConfig {
