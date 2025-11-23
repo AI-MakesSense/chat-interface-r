@@ -119,7 +119,12 @@ export async function POST(request: NextRequest) {
       }
 
       // Return the N8n response to the client
-      return NextResponse.json(responseData, { status: n8nResponse.status });
+      return NextResponse.json(responseData, {
+        status: n8nResponse.status,
+        headers: {
+          'Access-Control-Allow-Origin': '*',
+        },
+      });
 
     } catch (error) {
       console.error('Error forwarding to N8n:', error);
@@ -136,4 +141,15 @@ export async function POST(request: NextRequest) {
       { status: 500 }
     );
   }
+}
+
+export async function OPTIONS(request: NextRequest) {
+  return new NextResponse(null, {
+    status: 200,
+    headers: {
+      'Access-Control-Allow-Origin': '*',
+      'Access-Control-Allow-Methods': 'POST, OPTIONS',
+      'Access-Control-Allow-Headers': 'Content-Type, Authorization',
+    },
+  });
 }
