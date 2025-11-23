@@ -186,7 +186,6 @@ export function PreviewFrame({ config, className = '' }: PreviewFrameProps) {
     </p>
   </div>
 
-  <!-- Widget Configuration -->
   <script>
     // Initial configuration (will be updated via postMessage)
     window.ChatWidgetConfig = ${JSON.stringify(config, null, 2)};
@@ -220,7 +219,6 @@ export function PreviewFrame({ config, className = '' }: PreviewFrameProps) {
     }, '*');
   </script>
 
-  <!-- Widget Script -->
   <script>
     // Functional widget implementation for preview with real API integration
     (function() {
@@ -493,13 +491,17 @@ export function PreviewFrame({ config, className = '' }: PreviewFrameProps) {
             // Get current widget config
             const config = window.ChatWidgetConfig;
             
+            // Get current webhook URL for preview purposes
+            const currentWebhookUrl = config?.connection?.webhookUrl;
+
             // Check if webhook URL is configured
-            if (!config?.connection?.webhookUrl && !config?.connection?.relayEndpoint) {
-              throw new Error('No webhook URL or relay endpoint configured');
+            if (!currentWebhookUrl && !config?.connection?.relayEndpoint) {
+              throw new Error('No webhook URL configured. Please add one in settings.');
             }
 
             // Send message via relay API
             const relayUrl = '/api/chat-relay';
+            
             const response = await fetch(relayUrl, {
               method: 'POST',
               headers: {
@@ -510,6 +512,7 @@ export function PreviewFrame({ config, className = '' }: PreviewFrameProps) {
                 licenseKey: config.license?.key || 'preview',
                 message: text,
                 sessionId: 'preview-' + Date.now(),
+                previewWebhookUrl: currentWebhookUrl, // Send current unsaved URL
               }),
             });
 
@@ -517,17 +520,20 @@ export function PreviewFrame({ config, className = '' }: PreviewFrameProps) {
 
             if (!response.ok) {
               const errorData = await response.json().catch(() => ({}));
-              throw new Error(errorData.error || \`HTTP \${response.status}: \${response.statusText}\`);
+              throw new Error(errorData.error || \`HTTP \${response.status}\`);
             }
 
             const data = await response.json();
             
-            // Add assistant response
-            if (data.output) {
-              this.addMessage('assistant', data.output);
+            // Handle various N8n response formats
+            // Prioritize 'output', then 'text', then 'message', then stringify
+            const botResponse = data.output || data.text || data.message || (typeof data === 'string' ? data : JSON.stringify(data));
+
+            if (botResponse) {
+              this.addMessage('assistant', botResponse);
               this.updateConnectionStatus('success', 'Connected to n8n');
             } else {
-              throw new Error('No response from webhook');
+              throw new Error('Empty response from webhook');
             }
 
           } catch (error) {
@@ -542,6 +548,8 @@ export function PreviewFrame({ config, className = '' }: PreviewFrameProps) {
             this.isLoading = false;
             if (this.sendBtn) {
               this.sendBtn.disabled = false;
+              // Keep focus on input for better UX
+              this.messageInput.focus();
             }
           }
         },

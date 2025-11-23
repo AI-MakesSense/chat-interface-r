@@ -12,6 +12,8 @@ const relayRequestSchema = z.object({
   customContext: z.record(z.string(), z.any()).optional(),
   attachments: z.array(z.any()).optional(),
   extraInputs: z.record(z.string(), z.any()).optional(),
+  // Add this field to allow testing unsaved URLs
+  previewWebhookUrl: z.string().optional(),
 });
 
 export async function POST(request: NextRequest) {
@@ -27,63 +29,70 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const { widgetId, licenseKey, ...payload } = validationResult.data;
+    const { widgetId, licenseKey, previewWebhookUrl, ...payload } = validationResult.data;
 
-    // 2. Fetch widget and license
-    // Skip widget lookup for preview mode
+    let targetWebhookUrl: string | null = null;
+
+    // 2. Determine Webhook URL
+
+    // CASE A: Preview Mode
     if (widgetId === 'preview-widget' || licenseKey === 'preview') {
-      return NextResponse.json(
-        {
-          output: 'Preview mode: This is a simulated response. Configure your webhook URL to test with real n8n.',
-          preview: true
-        },
-        { status: 200 }
-      );
+      if (previewWebhookUrl) {
+        // If the frontend sent a URL, use it (Real N8n connection test)
+        targetWebhookUrl = previewWebhookUrl;
+      } else {
+        // Fallback to dummy response if no URL provided
+        return NextResponse.json(
+          {
+            output: 'Preview mode: No webhook URL provided. Please enter a URL to test.',
+            preview: true
+          },
+          { status: 200 }
+        );
+      }
+    }
+    // CASE B: Production/Saved Widget Mode
+    else {
+      const widget = await getWidgetWithLicense(widgetId);
+
+      if (!widget) {
+        return NextResponse.json(
+          { error: 'Widget not found' },
+          { status: 404 }
+        );
+      }
+
+      // Validate license key
+      if (widget.license.licenseKey !== licenseKey) {
+        return NextResponse.json(
+          { error: 'Invalid license key' },
+          { status: 401 }
+        );
+      }
+
+      // Validate license status
+      if (widget.license.status !== 'active') {
+        return NextResponse.json(
+          { error: 'License is not active' },
+          { status: 403 }
+        );
+      }
+
+      // Extract webhook URL from DB config
+      const config = widget.config as any;
+      targetWebhookUrl = config?.connection?.webhookUrl;
     }
 
-    const widget = await getWidgetWithLicense(widgetId);
-
-    if (!widget) {
-      return NextResponse.json(
-        { error: 'Widget not found' },
-        { status: 404 }
-      );
-    }
-
-    // 3. Validate license key
-    if (widget.license.licenseKey !== licenseKey) {
-      return NextResponse.json(
-        { error: 'Invalid license key' },
-        { status: 401 }
-      );
-    }
-
-    // 4. Validate license status
-    if (widget.license.status !== 'active') {
-      return NextResponse.json(
-        { error: 'License is not active' },
-        { status: 403 }
-      );
-    }
-
-    // 5. Extract webhook URL
-    // The config is stored as a JSONB column, so we need to cast it or access it safely
-    // Based on schema, it should have a 'connection' property with 'webhookUrl'
-    const config = widget.config as any;
-    const webhookUrl = config?.connection?.webhookUrl;
-
-    if (!webhookUrl) {
+    if (!targetWebhookUrl) {
       return NextResponse.json(
         { error: 'Webhook URL not configured for this widget' },
         { status: 400 }
       );
     }
 
-    // 6. Forward request to N8n
-    // We forward the payload minus the sensitive auth info (widgetId, licenseKey)
-    // N8n receives the message, session, and context
+    // 3. Forward request to N8n
     try {
-      const n8nResponse = await fetch(webhookUrl, {
+      const n8nResponse = await fetch(targetWebhookUrl, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -93,14 +102,13 @@ export async function POST(request: NextRequest) {
       });
 
       // Get the response from N8n
-      // We try to parse as JSON, but fallback to text if needed
       const contentType = n8nResponse.headers.get('content-type');
       let responseData;
 
       if (contentType && contentType.includes('application/json')) {
         responseData = await n8nResponse.json();
       } else {
-        responseData = { text: await n8nResponse.text() };
+        responseData = { output: await n8nResponse.text() };
       }
 
       // Return the N8n response to the client
