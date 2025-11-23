@@ -230,14 +230,24 @@ export function PreviewFrame({ config, className = '' }: PreviewFrameProps) {
         isLoading: false,
 
         init: function() {
-          this.render();
-          this.attachEventListeners();
-          // Add initial greeting message
-          this.addMessage('assistant', window.ChatWidgetConfig.branding.firstMessage || 'Hello! How can I help you today?');
+          try {
+            this.render();
+            this.attachEventListeners();
+            // Add initial greeting message
+            const initialMessage = window.ChatWidgetConfig?.branding?.firstMessage || 'Hello! How can I help you today?';
+            this.addMessage('assistant', initialMessage);
+          } catch (e) {
+            console.error('Chat widget initialization failed:', e);
+            window.parent.postMessage({ type: 'PREVIEW_ERROR', payload: { error: 'Widget initialization failed: ' + e.message } }, '*');
+          }
         },
 
         render: function() {
           const config = window.ChatWidgetConfig;
+          if (!config) {
+            console.error('ChatWidgetConfig is not defined during render.');
+            return;
+          }
 
           // Create widget container
           const container = document.createElement('div');
@@ -245,7 +255,7 @@ export function PreviewFrame({ config, className = '' }: PreviewFrameProps) {
           container.style.cssText = \`
             position: fixed;
             z-index: 9999;
-            \${this.getPositionStyles(config.style.position)}
+            \${this.getPositionStyles(config.style?.position || 'bottom-right')}
           \`;
 
           // Create widget button
@@ -255,8 +265,8 @@ export function PreviewFrame({ config, className = '' }: PreviewFrameProps) {
           button.style.cssText = \`
             width: 60px;
             height: 60px;
-            border-radius: \${config.style.cornerRadius || 12}px;
-            background-color: \${config.style.primaryColor};
+            border-radius: \${config.style?.cornerRadius || 12}px;
+            background-color: \${config.style?.primaryColor || '#667eea'};
             color: white;
             border: none;
             font-size: 24px;
@@ -281,11 +291,11 @@ export function PreviewFrame({ config, className = '' }: PreviewFrameProps) {
           chatWindow.style.cssText = \`
             display: none;
             position: fixed;
-            \${this.getPositionStyles(config.style.position, true)}
+            \${this.getPositionStyles(config.style?.position || 'bottom-right', true)}
             width: 380px;
             height: 600px;
             background: white;
-            border-radius: \${config.style.cornerRadius || 12}px;
+            border-radius: \${config.style?.cornerRadius || 12}px;
             box-shadow: 0 10px 40px rgba(0, 0, 0, 0.2);
             overflow: hidden;
             flex-direction: column;
@@ -293,7 +303,7 @@ export function PreviewFrame({ config, className = '' }: PreviewFrameProps) {
 
           chatWindow.innerHTML = \`
             <div style="
-              background-color: \${config.style.primaryColor};
+              background-color: \${config.style?.primaryColor || '#667eea'};
               color: white;
               padding: 20px;
               display: flex;
@@ -301,7 +311,7 @@ export function PreviewFrame({ config, className = '' }: PreviewFrameProps) {
               align-items: center;
             ">
               <div>
-                <div style="font-weight: bold; font-size: 16px;">\${config.branding.companyName || 'Chat Widget'}</div>
+                <div style="font-weight: bold; font-size: 16px;">\${config.branding?.companyName || 'Chat Widget'}</div>
                 <div style="font-size: 12px; opacity: 0.9;" id="connection-status">
                   <span style="display: inline-block; width: 6px; height: 6px; border-radius: 50%; background: #4ade80; margin-right: 4px;"></span>
                   Preview Mode - Testing Connection
@@ -350,7 +360,7 @@ export function PreviewFrame({ config, className = '' }: PreviewFrameProps) {
                   id="send-btn"
                   style="
                     padding: 12px 20px;
-                    background-color: \${config.style.primaryColor};
+                    background-color: \${config.style?.primaryColor || '#667eea'};
                     color: white;
                     border: none;
                     border-radius: 8px;
@@ -373,12 +383,18 @@ export function PreviewFrame({ config, className = '' }: PreviewFrameProps) {
         },
 
         addMessage: function(role, content) {
+          if (!this.messagesContainer) {
+            console.error('Messages container not found.');
+            return;
+          }
           const message = { role, content, timestamp: new Date() };
           this.messages.push(message);
           this.renderMessage(message);
         },
 
         renderMessage: function(message) {
+          if (!this.messagesContainer) return;
+
           const messageEl = document.createElement('div');
           const isUser = message.role === 'user';
           
@@ -388,11 +404,12 @@ export function PreviewFrame({ config, className = '' }: PreviewFrameProps) {
           \`;
 
           const bubble = document.createElement('div');
+          const primaryColor = window.ChatWidgetConfig?.style?.primaryColor || '#667eea';
           bubble.style.cssText = \`
             max-width: 70%;
             padding: 12px 16px;
             border-radius: 12px;
-            background: \${isUser ? window.ChatWidgetConfig.style.primaryColor : 'white'};
+            background: \${isUser ? primaryColor : 'white'};
             color: \${isUser ? 'white' : '#1a202c'};
             box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
             word-wrap: break-word;
@@ -407,6 +424,8 @@ export function PreviewFrame({ config, className = '' }: PreviewFrameProps) {
         },
 
         showLoading: function() {
+          if (!this.messagesContainer) return;
+
           const loadingEl = document.createElement('div');
           loadingEl.id = 'loading-indicator';
           loadingEl.style.cssText = \`
@@ -455,6 +474,11 @@ export function PreviewFrame({ config, className = '' }: PreviewFrameProps) {
         },
 
         sendMessage: async function() {
+          if (!this.messageInput || !this.sendBtn) {
+            console.error('Message input or send button not found.');
+            return;
+          }
+
           const text = this.messageInput.value.trim();
           if (!text || this.isLoading) return;
 
@@ -470,8 +494,8 @@ export function PreviewFrame({ config, className = '' }: PreviewFrameProps) {
             const config = window.ChatWidgetConfig;
             
             // Check if webhook URL is configured
-            if (!config.connection?.webhookUrl && !config.connection?.relayEndpoint) {
-              throw new Error('No webhook URL configured');
+            if (!config?.connection?.webhookUrl && !config?.connection?.relayEndpoint) {
+              throw new Error('No webhook URL or relay endpoint configured');
             }
 
             // Send message via relay API
@@ -516,7 +540,9 @@ export function PreviewFrame({ config, className = '' }: PreviewFrameProps) {
             this.updateConnectionStatus('error', 'Connection failed');
           } finally {
             this.isLoading = false;
-            this.sendBtn.disabled = false;
+            if (this.sendBtn) {
+              this.sendBtn.disabled = false;
+            }
           }
         },
 
@@ -538,53 +564,73 @@ export function PreviewFrame({ config, className = '' }: PreviewFrameProps) {
         },
 
         attachEventListeners: function() {
-          this.button.addEventListener('click', () => this.open());
+          if (this.button) {
+            this.button.addEventListener('click', () => this.open());
+          } else {
+            console.warn('Chat button not found, cannot attach event listener.');
+          }
 
           const closeBtn = document.getElementById('chat-close-btn');
           if (closeBtn) {
             closeBtn.addEventListener('click', () => this.close());
+          } else {
+            console.warn('Chat close button not found, cannot attach event listener.');
           }
 
-          this.sendBtn.addEventListener('click', () => this.sendMessage());
+          if (this.sendBtn) {
+            this.sendBtn.addEventListener('click', () => this.sendMessage());
+          } else {
+            console.warn('Send button not found, cannot attach event listener.');
+          }
           
-          this.messageInput.addEventListener('keypress', (e) => {
-            if (e.key === 'Enter' && !e.shiftKey) {
-              e.preventDefault();
-              this.sendMessage();
-            }
-          });
+          if (this.messageInput) {
+            this.messageInput.addEventListener('keypress', (e) => {
+              if (e.key === 'Enter' && !e.shiftKey) {
+                e.preventDefault();
+                this.sendMessage();
+              }
+            });
+          } else {
+            console.warn('Message input not found, cannot attach event listener.');
+          }
         },
 
         open: function() {
           if (this.chatWindow) {
             this.chatWindow.style.display = 'flex';
-            this.button.style.display = 'none';
+            if (this.button) this.button.style.display = 'none';
             this.isOpen = true;
-            this.messageInput.focus();
+            if (this.messageInput) this.messageInput.focus();
           }
         },
 
         close: function() {
           if (this.chatWindow) {
             this.chatWindow.style.display = 'none';
-            this.button.style.display = 'block';
+            if (this.button) this.button.style.display = 'block';
             this.isOpen = false;
           }
         },
 
         updateConfig: function(newConfig) {
-          // Remove old widget
-          const oldContainer = document.getElementById('chat-widget-container');
-          const oldWindow = document.getElementById('chat-widget-window');
-          if (oldContainer) oldContainer.remove();
-          if (oldWindow) oldWindow.remove();
+          try {
+            // Remove old widget
+            const oldContainer = document.getElementById('chat-widget-container');
+            const oldWindow = document.getElementById('chat-widget-window');
+            if (oldContainer) oldContainer.remove();
+            if (oldWindow) oldWindow.remove();
 
-          // Re-render with new config
-          window.ChatWidgetConfig = newConfig;
-          this.messages = []; // Reset messages
-          this.render();
-          this.attachEventListeners();
-          this.addMessage('assistant', newConfig.branding.firstMessage || 'Hello! How can I help you today?');
+            // Re-render with new config
+            window.ChatWidgetConfig = newConfig;
+            this.messages = []; // Reset messages
+            this.render();
+            this.attachEventListeners();
+            const firstMessage = newConfig.branding?.firstMessage || 'Hello! How can I help you today?';
+            this.addMessage('assistant', firstMessage);
+          } catch (e) {
+            console.error('Failed to update widget config:', e);
+            window.parent.postMessage({ type: 'PREVIEW_ERROR', payload: { error: 'Widget update failed: ' + e.message } }, '*');
+          }
         }
       };
 
