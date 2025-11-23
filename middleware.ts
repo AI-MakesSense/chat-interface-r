@@ -22,7 +22,7 @@
 
 import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
-import { jwtVerify } from 'jose';
+import { verifyJWT } from '@/lib/auth/jwt';
 
 /**
  * JWT secret key for token verification
@@ -31,17 +31,8 @@ import { jwtVerify } from 'jose';
  * SECURITY: JWT_SECRET must be set in environment variables
  * and must be at least 32 characters for adequate security.
  */
-const JWT_SECRET_STRING = process.env.JWT_SECRET;
-
-if (!JWT_SECRET_STRING) {
-  throw new Error('JWT_SECRET environment variable is required');
-}
-
-if (JWT_SECRET_STRING.length < 32) {
-  throw new Error('JWT_SECRET must be at least 32 characters');
-}
-
-const JWT_SECRET = new TextEncoder().encode(JWT_SECRET_STRING);
+// Remove local JWT_SECRET definition as we use the one from lib/auth/jwt
+// const JWT_SECRET_STRING = process.env.JWT_SECRET; ...
 
 /**
  * Protected route patterns
@@ -69,6 +60,7 @@ const AUTH_ROUTES = [
 const PUBLIC_API_ROUTES = [
   '/api/widget/', // Widget serving (validates license)
   '/api/stripe/webhook', // Stripe webhook (validates signature)
+  '/api/auth/logout', // Logout should be accessible
 ];
 
 /**
@@ -83,18 +75,25 @@ async function verifyAuth(request: NextRequest): Promise<string | null> {
     const token = request.cookies.get('auth-token')?.value;
 
     if (!token) {
+      console.log('[Middleware] No auth-token cookie found');
       return null;
     }
 
-    // Verify JWT token
-    const verified = await jwtVerify(token, JWT_SECRET);
+    // Verify JWT token using shared utility
+    const payload = await verifyJWT(token);
 
     // Extract user ID from payload
-    const userId = verified.payload.userId as string;
+    const userId = payload.sub;
 
-    return userId || null;
+    if (!userId) {
+      console.log('[Middleware] Token payload missing sub (userId)');
+      return null;
+    }
+
+    return userId;
   } catch (error) {
     // Token is invalid or expired
+    console.error('[Middleware] Token verification failed:', error instanceof Error ? error.message : 'Unknown error');
     return null;
   }
 }
