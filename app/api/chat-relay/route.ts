@@ -8,10 +8,10 @@ const relayRequestSchema = z.object({
   licenseKey: z.string().min(1),
   message: z.string(),
   sessionId: z.string(),
-  context: z.record(z.any()).optional(),
-  customContext: z.record(z.any()).optional(),
+  context: z.record(z.string(), z.any()).optional(),
+  customContext: z.record(z.string(), z.any()).optional(),
   attachments: z.array(z.any()).optional(),
-  extraInputs: z.record(z.any()).optional(),
+  extraInputs: z.record(z.string(), z.any()).optional(),
 });
 
 export async function POST(request: NextRequest) {
