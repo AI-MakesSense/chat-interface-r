@@ -438,7 +438,13 @@ function ConfiguratorPage() {
               </CardHeader>
               <CardContent>
                 <PreviewFrame
-                  config={currentConfig}
+                  config={{
+                    ...currentConfig,
+                    widgetId: currentWidget?.id,
+                    license: {
+                      key: currentWidget?.licenseKey,
+                    },
+                  }}
                   className="min-h-[700px] relative"
                 />
               </CardContent>

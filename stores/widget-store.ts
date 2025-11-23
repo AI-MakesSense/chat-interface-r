@@ -18,6 +18,14 @@ import { create } from 'zustand';
  * Matches the JSON schema stored in database
  */
 export interface WidgetConfig {
+  // Widget metadata
+  widgetId?: string;
+  license?: {
+    key?: string;
+    active?: boolean;
+    plan?: string;
+  };
+
   // Branding
   branding: {
     companyName?: string;
