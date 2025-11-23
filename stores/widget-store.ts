@@ -277,7 +277,7 @@ export const useWidgetStore = create<WidgetState>((set, get) => ({
 
     try {
       const response = await fetch(`/api/widgets/${id}`, {
-        method: 'PUT',
+        method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
         body: JSON.stringify(data),
