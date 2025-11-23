@@ -34,11 +34,12 @@ export function createFlagsJSON(license: License): string {
 }
 
 /**
- * Inject license flags into widget bundle
+ * Inject license flags and relay configuration into widget bundle
  *
  * @param bundleContent - The widget bundle JavaScript content
  * @param license - License object from database
- * @returns Modified bundle with injected license flags
+ * @param widgetId - Widget ID for relay authentication (optional, will skip relay if not provided)
+ * @returns Modified bundle with injected license flags and relay config
  * @throws Error if markers are not found in bundle
  *
  * The function looks for comment markers in the bundle:
@@ -47,8 +48,13 @@ export function createFlagsJSON(license: License): string {
  *
  * And replaces the content between them with:
  * window.N8N_LICENSE_FLAGS = {tier, brandingEnabled, domainLimit};
+ * window.ChatWidgetConfig = {..., relay: {relayUrl, widgetId, licenseKey}};
  */
-export function injectLicenseFlags(bundleContent: string, license: License): string {
+export function injectLicenseFlags(
+  bundleContent: string,
+  license: License,
+  widgetId?: string
+): string {
   // Find start marker - try with different whitespace variations
   let startIdx = bundleContent.indexOf(START_MARKER);
   if (startIdx === -1) {
@@ -73,7 +79,17 @@ export function injectLicenseFlags(bundleContent: string, license: License): str
   const flagsJSON = createFlagsJSON(license);
 
   // Create the injection code
-  const injectionCode = `\n  window.N8N_LICENSE_FLAGS = ${flagsJSON};`;
+  let injectionCode = `\n  window.N8N_LICENSE_FLAGS = ${flagsJSON};`;
+
+  // Add relay configuration if widgetId is provided
+  if (widgetId) {
+    const relayConfig = {
+      relayUrl: '/api/chat-relay',
+      widgetId: widgetId,
+      licenseKey: license.licenseKey
+    };
+    injectionCode += `\n  window.ChatWidgetConfig = window.ChatWidgetConfig || {};\n  window.ChatWidgetConfig.relay = ${JSON.stringify(relayConfig)};`;
+  }
 
   // Build the new bundle
   const before = bundleContent.slice(0, startLineBegin);

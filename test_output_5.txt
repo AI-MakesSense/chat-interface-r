@@ -1,0 +1,165 @@
+
+> n8n-widget-designer@0.1.0 test /Users/polinger.ai/Desktop/Projects/Chat Interfacer
+> jest tests/integration/api/chat-relay.test.ts
+
+  console.log
+    [dotenv@17.2.3] injecting env (1) from .env.local -- tip: ⚙️  load multiple .env files with { path: ['.env.local', '.env'] }
+
+      at _log (node_modules/.pnpm/dotenv@17.2.3/node_modules/dotenv/lib/main.js:142:11)
+
+  console.error
+    DEBUG: Error in chat relay: DrizzleQueryError: Failed query: select "widgets"."id", "widgets"."license_id", "widgets"."name", "widgets"."status", "widgets"."config", "widgets"."version", "widgets"."deployed_at", "widgets"."created_at", "widgets"."updated_at", "licenses"."id", "licenses"."user_id", "licenses"."license_key", "licenses"."tier", "licenses"."domains", "licenses"."domain_limit", "licenses"."widget_limit", "licenses"."branding_enabled", "licenses"."status", "licenses"."stripe_subscription_id", "licenses"."stripe_customer_id", "licenses"."expires_at", "licenses"."created_at", "licenses"."updated_at" from "widgets" inner join "licenses" on "widgets"."license_id" = "licenses"."id" where "widgets"."id" = $1 limit $2
+    params: 123e4567-e89b-12d3-a456-426614174000,1
+        at NeonHttpPreparedQuery.queryWithCache (/Users/polinger.ai/Desktop/Projects/Chat Interfacer/node_modules/.pnpm/drizzle-orm@0.44.7_@neondatabase+serverless@1.0.2_@types+pg@8.11.6_@vercel+postgres@0.10.0/node_modules/src/pg-core/session.ts:73:11)
+        at NeonHttpPreparedQuery.execute (/Users/polinger.ai/Desktop/Projects/Chat Interfacer/node_modules/.pnpm/drizzle-orm@0.44.7_@neondatabase+serverless@1.0.2_@types+pg@8.11.6_@vercel+postgres@0.10.0/node_modules/src/neon-http/session.ts:83:18)
+        ... 2 lines matching cause stack trace ...
+        at Object.<anonymous> (/Users/polinger.ai/Desktop/Projects/Chat Interfacer/tests/integration/api/chat-relay.test.ts:57:21) {
+      query: 'select "widgets"."id", "widgets"."license_id", "widgets"."name", "widgets"."status", "widgets"."config", "widgets"."version", "widgets"."deployed_at", "widgets"."created_at", "widgets"."updated_at", "licenses"."id", "licenses"."user_id", "licenses"."license_key", "licenses"."tier", "licenses"."domains", "licenses"."domain_limit", "licenses"."widget_limit", "licenses"."branding_enabled", "licenses"."status", "licenses"."stripe_subscription_id", "licenses"."stripe_customer_id", "licenses"."expires_at", "licenses"."created_at", "licenses"."updated_at" from "widgets" inner join "licenses" on "widgets"."license_id" = "licenses"."id" where "widgets"."id" = $1 limit $2',
+      params: [ '123e4567-e89b-12d3-a456-426614174000', 1 ],
+      cause: TypeError: we.text is not a function
+          at mr.execute (/Users/polinger.ai/Desktop/Projects/Chat Interfacer/node_modules/.pnpm/@neondatabase+serverless@1.0.2/node_modules/@neondatabase/serverless/index.js:1300:93)
+          at /Users/polinger.ai/Desktop/Projects/Chat Interfacer/node_modules/.pnpm/drizzle-orm@0.44.7_@neondatabase+serverless@1.0.2_@types+pg@8.11.6_@vercel+postgres@0.10.0/node_modules/src/neon-http/session.ts:84:11
+          at NeonHttpPreparedQuery.queryWithCache (/Users/polinger.ai/Desktop/Projects/Chat Interfacer/node_modules/.pnpm/drizzle-orm@0.44.7_@neondatabase+serverless@1.0.2_@types+pg@8.11.6_@vercel+postgres@0.10.0/node_modules/src/pg-core/session.ts:71:12)
+          at NeonHttpPreparedQuery.execute (/Users/polinger.ai/Desktop/Projects/Chat Interfacer/node_modules/.pnpm/drizzle-orm@0.44.7_@neondatabase+serverless@1.0.2_@types+pg@8.11.6_@vercel+postgres@0.10.0/node_modules/src/neon-http/session.ts:83:18)
+          at getWidgetWithLicense (/Users/polinger.ai/Desktop/Projects/Chat Interfacer/lib/db/queries.ts:393:18)
+          at POST (/Users/polinger.ai/Desktop/Projects/Chat Interfacer/app/api/chat-relay/route.ts:33:20)
+          at Object.<anonymous> (/Users/polinger.ai/Desktop/Projects/Chat Interfacer/tests/integration/api/chat-relay.test.ts:57:21)
+    }
+
+      105 |
+      106 |   } catch (error) {
+    > 107 |     console.error('DEBUG: Error in chat relay:', error);
+          |             ^
+      108 |     return NextResponse.json(
+      109 |       { error: 'Internal server error', details: String(error) },
+      110 |       { status: 500 }
+
+      at error (app/api/chat-relay/route.ts:107:13)
+      at Object.<anonymous> (tests/integration/api/chat-relay.test.ts:57:21)
+
+  console.error
+    DEBUG: Error in chat relay: DrizzleQueryError: Failed query: select "widgets"."id", "widgets"."license_id", "widgets"."name", "widgets"."status", "widgets"."config", "widgets"."version", "widgets"."deployed_at", "widgets"."created_at", "widgets"."updated_at", "licenses"."id", "licenses"."user_id", "licenses"."license_key", "licenses"."tier", "licenses"."domains", "licenses"."domain_limit", "licenses"."widget_limit", "licenses"."branding_enabled", "licenses"."status", "licenses"."stripe_subscription_id", "licenses"."stripe_customer_id", "licenses"."expires_at", "licenses"."created_at", "licenses"."updated_at" from "widgets" inner join "licenses" on "widgets"."license_id" = "licenses"."id" where "widgets"."id" = $1 limit $2
+    params: 123e4567-e89b-12d3-a456-426614174000,1
+        at NeonHttpPreparedQuery.queryWithCache (/Users/polinger.ai/Desktop/Projects/Chat Interfacer/node_modules/.pnpm/drizzle-orm@0.44.7_@neondatabase+serverless@1.0.2_@types+pg@8.11.6_@vercel+postgres@0.10.0/node_modules/src/pg-core/session.ts:73:11)
+        at NeonHttpPreparedQuery.execute (/Users/polinger.ai/Desktop/Projects/Chat Interfacer/node_modules/.pnpm/drizzle-orm@0.44.7_@neondatabase+serverless@1.0.2_@types+pg@8.11.6_@vercel+postgres@0.10.0/node_modules/src/neon-http/session.ts:83:18)
+        ... 2 lines matching cause stack trace ...
+        at Object.<anonymous> (/Users/polinger.ai/Desktop/Projects/Chat Interfacer/tests/integration/api/chat-relay.test.ts:77:21) {
+      query: 'select "widgets"."id", "widgets"."license_id", "widgets"."name", "widgets"."status", "widgets"."config", "widgets"."version", "widgets"."deployed_at", "widgets"."created_at", "widgets"."updated_at", "licenses"."id", "licenses"."user_id", "licenses"."license_key", "licenses"."tier", "licenses"."domains", "licenses"."domain_limit", "licenses"."widget_limit", "licenses"."branding_enabled", "licenses"."status", "licenses"."stripe_subscription_id", "licenses"."stripe_customer_id", "licenses"."expires_at", "licenses"."created_at", "licenses"."updated_at" from "widgets" inner join "licenses" on "widgets"."license_id" = "licenses"."id" where "widgets"."id" = $1 limit $2',
+      params: [ '123e4567-e89b-12d3-a456-426614174000', 1 ],
+      cause: TypeError: we.text is not a function
+          at mr.execute (/Users/polinger.ai/Desktop/Projects/Chat Interfacer/node_modules/.pnpm/@neondatabase+serverless@1.0.2/node_modules/@neondatabase/serverless/index.js:1300:93)
+          at /Users/polinger.ai/Desktop/Projects/Chat Interfacer/node_modules/.pnpm/drizzle-orm@0.44.7_@neondatabase+serverless@1.0.2_@types+pg@8.11.6_@vercel+postgres@0.10.0/node_modules/src/neon-http/session.ts:84:11
+          at NeonHttpPreparedQuery.queryWithCache (/Users/polinger.ai/Desktop/Projects/Chat Interfacer/node_modules/.pnpm/drizzle-orm@0.44.7_@neondatabase+serverless@1.0.2_@types+pg@8.11.6_@vercel+postgres@0.10.0/node_modules/src/pg-core/session.ts:71:12)
+          at NeonHttpPreparedQuery.execute (/Users/polinger.ai/Desktop/Projects/Chat Interfacer/node_modules/.pnpm/drizzle-orm@0.44.7_@neondatabase+serverless@1.0.2_@types+pg@8.11.6_@vercel+postgres@0.10.0/node_modules/src/neon-http/session.ts:83:18)
+          at getWidgetWithLicense (/Users/polinger.ai/Desktop/Projects/Chat Interfacer/lib/db/queries.ts:393:18)
+          at POST (/Users/polinger.ai/Desktop/Projects/Chat Interfacer/app/api/chat-relay/route.ts:33:20)
+          at Object.<anonymous> (/Users/polinger.ai/Desktop/Projects/Chat Interfacer/tests/integration/api/chat-relay.test.ts:77:21)
+    }
+
+      105 |
+      106 |   } catch (error) {
+    > 107 |     console.error('DEBUG: Error in chat relay:', error);
+          |             ^
+      108 |     return NextResponse.json(
+      109 |       { error: 'Internal server error', details: String(error) },
+      110 |       { status: 500 }
+
+      at error (app/api/chat-relay/route.ts:107:13)
+      at Object.<anonymous> (tests/integration/api/chat-relay.test.ts:77:21)
+
+  console.error
+    DEBUG: Error in chat relay: DrizzleQueryError: Failed query: select "widgets"."id", "widgets"."license_id", "widgets"."name", "widgets"."status", "widgets"."config", "widgets"."version", "widgets"."deployed_at", "widgets"."created_at", "widgets"."updated_at", "licenses"."id", "licenses"."user_id", "licenses"."license_key", "licenses"."tier", "licenses"."domains", "licenses"."domain_limit", "licenses"."widget_limit", "licenses"."branding_enabled", "licenses"."status", "licenses"."stripe_subscription_id", "licenses"."stripe_customer_id", "licenses"."expires_at", "licenses"."created_at", "licenses"."updated_at" from "widgets" inner join "licenses" on "widgets"."license_id" = "licenses"."id" where "widgets"."id" = $1 limit $2
+    params: 123e4567-e89b-12d3-a456-426614174000,1
+        at NeonHttpPreparedQuery.queryWithCache (/Users/polinger.ai/Desktop/Projects/Chat Interfacer/node_modules/.pnpm/drizzle-orm@0.44.7_@neondatabase+serverless@1.0.2_@types+pg@8.11.6_@vercel+postgres@0.10.0/node_modules/src/pg-core/session.ts:73:11)
+        at NeonHttpPreparedQuery.execute (/Users/polinger.ai/Desktop/Projects/Chat Interfacer/node_modules/.pnpm/drizzle-orm@0.44.7_@neondatabase+serverless@1.0.2_@types+pg@8.11.6_@vercel+postgres@0.10.0/node_modules/src/neon-http/session.ts:83:18)
+        ... 2 lines matching cause stack trace ...
+        at Object.<anonymous> (/Users/polinger.ai/Desktop/Projects/Chat Interfacer/tests/integration/api/chat-relay.test.ts:87:21) {
+      query: 'select "widgets"."id", "widgets"."license_id", "widgets"."name", "widgets"."status", "widgets"."config", "widgets"."version", "widgets"."deployed_at", "widgets"."created_at", "widgets"."updated_at", "licenses"."id", "licenses"."user_id", "licenses"."license_key", "licenses"."tier", "licenses"."domains", "licenses"."domain_limit", "licenses"."widget_limit", "licenses"."branding_enabled", "licenses"."status", "licenses"."stripe_subscription_id", "licenses"."stripe_customer_id", "licenses"."expires_at", "licenses"."created_at", "licenses"."updated_at" from "widgets" inner join "licenses" on "widgets"."license_id" = "licenses"."id" where "widgets"."id" = $1 limit $2',
+      params: [ '123e4567-e89b-12d3-a456-426614174000', 1 ],
+      cause: TypeError: we.text is not a function
+          at mr.execute (/Users/polinger.ai/Desktop/Projects/Chat Interfacer/node_modules/.pnpm/@neondatabase+serverless@1.0.2/node_modules/@neondatabase/serverless/index.js:1300:93)
+          at /Users/polinger.ai/Desktop/Projects/Chat Interfacer/node_modules/.pnpm/drizzle-orm@0.44.7_@neondatabase+serverless@1.0.2_@types+pg@8.11.6_@vercel+postgres@0.10.0/node_modules/src/neon-http/session.ts:84:11
+          at NeonHttpPreparedQuery.queryWithCache (/Users/polinger.ai/Desktop/Projects/Chat Interfacer/node_modules/.pnpm/drizzle-orm@0.44.7_@neondatabase+serverless@1.0.2_@types+pg@8.11.6_@vercel+postgres@0.10.0/node_modules/src/pg-core/session.ts:71:12)
+          at NeonHttpPreparedQuery.execute (/Users/polinger.ai/Desktop/Projects/Chat Interfacer/node_modules/.pnpm/drizzle-orm@0.44.7_@neondatabase+serverless@1.0.2_@types+pg@8.11.6_@vercel+postgres@0.10.0/node_modules/src/neon-http/session.ts:83:18)
+          at getWidgetWithLicense (/Users/polinger.ai/Desktop/Projects/Chat Interfacer/lib/db/queries.ts:393:18)
+          at POST (/Users/polinger.ai/Desktop/Projects/Chat Interfacer/app/api/chat-relay/route.ts:33:20)
+          at Object.<anonymous> (/Users/polinger.ai/Desktop/Projects/Chat Interfacer/tests/integration/api/chat-relay.test.ts:87:21)
+    }
+
+      105 |
+      106 |   } catch (error) {
+    > 107 |     console.error('DEBUG: Error in chat relay:', error);
+          |             ^
+      108 |     return NextResponse.json(
+      109 |       { error: 'Internal server error', details: String(error) },
+      110 |       { status: 500 }
+
+      at error (app/api/chat-relay/route.ts:107:13)
+      at Object.<anonymous> (tests/integration/api/chat-relay.test.ts:87:21)
+
+FAIL tests/integration/api/chat-relay.test.ts
+  Chat Relay API
+    ✕ should successfully relay message to N8n (21 ms)
+    ✕ should return 404 if widget not found (2 ms)
+    ✕ should return 401 if license key is invalid (1 ms)
+    ○ skipped should return 403 if license is not active
+    ○ skipped should return 400 if webhook URL is missing
+    ○ skipped should return 502 if N8n request fails
+
+  ● Chat Relay API › should successfully relay message to N8n
+
+    expect(received).toBe(expected) // Object.is equality
+
+    Expected: 200
+    Received: 500
+
+      58 |         const data = await res.json();
+      59 |
+    > 60 |         expect(res.status).toBe(200);
+         |                            ^
+      61 |         expect(data).toEqual({ response: 'Hello from N8n' });
+      62 |         expect(global.fetch).toHaveBeenCalledWith(mockWebhookUrl, expect.objectContaining({
+      63 |             method: 'POST',
+
+      at Object.toBe (tests/integration/api/chat-relay.test.ts:60:28)
+
+  ● Chat Relay API › should return 404 if widget not found
+
+    expect(received).toBe(expected) // Object.is equality
+
+    Expected: 404
+    Received: 500
+
+      76 |
+      77 |         const res = await POST(req);
+    > 78 |         expect(res.status).toBe(404);
+         |                            ^
+      79 |     });
+      80 |
+      81 |     it('should return 401 if license key is invalid', async () => {
+
+      at Object.toBe (tests/integration/api/chat-relay.test.ts:78:28)
+
+  ● Chat Relay API › should return 401 if license key is invalid
+
+    expect(received).toBe(expected) // Object.is equality
+
+    Expected: 401
+    Received: 500
+
+      86 |
+      87 |         const res = await POST(req);
+    > 88 |         expect(res.status).toBe(401);
+         |                            ^
+      89 |     });
+      90 |
+      91 |     it.skip('should return 403 if license is not active', async () => {
+
+      at Object.toBe (tests/integration/api/chat-relay.test.ts:88:28)
+
+Test Suites: 1 failed, 1 total
+Tests:       3 failed, 3 skipped, 6 total
+Snapshots:   0 total
+Time:        0.204 s, estimated 1 s
+Ran all test suites matching /tests\/integration\/api\/chat-relay.test.ts/i.
+ ELIFECYCLE  Test failed. See above for more details.

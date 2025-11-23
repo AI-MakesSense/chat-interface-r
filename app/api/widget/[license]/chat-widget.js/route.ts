@@ -19,7 +19,7 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import { getLicenseByKey } from '@/lib/db/queries';
+import { getLicenseByKey, getWidgetsByLicenseId } from '@/lib/db/queries';
 import { normalizeDomain } from '@/lib/license/domain';
 import { extractDomainFromReferer, createResponseHeaders } from '@/lib/widget/headers';
 import { createErrorScript, logWidgetError, ErrorType } from '@/lib/widget/error';
@@ -208,10 +208,14 @@ export async function GET(
       }
     }
 
-    // Step 10: Serve widget bundle with injected flags
-    const widgetBundle = await serveWidgetBundle(license);
+    // Step 10: Get widgets for this license to inject relay configuration
+    const widgets = await getWidgetsByLicenseId(license.id);
+    const widgetId = widgets.length > 0 ? widgets[0].id : undefined;
 
-    // Step 11: Return successful response
+    // Step 11: Serve widget bundle with injected flags and relay config
+    const widgetBundle = await serveWidgetBundle(license, widgetId);
+
+    // Step 12: Return successful response
     return new NextResponse(widgetBundle, {
       status: 200,
       headers: createResponseHeaders()

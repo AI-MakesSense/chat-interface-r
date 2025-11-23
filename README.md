@@ -2,6 +2,13 @@
 
 A complete SaaS platform that enables users to visually design, customize, and deploy embeddable chat widgets for N8n workflows without writing code.
 
+## 🚀 Quick Links
+
+- **[Interactive Demo](http://localhost:3000/demo)** - Try the live demo walkthrough
+- **[Quick Start Guide](./QUICKSTART.md)** - Get running in 5 minutes
+- **[Full Demo Guide](./DEMOGUIDE.md)** - Complete feature walkthrough
+
+
 ## ✨ Features
 
 ### 🎯 Widget Design & Configuration

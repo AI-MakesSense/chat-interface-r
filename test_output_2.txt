@@ -1,0 +1,133 @@
+
+> n8n-widget-designer@0.1.0 test /Users/polinger.ai/Desktop/Projects/Chat Interfacer
+> jest tests/integration/api/chat-relay.test.ts
+
+  console.log
+    Is getWidgetWithLicense a mock? false
+
+      at Object.log (tests/integration/api/chat-relay.test.ts:45:17)
+
+  console.log
+    Is getWidgetWithLicense a mock? false
+
+      at Object.log (tests/integration/api/chat-relay.test.ts:45:17)
+
+  console.log
+    Is getWidgetWithLicense a mock? false
+
+      at Object.log (tests/integration/api/chat-relay.test.ts:45:17)
+
+  console.log
+    Is getWidgetWithLicense a mock? false
+
+      at Object.log (tests/integration/api/chat-relay.test.ts:45:17)
+
+  console.log
+    Is getWidgetWithLicense a mock? false
+
+      at Object.log (tests/integration/api/chat-relay.test.ts:45:17)
+
+  console.log
+    Is getWidgetWithLicense a mock? false
+
+      at Object.log (tests/integration/api/chat-relay.test.ts:45:17)
+
+FAIL tests/integration/api/chat-relay.test.ts
+  Chat Relay API
+    ✕ should successfully relay message to N8n (9 ms)
+    ✕ should return 404 if widget not found
+    ✕ should return 401 if license key is invalid
+    ✕ should return 403 if license is not active (1 ms)
+    ✕ should return 400 if webhook URL is missing
+    ✕ should return 502 if N8n request fails (1 ms)
+
+  ● Chat Relay API › should successfully relay message to N8n
+
+    TypeError: _queries.getWidgetWithLicense.mockResolvedValue is not a function
+
+      44 |         jest.clearAllMocks();
+      45 |         console.log('Is getWidgetWithLicense a mock?', jest.isMockFunction(getWidgetWithLicense));
+    > 46 |         (getWidgetWithLicense as jest.Mock).mockResolvedValue(mockWidget);
+         |                                             ^
+      47 |         (global.fetch as unknown as jest.Mock).mockResolvedValue({
+      48 |             status: 200,
+      49 |             headers: { get: () => 'application/json' },
+
+      at Object.mockResolvedValue (tests/integration/api/chat-relay.test.ts:46:45)
+
+  ● Chat Relay API › should return 404 if widget not found
+
+    TypeError: _queries.getWidgetWithLicense.mockResolvedValue is not a function
+
+      44 |         jest.clearAllMocks();
+      45 |         console.log('Is getWidgetWithLicense a mock?', jest.isMockFunction(getWidgetWithLicense));
+    > 46 |         (getWidgetWithLicense as jest.Mock).mockResolvedValue(mockWidget);
+         |                                             ^
+      47 |         (global.fetch as unknown as jest.Mock).mockResolvedValue({
+      48 |             status: 200,
+      49 |             headers: { get: () => 'application/json' },
+
+      at Object.mockResolvedValue (tests/integration/api/chat-relay.test.ts:46:45)
+
+  ● Chat Relay API › should return 401 if license key is invalid
+
+    TypeError: _queries.getWidgetWithLicense.mockResolvedValue is not a function
+
+      44 |         jest.clearAllMocks();
+      45 |         console.log('Is getWidgetWithLicense a mock?', jest.isMockFunction(getWidgetWithLicense));
+    > 46 |         (getWidgetWithLicense as jest.Mock).mockResolvedValue(mockWidget);
+         |                                             ^
+      47 |         (global.fetch as unknown as jest.Mock).mockResolvedValue({
+      48 |             status: 200,
+      49 |             headers: { get: () => 'application/json' },
+
+      at Object.mockResolvedValue (tests/integration/api/chat-relay.test.ts:46:45)
+
+  ● Chat Relay API › should return 403 if license is not active
+
+    TypeError: _queries.getWidgetWithLicense.mockResolvedValue is not a function
+
+      44 |         jest.clearAllMocks();
+      45 |         console.log('Is getWidgetWithLicense a mock?', jest.isMockFunction(getWidgetWithLicense));
+    > 46 |         (getWidgetWithLicense as jest.Mock).mockResolvedValue(mockWidget);
+         |                                             ^
+      47 |         (global.fetch as unknown as jest.Mock).mockResolvedValue({
+      48 |             status: 200,
+      49 |             headers: { get: () => 'application/json' },
+
+      at Object.mockResolvedValue (tests/integration/api/chat-relay.test.ts:46:45)
+
+  ● Chat Relay API › should return 400 if webhook URL is missing
+
+    TypeError: _queries.getWidgetWithLicense.mockResolvedValue is not a function
+
+      44 |         jest.clearAllMocks();
+      45 |         console.log('Is getWidgetWithLicense a mock?', jest.isMockFunction(getWidgetWithLicense));
+    > 46 |         (getWidgetWithLicense as jest.Mock).mockResolvedValue(mockWidget);
+         |                                             ^
+      47 |         (global.fetch as unknown as jest.Mock).mockResolvedValue({
+      48 |             status: 200,
+      49 |             headers: { get: () => 'application/json' },
+
+      at Object.mockResolvedValue (tests/integration/api/chat-relay.test.ts:46:45)
+
+  ● Chat Relay API › should return 502 if N8n request fails
+
+    TypeError: _queries.getWidgetWithLicense.mockResolvedValue is not a function
+
+      44 |         jest.clearAllMocks();
+      45 |         console.log('Is getWidgetWithLicense a mock?', jest.isMockFunction(getWidgetWithLicense));
+    > 46 |         (getWidgetWithLicense as jest.Mock).mockResolvedValue(mockWidget);
+         |                                             ^
+      47 |         (global.fetch as unknown as jest.Mock).mockResolvedValue({
+      48 |             status: 200,
+      49 |             headers: { get: () => 'application/json' },
+
+      at Object.mockResolvedValue (tests/integration/api/chat-relay.test.ts:46:45)
+
+Test Suites: 1 failed, 1 total
+Tests:       6 failed, 6 total
+Snapshots:   0 total
+Time:        0.174 s, estimated 1 s
+Ran all test suites matching /tests\/integration\/api\/chat-relay.test.ts/i.
+ ELIFECYCLE  Test failed. See above for more details.
