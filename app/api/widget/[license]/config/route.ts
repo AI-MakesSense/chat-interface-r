@@ -64,6 +64,7 @@ export async function GET(
 
         // Construct the config object from the widget
         const config: WidgetConfig = {
+            widgetId: widget.id, // Add widgetId for relay API
             license: {
                 key: licenseKey,
                 active: true,

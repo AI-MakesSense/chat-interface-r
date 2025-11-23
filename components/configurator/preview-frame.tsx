@@ -506,10 +506,10 @@ export function PreviewFrame({ config, className = '' }: PreviewFrameProps) {
                 'Content-Type': 'application/json',
               },
               body: JSON.stringify({
-                sessionId: 'preview-' + Date.now(),
-                action: 'sendMessage',
-                chatInput: text,
+                widgetId: config.widgetId || 'preview-widget',
                 licenseKey: config.license?.key || 'preview',
+                message: text,
+                sessionId: 'preview-' + Date.now(),
               }),
             });
 

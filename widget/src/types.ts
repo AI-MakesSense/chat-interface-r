@@ -6,6 +6,7 @@
  */
 
 export interface WidgetConfig {
+  widgetId?: string; // Widget ID for relay API
   branding: BrandingConfig;
   style: StyleConfig;
   features: FeaturesConfig;
