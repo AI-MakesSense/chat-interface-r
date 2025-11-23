@@ -10,35 +10,52 @@
  * - Invalid scenarios: Missing auth, license not owned by user (403), not found (404), invalid body, empty update
  */
 
-import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { PATCH } from '@/app/api/licenses/[id]/route';
 import { NextRequest } from 'next/server';
 import * as dbClient from '@/lib/db/client';
-import * as authMiddleware from '@/lib/auth/middleware';
+import * as authMiddleware from '@/lib/auth/guard';
 import * as licenseDomain from '@/lib/license/domain';
 
+// Mock jose library to avoid ESM issues
+jest.mock('jose', () => ({
+  SignJWT: jest.fn().mockImplementation(() => ({
+    setProtectedHeader: jest.fn().mockReturnThis(),
+    setIssuedAt: jest.fn().mockReturnThis(),
+    setExpirationTime: jest.fn().mockReturnThis(),
+    sign: jest.fn().mockResolvedValue('mock-token'),
+  })),
+  jwtVerify: jest.fn().mockResolvedValue({
+    payload: { sub: 'user-123', email: 'test@example.com' },
+  }),
+}));
+
 // Mock the database client
-vi.mock('@/lib/db/client', () => ({
+jest.mock('@/lib/db/client', () => ({
   db: {
-    select: vi.fn().mockReturnThis(),
-    from: vi.fn().mockReturnThis(),
-    where: vi.fn().mockReturnThis(),
-    limit: vi.fn(),
-    update: vi.fn().mockReturnThis(),
-    set: vi.fn().mockReturnThis(),
-    returning: vi.fn(),
+    select: jest.fn().mockReturnThis(),
+    from: jest.fn().mockReturnThis(),
+    where: jest.fn().mockReturnThis(),
+    limit: jest.fn(),
+    update: jest.fn().mockReturnThis(),
+    select: jest.fn().mockReturnThis(),
+    from: jest.fn().mockReturnThis(),
+    where: jest.fn().mockReturnThis(),
+    limit: jest.fn(),
+    update: jest.fn().mockReturnThis(),
+    set: jest.fn().mockReturnThis(),
+    returning: jest.fn(),
   },
 }));
 
 // Mock authentication middleware
-vi.mock('@/lib/auth/middleware', () => ({
-  requireAuth: vi.fn(),
+jest.mock('@/lib/auth/guard', () => ({
+  requireAuth: jest.fn(),
 }));
 
 // Mock domain normalization
-vi.mock('@/lib/license/domain', () => ({
-  normalizeDomain: vi.fn((domain: string) => domain.toLowerCase().replace(/^https?:\/\//, '').replace(/^www\./, '')),
-  isValidDomain: vi.fn((domain: string) => domain.length > 0 && domain.includes('.') && !domain.startsWith('.') && !domain.endsWith('.')),
+jest.mock('@/lib/license/domain', () => ({
+  normalizeDomain: jest.fn((domain: string) => domain.toLowerCase().replace(/^https?:\/\//, '').replace(/^www\./, '')),
+  isValidDomain: jest.fn((domain: string) => domain.length > 0 && domain.includes('.') && !domain.startsWith('.') && !domain.endsWith('.')),
 }));
 
 // Helper function to create a mock PATCH request
@@ -65,7 +82,7 @@ const createContext = (id: string) => ({
 
 describe('PATCH /api/licenses/[id]', () => {
   beforeEach(() => {
-    vi.clearAllMocks();
+    jest.clearAllMocks();
   });
 
   describe('Valid Scenarios', () => {
@@ -79,17 +96,17 @@ describe('PATCH /api/licenses/[id]', () => {
         domains: ['new-domain.com'],
       };
 
-      vi.spyOn(authMiddleware, 'requireAuth').mockResolvedValue({
+      jest.spyOn(authMiddleware, 'requireAuth').mockResolvedValue({
         userId: mockUserId,
         email: 'test@example.com',
       } as any);
 
       // Mock license fetch (verify ownership)
-      const mockDbSelect = vi.spyOn(dbClient.db, 'select');
+      const mockDbSelect = jest.spyOn(dbClient.db, 'select');
       mockDbSelect.mockReturnValue({
-        from: vi.fn().mockReturnThis(),
-        where: vi.fn().mockReturnThis(),
-        limit: vi.fn().mockResolvedValue([{
+        from: jest.fn().mockReturnThis(),
+        where: jest.fn().mockReturnThis(),
+        limit: jest.fn().mockResolvedValue([{
           id: licenseId,
           userId: mockUserId,
           licenseKey: 'existing-key-1234567890123456789',
@@ -105,11 +122,11 @@ describe('PATCH /api/licenses/[id]', () => {
       } as any);
 
       // Mock license update
-      const mockDbUpdate = vi.spyOn(dbClient.db, 'update');
+      const mockDbUpdate = jest.spyOn(dbClient.db, 'update');
       mockDbUpdate.mockReturnValue({
-        set: vi.fn().mockReturnThis(),
-        where: vi.fn().mockReturnThis(),
-        returning: vi.fn().mockResolvedValue([{
+        set: jest.fn().mockReturnThis(),
+        where: jest.fn().mockReturnThis(),
+        returning: jest.fn().mockResolvedValue([{
           id: licenseId,
           userId: mockUserId,
           licenseKey: 'existing-key-1234567890123456789',
@@ -147,16 +164,16 @@ describe('PATCH /api/licenses/[id]', () => {
         status: 'cancelled',
       };
 
-      vi.spyOn(authMiddleware, 'requireAuth').mockResolvedValue({
+      jest.spyOn(authMiddleware, 'requireAuth').mockResolvedValue({
         userId: mockUserId,
         email: 'test@example.com',
       } as any);
 
-      const mockDbSelect = vi.spyOn(dbClient.db, 'select');
+      const mockDbSelect = jest.spyOn(dbClient.db, 'select');
       mockDbSelect.mockReturnValue({
-        from: vi.fn().mockReturnThis(),
-        where: vi.fn().mockReturnThis(),
-        limit: vi.fn().mockResolvedValue([{
+        from: jest.fn().mockReturnThis(),
+        where: jest.fn().mockReturnThis(),
+        limit: jest.fn().mockResolvedValue([{
           id: licenseId,
           userId: mockUserId,
           tier: 'pro',
@@ -164,11 +181,11 @@ describe('PATCH /api/licenses/[id]', () => {
         }]),
       } as any);
 
-      const mockDbUpdate = vi.spyOn(dbClient.db, 'update');
+      const mockDbUpdate = jest.spyOn(dbClient.db, 'update');
       mockDbUpdate.mockReturnValue({
-        set: vi.fn().mockReturnThis(),
-        where: vi.fn().mockReturnThis(),
-        returning: vi.fn().mockResolvedValue([{
+        set: jest.fn().mockReturnThis(),
+        where: jest.fn().mockReturnThis(),
+        returning: jest.fn().mockResolvedValue([{
           id: licenseId,
           userId: mockUserId,
           tier: 'pro',
@@ -199,27 +216,27 @@ describe('PATCH /api/licenses/[id]', () => {
         expiresAt: futureDate.toISOString(),
       };
 
-      vi.spyOn(authMiddleware, 'requireAuth').mockResolvedValue({
+      jest.spyOn(authMiddleware, 'requireAuth').mockResolvedValue({
         userId: mockUserId,
         email: 'test@example.com',
       } as any);
 
-      const mockDbSelect = vi.spyOn(dbClient.db, 'select');
+      const mockDbSelect = jest.spyOn(dbClient.db, 'select');
       mockDbSelect.mockReturnValue({
-        from: vi.fn().mockReturnThis(),
-        where: vi.fn().mockReturnThis(),
-        limit: vi.fn().mockResolvedValue([{
+        from: jest.fn().mockReturnThis(),
+        where: jest.fn().mockReturnThis(),
+        limit: jest.fn().mockResolvedValue([{
           id: licenseId,
           userId: mockUserId,
           expiresAt: new Date(Date.now() + 365 * 24 * 60 * 60 * 1000),
         }]),
       } as any);
 
-      const mockDbUpdate = vi.spyOn(dbClient.db, 'update');
+      const mockDbUpdate = jest.spyOn(dbClient.db, 'update');
       mockDbUpdate.mockReturnValue({
-        set: vi.fn().mockReturnThis(),
-        where: vi.fn().mockReturnThis(),
-        returning: vi.fn().mockResolvedValue([{
+        set: jest.fn().mockReturnThis(),
+        where: jest.fn().mockReturnThis(),
+        returning: jest.fn().mockResolvedValue([{
           id: licenseId,
           userId: mockUserId,
           expiresAt: futureDate,
@@ -251,16 +268,16 @@ describe('PATCH /api/licenses/[id]', () => {
         expiresAt: futureDate.toISOString(),
       };
 
-      vi.spyOn(authMiddleware, 'requireAuth').mockResolvedValue({
+      jest.spyOn(authMiddleware, 'requireAuth').mockResolvedValue({
         userId: mockUserId,
         email: 'test@example.com',
       } as any);
 
-      const mockDbSelect = vi.spyOn(dbClient.db, 'select');
+      const mockDbSelect = jest.spyOn(dbClient.db, 'select');
       mockDbSelect.mockReturnValue({
-        from: vi.fn().mockReturnThis(),
-        where: vi.fn().mockReturnThis(),
-        limit: vi.fn().mockResolvedValue([{
+        from: jest.fn().mockReturnThis(),
+        where: jest.fn().mockReturnThis(),
+        limit: jest.fn().mockResolvedValue([{
           id: licenseId,
           userId: mockUserId,
           tier: 'basic',
@@ -269,11 +286,11 @@ describe('PATCH /api/licenses/[id]', () => {
         }]),
       } as any);
 
-      const mockDbUpdate = vi.spyOn(dbClient.db, 'update');
+      const mockDbUpdate = jest.spyOn(dbClient.db, 'update');
       mockDbUpdate.mockReturnValue({
-        set: vi.fn().mockReturnThis(),
-        where: vi.fn().mockReturnThis(),
-        returning: vi.fn().mockResolvedValue([{
+        set: jest.fn().mockReturnThis(),
+        where: jest.fn().mockReturnThis(),
+        returning: jest.fn().mockResolvedValue([{
           id: licenseId,
           userId: mockUserId,
           tier: 'basic',
@@ -307,18 +324,18 @@ describe('PATCH /api/licenses/[id]', () => {
         domains: ['HTTPS://WWW.Normalized.COM'],
       };
 
-      vi.spyOn(authMiddleware, 'requireAuth').mockResolvedValue({
+      jest.spyOn(authMiddleware, 'requireAuth').mockResolvedValue({
         userId: mockUserId,
         email: 'test@example.com',
       } as any);
 
-      const normalizeSpy = vi.spyOn(licenseDomain, 'normalizeDomain');
+      const normalizeSpy = jest.spyOn(licenseDomain, 'normalizeDomain');
 
-      const mockDbSelect = vi.spyOn(dbClient.db, 'select');
+      const mockDbSelect = jest.spyOn(dbClient.db, 'select');
       mockDbSelect.mockReturnValue({
-        from: vi.fn().mockReturnThis(),
-        where: vi.fn().mockReturnThis(),
-        limit: vi.fn().mockResolvedValue([{
+        from: jest.fn().mockReturnThis(),
+        where: jest.fn().mockReturnThis(),
+        limit: jest.fn().mockResolvedValue([{
           id: licenseId,
           userId: mockUserId,
           tier: 'basic',
@@ -326,11 +343,11 @@ describe('PATCH /api/licenses/[id]', () => {
         }]),
       } as any);
 
-      const mockDbUpdate = vi.spyOn(dbClient.db, 'update');
+      const mockDbUpdate = jest.spyOn(dbClient.db, 'update');
       mockDbUpdate.mockReturnValue({
-        set: vi.fn().mockReturnThis(),
-        where: vi.fn().mockReturnThis(),
-        returning: vi.fn().mockResolvedValue([{
+        set: jest.fn().mockReturnThis(),
+        where: jest.fn().mockReturnThis(),
+        returning: jest.fn().mockResolvedValue([{
           id: licenseId,
           userId: mockUserId,
           tier: 'basic',
@@ -362,7 +379,7 @@ describe('PATCH /api/licenses/[id]', () => {
         status: 'active',
       };
 
-      vi.spyOn(authMiddleware, 'requireAuth').mockRejectedValue(
+      jest.spyOn(authMiddleware, 'requireAuth').mockRejectedValue(
         new Error('Authentication required')
       );
 
@@ -388,17 +405,17 @@ describe('PATCH /api/licenses/[id]', () => {
         status: 'active',
       };
 
-      vi.spyOn(authMiddleware, 'requireAuth').mockResolvedValue({
+      jest.spyOn(authMiddleware, 'requireAuth').mockResolvedValue({
         userId: mockUserId,
         email: 'test@example.com',
       } as any);
 
       // Mock license fetch - license belongs to different user
-      const mockDbSelect = vi.spyOn(dbClient.db, 'select');
+      const mockDbSelect = jest.spyOn(dbClient.db, 'select');
       mockDbSelect.mockReturnValue({
-        from: vi.fn().mockReturnThis(),
-        where: vi.fn().mockReturnThis(),
-        limit: vi.fn().mockResolvedValue([{
+        from: jest.fn().mockReturnThis(),
+        where: jest.fn().mockReturnThis(),
+        limit: jest.fn().mockResolvedValue([{
           id: licenseId,
           userId: 'different-user-456', // Different user
           tier: 'basic',
@@ -427,17 +444,17 @@ describe('PATCH /api/licenses/[id]', () => {
         status: 'active',
       };
 
-      vi.spyOn(authMiddleware, 'requireAuth').mockResolvedValue({
+      jest.spyOn(authMiddleware, 'requireAuth').mockResolvedValue({
         userId: mockUserId,
         email: 'test@example.com',
       } as any);
 
       // Mock license fetch - no license found
-      const mockDbSelect = vi.spyOn(dbClient.db, 'select');
+      const mockDbSelect = jest.spyOn(dbClient.db, 'select');
       mockDbSelect.mockReturnValue({
-        from: vi.fn().mockReturnThis(),
-        where: vi.fn().mockReturnThis(),
-        limit: vi.fn().mockResolvedValue([]), // Empty array
+        from: jest.fn().mockReturnThis(),
+        where: jest.fn().mockReturnThis(),
+        limit: jest.fn().mockResolvedValue([]), // Empty array
       } as any);
 
       const request = createUpdateRequest(licenseId, updateData, 'valid-token');
@@ -462,16 +479,16 @@ describe('PATCH /api/licenses/[id]', () => {
         status: 'invalid-status', // Not 'active', 'cancelled', or 'expired'
       };
 
-      vi.spyOn(authMiddleware, 'requireAuth').mockResolvedValue({
+      jest.spyOn(authMiddleware, 'requireAuth').mockResolvedValue({
         userId: mockUserId,
         email: 'test@example.com',
       } as any);
 
-      const mockDbSelect = vi.spyOn(dbClient.db, 'select');
+      const mockDbSelect = jest.spyOn(dbClient.db, 'select');
       mockDbSelect.mockReturnValue({
-        from: vi.fn().mockReturnThis(),
-        where: vi.fn().mockReturnThis(),
-        limit: vi.fn().mockResolvedValue([{
+        from: jest.fn().mockReturnThis(),
+        where: jest.fn().mockReturnThis(),
+        limit: jest.fn().mockResolvedValue([{
           id: licenseId,
           userId: mockUserId,
         }]),
@@ -497,7 +514,7 @@ describe('PATCH /api/licenses/[id]', () => {
       const mockUserId = 'user-123';
       const emptyData = {}; // No fields to update
 
-      vi.spyOn(authMiddleware, 'requireAuth').mockResolvedValue({
+      jest.spyOn(authMiddleware, 'requireAuth').mockResolvedValue({
         userId: mockUserId,
         email: 'test@example.com',
       } as any);
@@ -525,16 +542,16 @@ describe('PATCH /api/licenses/[id]', () => {
         expiresAt: pastDate.toISOString(),
       };
 
-      vi.spyOn(authMiddleware, 'requireAuth').mockResolvedValue({
+      jest.spyOn(authMiddleware, 'requireAuth').mockResolvedValue({
         userId: mockUserId,
         email: 'test@example.com',
       } as any);
 
-      const mockDbSelect = vi.spyOn(dbClient.db, 'select');
+      const mockDbSelect = jest.spyOn(dbClient.db, 'select');
       mockDbSelect.mockReturnValue({
-        from: vi.fn().mockReturnThis(),
-        where: vi.fn().mockReturnThis(),
-        limit: vi.fn().mockResolvedValue([{
+        from: jest.fn().mockReturnThis(),
+        where: jest.fn().mockReturnThis(),
+        limit: jest.fn().mockResolvedValue([{
           id: licenseId,
           userId: mockUserId,
         }]),
@@ -562,16 +579,16 @@ describe('PATCH /api/licenses/[id]', () => {
         domains: [], // Empty array
       };
 
-      vi.spyOn(authMiddleware, 'requireAuth').mockResolvedValue({
+      jest.spyOn(authMiddleware, 'requireAuth').mockResolvedValue({
         userId: mockUserId,
         email: 'test@example.com',
       } as any);
 
-      const mockDbSelect = vi.spyOn(dbClient.db, 'select');
+      const mockDbSelect = jest.spyOn(dbClient.db, 'select');
       mockDbSelect.mockReturnValue({
-        from: vi.fn().mockReturnThis(),
-        where: vi.fn().mockReturnThis(),
-        limit: vi.fn().mockResolvedValue([{
+        from: jest.fn().mockReturnThis(),
+        where: jest.fn().mockReturnThis(),
+        limit: jest.fn().mockResolvedValue([{
           id: licenseId,
           userId: mockUserId,
         }]),

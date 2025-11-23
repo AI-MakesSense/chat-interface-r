@@ -13,7 +13,7 @@ const customJestConfig = {
     '^@/(.*)$': '<rootDir>/$1',
   },
   testEnvironment: 'jsdom',
-  transformIgnorePatterns: ['node_modules/(?!(msw)/)'],
+  transformIgnorePatterns: ['node_modules/(?!(msw|jose)/)'],
 }
 
 // createJestConfig is exported this way to ensure that next/jest can load the Next.js config which is async

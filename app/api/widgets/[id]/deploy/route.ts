@@ -14,7 +14,7 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import { requireAuth } from '@/lib/auth/middleware';
+import { requireAuth } from '@/lib/auth/guard';
 import { getWidgetWithLicense, deployWidget } from '@/lib/db/queries';
 import { createWidgetConfigSchema } from '@/lib/validation/widget-schema';
 import { z } from 'zod';
@@ -30,7 +30,7 @@ export async function POST(
   try {
     // Extract widget ID from route params (await for Next.js 16)
     const { id } = await params;
-    
+
     // 1. Authenticate user
     const user = await requireAuth(request);
 

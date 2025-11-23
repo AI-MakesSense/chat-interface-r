@@ -8,7 +8,7 @@
  */
 
 import { NextRequest } from 'next/server';
-import { clearAuthCookie } from '@/lib/auth/middleware';
+import { clearAuthCookie } from '@/lib/auth/guard';
 import { handleAPIError } from '@/lib/utils/api-error';
 
 export async function POST(request: NextRequest) {

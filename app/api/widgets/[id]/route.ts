@@ -13,7 +13,7 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import { requireAuth } from '@/lib/auth/middleware';
+import { requireAuth } from '@/lib/auth/guard';
 import { getWidgetWithLicense, updateWidget, deleteWidget } from '@/lib/db/queries';
 import { createWidgetConfigSchema } from '@/lib/validation/widget-schema';
 import { z } from 'zod';

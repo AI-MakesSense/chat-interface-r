@@ -11,37 +11,50 @@
  * - Edge cases: Unique key generation, domain normalization, expiration calculation
  */
 
-import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { POST } from '@/app/api/licenses/route';
 import { NextRequest } from 'next/server';
 import * as dbClient from '@/lib/db/client';
-import * as authMiddleware from '@/lib/auth/middleware';
+import * as authMiddleware from '@/lib/auth/guard';
 import * as licenseGenerate from '@/lib/license/generate';
 import * as licenseDomain from '@/lib/license/domain';
 
+// Mock jose library to avoid ESM issues
+jest.mock('jose', () => ({
+  SignJWT: jest.fn().mockImplementation(() => ({
+    setProtectedHeader: jest.fn().mockReturnThis(),
+    setIssuedAt: jest.fn().mockReturnThis(),
+    setExpirationTime: jest.fn().mockReturnThis(),
+    sign: jest.fn().mockResolvedValue('mock-token'),
+  })),
+  jwtVerify: jest.fn().mockResolvedValue({
+    payload: { sub: 'user-123', email: 'test@example.com' },
+  }),
+}));
+
 // Mock the database client
-vi.mock('@/lib/db/client', () => ({
+jest.mock('@/lib/db/client', () => ({
   db: {
-    insert: vi.fn().mockReturnThis(),
-    values: vi.fn().mockReturnThis(),
-    returning: vi.fn(),
+    insert: jest.fn().mockReturnThis(),
+    insert: jest.fn().mockReturnThis(),
+    values: jest.fn().mockReturnThis(),
+    returning: jest.fn(),
   },
 }));
 
 // Mock authentication middleware
-vi.mock('@/lib/auth/middleware', () => ({
-  requireAuth: vi.fn(),
+jest.mock('@/lib/auth/guard', () => ({
+  requireAuth: jest.fn(),
 }));
 
 // Mock license generation
-vi.mock('@/lib/license/generate', () => ({
-  generateLicenseKey: vi.fn(),
+jest.mock('@/lib/license/generate', () => ({
+  generateLicenseKey: jest.fn(),
 }));
 
 // Mock domain normalization
-vi.mock('@/lib/license/domain', () => ({
-  normalizeDomain: vi.fn((domain: string) => domain.toLowerCase().replace(/^https?:\/\//, '').replace(/^www\./, '')),
-  isValidDomain: vi.fn((domain: string) => domain.length > 0 && domain.includes('.') && !domain.startsWith('.') && !domain.endsWith('.')),
+jest.mock('@/lib/license/domain', () => ({
+  normalizeDomain: jest.fn((domain: string) => domain.toLowerCase().replace(/^https?:\/\//, '').replace(/^www\./, '')),
+  isValidDomain: jest.fn((domain: string) => domain.length > 0 && domain.includes('.') && !domain.startsWith('.') && !domain.endsWith('.')),
 }));
 
 // Helper function to create a mock POST request
@@ -63,7 +76,7 @@ function createLicenseRequest(body: any, authToken?: string): NextRequest {
 
 describe('POST /api/licenses', () => {
   beforeEach(() => {
-    vi.clearAllMocks();
+    jest.clearAllMocks();
   });
 
   describe('Valid Scenarios', () => {
@@ -79,17 +92,17 @@ describe('POST /api/licenses', () => {
       const mockUserId = 'user-123';
       const mockLicenseKey = 'a1b2c3d4e5f617a8196071127334f5e6';
 
-      vi.spyOn(authMiddleware, 'requireAuth').mockResolvedValue({
+      jest.spyOn(authMiddleware, 'requireAuth').mockResolvedValue({
         userId: mockUserId,
         email: 'test@example.com',
       } as any);
 
-      vi.spyOn(licenseGenerate, 'generateLicenseKey').mockReturnValue(mockLicenseKey);
+      jest.spyOn(licenseGenerate, 'generateLicenseKey').mockReturnValue(mockLicenseKey);
 
-      const mockDbInsert = vi.spyOn(dbClient.db, 'insert');
+      const mockDbInsert = jest.spyOn(dbClient.db, 'insert');
       mockDbInsert.mockReturnValue({
-        values: vi.fn().mockReturnThis(),
-        returning: vi.fn().mockResolvedValue([{
+        values: jest.fn().mockReturnThis(),
+        returning: jest.fn().mockResolvedValue([{
           id: 'license-123',
           userId: mockUserId,
           licenseKey: mockLicenseKey,
@@ -132,17 +145,17 @@ describe('POST /api/licenses', () => {
       const mockUserId = 'user-456';
       const mockLicenseKey = 'b2c3d4e5f617a81960711273345e6171';
 
-      vi.spyOn(authMiddleware, 'requireAuth').mockResolvedValue({
+      jest.spyOn(authMiddleware, 'requireAuth').mockResolvedValue({
         userId: mockUserId,
         email: 'pro@example.com',
       } as any);
 
-      vi.spyOn(licenseGenerate, 'generateLicenseKey').mockReturnValue(mockLicenseKey);
+      jest.spyOn(licenseGenerate, 'generateLicenseKey').mockReturnValue(mockLicenseKey);
 
-      const mockDbInsert = vi.spyOn(dbClient.db, 'insert');
+      const mockDbInsert = jest.spyOn(dbClient.db, 'insert');
       mockDbInsert.mockReturnValue({
-        values: vi.fn().mockReturnThis(),
-        returning: vi.fn().mockResolvedValue([{
+        values: jest.fn().mockReturnThis(),
+        returning: jest.fn().mockResolvedValue([{
           id: 'license-456',
           userId: mockUserId,
           licenseKey: mockLicenseKey,
@@ -182,17 +195,17 @@ describe('POST /api/licenses', () => {
       const mockUserId = 'user-789';
       const mockLicenseKey = 'c3d4e5f617a8196071127334f5e61718';
 
-      vi.spyOn(authMiddleware, 'requireAuth').mockResolvedValue({
+      jest.spyOn(authMiddleware, 'requireAuth').mockResolvedValue({
         userId: mockUserId,
         email: 'agency@example.com',
       } as any);
 
-      vi.spyOn(licenseGenerate, 'generateLicenseKey').mockReturnValue(mockLicenseKey);
+      jest.spyOn(licenseGenerate, 'generateLicenseKey').mockReturnValue(mockLicenseKey);
 
-      const mockDbInsert = vi.spyOn(dbClient.db, 'insert');
+      const mockDbInsert = jest.spyOn(dbClient.db, 'insert');
       mockDbInsert.mockReturnValue({
-        values: vi.fn().mockReturnThis(),
-        returning: vi.fn().mockResolvedValue([{
+        values: jest.fn().mockReturnThis(),
+        returning: jest.fn().mockResolvedValue([{
           id: 'license-789',
           userId: mockUserId,
           licenseKey: mockLicenseKey,
@@ -234,19 +247,19 @@ describe('POST /api/licenses', () => {
       const mockUserId = 'user-999';
       const mockLicenseKey = 'd4e5f617a81960711273345e617188a';
 
-      vi.spyOn(authMiddleware, 'requireAuth').mockResolvedValue({
+      jest.spyOn(authMiddleware, 'requireAuth').mockResolvedValue({
         userId: mockUserId,
         email: 'custom@example.com',
       } as any);
 
-      vi.spyOn(licenseGenerate, 'generateLicenseKey').mockReturnValue(mockLicenseKey);
+      jest.spyOn(licenseGenerate, 'generateLicenseKey').mockReturnValue(mockLicenseKey);
 
       const expectedExpirationDate = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
 
-      const mockDbInsert = vi.spyOn(dbClient.db, 'insert');
+      const mockDbInsert = jest.spyOn(dbClient.db, 'insert');
       mockDbInsert.mockReturnValue({
-        values: vi.fn().mockReturnThis(),
-        returning: vi.fn().mockResolvedValue([{
+        values: jest.fn().mockReturnThis(),
+        returning: jest.fn().mockResolvedValue([{
           id: 'license-999',
           userId: mockUserId,
           licenseKey: mockLicenseKey,
@@ -284,17 +297,17 @@ describe('POST /api/licenses', () => {
       const mockUserId = 'user-default';
       const mockLicenseKey = 'e5f6g7h8i9j0k1l2m3n4o5p6q7r8s9t0';
 
-      vi.spyOn(authMiddleware, 'requireAuth').mockResolvedValue({
+      jest.spyOn(authMiddleware, 'requireAuth').mockResolvedValue({
         userId: mockUserId,
         email: 'default@example.com',
       } as any);
 
-      vi.spyOn(licenseGenerate, 'generateLicenseKey').mockReturnValue(mockLicenseKey);
+      jest.spyOn(licenseGenerate, 'generateLicenseKey').mockReturnValue(mockLicenseKey);
 
-      const mockDbInsert = vi.spyOn(dbClient.db, 'insert');
+      const mockDbInsert = jest.spyOn(dbClient.db, 'insert');
       mockDbInsert.mockReturnValue({
-        values: vi.fn().mockReturnThis(),
-        returning: vi.fn().mockResolvedValue([{
+        values: jest.fn().mockReturnThis(),
+        returning: jest.fn().mockResolvedValue([{
           id: 'license-default',
           userId: mockUserId,
           licenseKey: mockLicenseKey,
@@ -331,19 +344,19 @@ describe('POST /api/licenses', () => {
 
       const mockUserId = 'user-unique';
 
-      vi.spyOn(authMiddleware, 'requireAuth').mockResolvedValue({
+      jest.spyOn(authMiddleware, 'requireAuth').mockResolvedValue({
         userId: mockUserId,
         email: 'unique@example.com',
       } as any);
 
-      const generateSpy = vi.spyOn(licenseGenerate, 'generateLicenseKey');
+      const generateSpy = jest.spyOn(licenseGenerate, 'generateLicenseKey');
       generateSpy.mockReturnValueOnce('unique-key-1-23456789012345678901');
       generateSpy.mockReturnValueOnce('unique-key-2-23456789012345678901');
 
-      const mockDbInsert = vi.spyOn(dbClient.db, 'insert');
+      const mockDbInsert = jest.spyOn(dbClient.db, 'insert');
       mockDbInsert.mockReturnValue({
-        values: vi.fn().mockReturnThis(),
-        returning: vi.fn()
+        values: jest.fn().mockReturnThis(),
+        returning: jest.fn()
           .mockResolvedValueOnce([{ id: 'lic-1', licenseKey: 'unique-key-1-23456789012345678901' }])
           .mockResolvedValueOnce([{ id: 'lic-2', licenseKey: 'unique-key-2-23456789012345678901' }]),
       } as any);
@@ -373,7 +386,7 @@ describe('POST /api/licenses', () => {
         domains: ['example.com'],
       };
 
-      vi.spyOn(authMiddleware, 'requireAuth').mockRejectedValue(
+      jest.spyOn(authMiddleware, 'requireAuth').mockRejectedValue(
         new Error('Authentication required')
       );
 
@@ -397,7 +410,7 @@ describe('POST /api/licenses', () => {
         domains: ['example.com'],
       };
 
-      vi.spyOn(authMiddleware, 'requireAuth').mockResolvedValue({
+      jest.spyOn(authMiddleware, 'requireAuth').mockResolvedValue({
         userId: 'user-123',
         email: 'test@example.com',
       } as any);
@@ -422,7 +435,7 @@ describe('POST /api/licenses', () => {
         domains: [], // Empty array
       };
 
-      vi.spyOn(authMiddleware, 'requireAuth').mockResolvedValue({
+      jest.spyOn(authMiddleware, 'requireAuth').mockResolvedValue({
         userId: 'user-123',
         email: 'test@example.com',
       } as any);
@@ -447,7 +460,7 @@ describe('POST /api/licenses', () => {
         domains: ['domain1.com', 'domain2.com'], // Basic allows only 1
       };
 
-      vi.spyOn(authMiddleware, 'requireAuth').mockResolvedValue({
+      jest.spyOn(authMiddleware, 'requireAuth').mockResolvedValue({
         userId: 'user-123',
         email: 'test@example.com',
       } as any);
@@ -472,7 +485,7 @@ describe('POST /api/licenses', () => {
         domains: ['domain1.com', 'domain2.com', 'domain3.com'],
       };
 
-      vi.spyOn(authMiddleware, 'requireAuth').mockResolvedValue({
+      jest.spyOn(authMiddleware, 'requireAuth').mockResolvedValue({
         userId: 'user-123',
         email: 'test@example.com',
       } as any);
@@ -498,7 +511,7 @@ describe('POST /api/licenses', () => {
         expiresInDays: -30,
       };
 
-      vi.spyOn(authMiddleware, 'requireAuth').mockResolvedValue({
+      jest.spyOn(authMiddleware, 'requireAuth').mockResolvedValue({
         userId: 'user-123',
         email: 'test@example.com',
       } as any);
@@ -528,19 +541,19 @@ describe('POST /api/licenses', () => {
       const mockUserId = 'user-normalize';
       const mockLicenseKey = 'f6g7h8i9j0k1l2m3n4o5p6q7r8s9t0u1';
 
-      vi.spyOn(authMiddleware, 'requireAuth').mockResolvedValue({
+      jest.spyOn(authMiddleware, 'requireAuth').mockResolvedValue({
         userId: mockUserId,
         email: 'normalize@example.com',
       } as any);
 
-      vi.spyOn(licenseGenerate, 'generateLicenseKey').mockReturnValue(mockLicenseKey);
+      jest.spyOn(licenseGenerate, 'generateLicenseKey').mockReturnValue(mockLicenseKey);
 
-      const normalizeSpy = vi.spyOn(licenseDomain, 'normalizeDomain');
+      const normalizeSpy = jest.spyOn(licenseDomain, 'normalizeDomain');
 
-      const mockDbInsert = vi.spyOn(dbClient.db, 'insert');
+      const mockDbInsert = jest.spyOn(dbClient.db, 'insert');
       mockDbInsert.mockReturnValue({
-        values: vi.fn().mockReturnThis(),
-        returning: vi.fn().mockResolvedValue([{
+        values: jest.fn().mockReturnThis(),
+        returning: jest.fn().mockResolvedValue([{
           id: 'license-normalize',
           userId: mockUserId,
           licenseKey: mockLicenseKey,
@@ -580,20 +593,20 @@ describe('POST /api/licenses', () => {
       const mockUserId = 'user-expire-calc';
       const mockLicenseKey = 'g7h8i9j0k1l2m3n4o5p6q7r8s9t0u1v2';
 
-      vi.spyOn(authMiddleware, 'requireAuth').mockResolvedValue({
+      jest.spyOn(authMiddleware, 'requireAuth').mockResolvedValue({
         userId: mockUserId,
         email: 'expire@example.com',
       } as any);
 
-      vi.spyOn(licenseGenerate, 'generateLicenseKey').mockReturnValue(mockLicenseKey);
+      jest.spyOn(licenseGenerate, 'generateLicenseKey').mockReturnValue(mockLicenseKey);
 
       const now = Date.now();
       const expectedExpiration = new Date(now + 90 * 24 * 60 * 60 * 1000);
 
-      const mockDbInsert = vi.spyOn(dbClient.db, 'insert');
+      const mockDbInsert = jest.spyOn(dbClient.db, 'insert');
       mockDbInsert.mockReturnValue({
-        values: vi.fn().mockReturnThis(),
-        returning: vi.fn().mockResolvedValue([{
+        values: jest.fn().mockReturnThis(),
+        returning: jest.fn().mockResolvedValue([{
           id: 'license-expire-calc',
           userId: mockUserId,
           licenseKey: mockLicenseKey,

@@ -8,7 +8,7 @@
  */
 
 import { NextRequest } from 'next/server';
-import { requireAuth } from '@/lib/auth/middleware';
+import { requireAuth } from '@/lib/auth/guard';
 import { getUserById } from '@/lib/db/queries';
 import { handleAPIError, errorResponse } from '@/lib/utils/api-error';
 

@@ -9,7 +9,7 @@
  */
 
 import { NextRequest } from 'next/server';
-import { requireAuth } from '@/lib/auth/middleware';
+import { requireAuth } from '@/lib/auth/guard';
 import { getAuthenticatedUserId } from '@/lib/auth/helpers';
 import { updateLicenseSchema } from '@/lib/api/schemas';
 import { normalizeDomain } from '@/lib/license/domain';

@@ -7,7 +7,7 @@
  */
 
 import { NextRequest } from 'next/server';
-import { requireAuth } from './middleware';
+import { requireAuth } from './guard';
 
 /**
  * Extract the authenticated user's ID from the request

@@ -10,24 +10,36 @@
  * - Invalid scenarios: Missing authentication, returns only user's licenses (not other users')
  */
 
-import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { GET } from '@/app/api/licenses/route';
 import { NextRequest } from 'next/server';
 import * as dbClient from '@/lib/db/client';
-import * as authMiddleware from '@/lib/auth/middleware';
+import * as authMiddleware from '@/lib/auth/guard';
+
+// Mock jose library to avoid ESM issues
+jest.mock('jose', () => ({
+  SignJWT: jest.fn().mockImplementation(() => ({
+    setProtectedHeader: jest.fn().mockReturnThis(),
+    setIssuedAt: jest.fn().mockReturnThis(),
+    setExpirationTime: jest.fn().mockReturnThis(),
+    sign: jest.fn().mockResolvedValue('mock-token'),
+  })),
+  jwtVerify: jest.fn().mockResolvedValue({
+    payload: { sub: 'user-123', email: 'test@example.com' },
+  }),
+}));
 
 // Mock the database client
-vi.mock('@/lib/db/client', () => ({
+jest.mock('@/lib/db/client', () => ({
   db: {
-    select: vi.fn().mockReturnThis(),
-    from: vi.fn().mockReturnThis(),
-    where: vi.fn().mockReturnThis(),
+    select: jest.fn().mockReturnThis(),
+    from: jest.fn().mockReturnThis(),
+    where: jest.fn().mockReturnThis(),
   },
 }));
 
 // Mock authentication middleware
-vi.mock('@/lib/auth/middleware', () => ({
-  requireAuth: vi.fn(),
+jest.mock('@/lib/auth/guard', () => ({
+  requireAuth: jest.fn(),
 }));
 
 // Helper function to create a mock GET request
@@ -46,7 +58,7 @@ function createListRequest(authToken?: string): NextRequest {
 
 describe('GET /api/licenses', () => {
   beforeEach(() => {
-    vi.clearAllMocks();
+    jest.clearAllMocks();
   });
 
   describe('Valid Scenarios', () => {
@@ -56,7 +68,7 @@ describe('GET /api/licenses', () => {
       // Arrange
       const mockUserId = 'user-123';
 
-      vi.spyOn(authMiddleware, 'requireAuth').mockResolvedValue({
+      jest.spyOn(authMiddleware, 'requireAuth').mockResolvedValue({
         userId: mockUserId,
         email: 'test@example.com',
       } as any);
@@ -90,10 +102,10 @@ describe('GET /api/licenses', () => {
         },
       ];
 
-      const mockDbSelect = vi.spyOn(dbClient.db, 'select');
+      const mockDbSelect = jest.spyOn(dbClient.db, 'select');
       mockDbSelect.mockReturnValue({
-        from: vi.fn().mockReturnThis(),
-        where: vi.fn().mockResolvedValue(mockLicenses),
+        from: jest.fn().mockReturnThis(),
+        where: jest.fn().mockResolvedValue(mockLicenses),
       } as any);
 
       const request = createListRequest('valid-token');
@@ -117,15 +129,15 @@ describe('GET /api/licenses', () => {
       // Arrange
       const mockUserId = 'user-no-licenses';
 
-      vi.spyOn(authMiddleware, 'requireAuth').mockResolvedValue({
+      jest.spyOn(authMiddleware, 'requireAuth').mockResolvedValue({
         userId: mockUserId,
         email: 'newuser@example.com',
       } as any);
 
-      const mockDbSelect = vi.spyOn(dbClient.db, 'select');
+      const mockDbSelect = jest.spyOn(dbClient.db, 'select');
       mockDbSelect.mockReturnValue({
-        from: vi.fn().mockReturnThis(),
-        where: vi.fn().mockResolvedValue([]), // Empty array
+        from: jest.fn().mockReturnThis(),
+        where: jest.fn().mockResolvedValue([]), // Empty array
       } as any);
 
       const request = createListRequest('valid-token');
@@ -147,7 +159,7 @@ describe('GET /api/licenses', () => {
       // Arrange
       const mockUserId = 'user-many-licenses';
 
-      vi.spyOn(authMiddleware, 'requireAuth').mockResolvedValue({
+      jest.spyOn(authMiddleware, 'requireAuth').mockResolvedValue({
         userId: mockUserId,
         email: 'poweruser@example.com',
       } as any);
@@ -176,10 +188,10 @@ describe('GET /api/licenses', () => {
         },
       ];
 
-      const mockDbSelect = vi.spyOn(dbClient.db, 'select');
+      const mockDbSelect = jest.spyOn(dbClient.db, 'select');
       mockDbSelect.mockReturnValue({
-        from: vi.fn().mockReturnThis(),
-        where: vi.fn().mockResolvedValue(mockLicenses),
+        from: jest.fn().mockReturnThis(),
+        where: jest.fn().mockResolvedValue(mockLicenses),
       } as any);
 
       const request = createListRequest('valid-token');
@@ -202,7 +214,7 @@ describe('GET /api/licenses', () => {
       // Arrange
       const mockUserId = 'user-fields';
 
-      vi.spyOn(authMiddleware, 'requireAuth').mockResolvedValue({
+      jest.spyOn(authMiddleware, 'requireAuth').mockResolvedValue({
         userId: mockUserId,
         email: 'test@example.com',
       } as any);
@@ -223,10 +235,10 @@ describe('GET /api/licenses', () => {
         updatedAt: new Date('2024-06-01'),
       };
 
-      const mockDbSelect = vi.spyOn(dbClient.db, 'select');
+      const mockDbSelect = jest.spyOn(dbClient.db, 'select');
       mockDbSelect.mockReturnValue({
-        from: vi.fn().mockReturnThis(),
-        where: vi.fn().mockResolvedValue([mockLicense]),
+        from: jest.fn().mockReturnThis(),
+        where: jest.fn().mockResolvedValue([mockLicense]),
       } as any);
 
       const request = createListRequest('valid-token');
@@ -258,7 +270,7 @@ describe('GET /api/licenses', () => {
       // FAIL REASON: GET route handler does not exist yet
 
       // Arrange
-      vi.spyOn(authMiddleware, 'requireAuth').mockRejectedValue(
+      jest.spyOn(authMiddleware, 'requireAuth').mockRejectedValue(
         new Error('Authentication required')
       );
 
@@ -280,7 +292,7 @@ describe('GET /api/licenses', () => {
       const mockUserId = 'user-123';
       const otherUserId = 'user-456';
 
-      vi.spyOn(authMiddleware, 'requireAuth').mockResolvedValue({
+      jest.spyOn(authMiddleware, 'requireAuth').mockResolvedValue({
         userId: mockUserId,
         email: 'test@example.com',
       } as any);
@@ -297,10 +309,10 @@ describe('GET /api/licenses', () => {
         // Intentionally NOT including other users' licenses
       ];
 
-      const mockDbSelect = vi.spyOn(dbClient.db, 'select');
+      const mockDbSelect = jest.spyOn(dbClient.db, 'select');
       mockDbSelect.mockReturnValue({
-        from: vi.fn().mockReturnThis(),
-        where: vi.fn().mockImplementation(() => {
+        from: jest.fn().mockReturnThis(),
+        where: jest.fn().mockImplementation(() => {
           // Verify where clause is filtering by userId
           return Promise.resolve(mockLicenses);
         }),

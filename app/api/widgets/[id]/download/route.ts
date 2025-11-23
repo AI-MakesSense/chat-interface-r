@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { requireAuth } from '@/lib/auth/middleware';
+// FIX: Changed import from 'middleware' to 'guard' to avoid Next.js reserved filename conflict
+import { requireAuth } from '@/lib/auth/guard';
 import { getWidgetWithLicense } from '@/lib/db/queries';
 import { ZipGenerator } from '@/lib/zip-generator';
 import { z } from 'zod';
@@ -26,9 +27,7 @@ export async function GET(
     const user = await requireAuth(request);
 
     // 2. Validate widget ID format
-    // FIX: No 'await' needed for params in Next.js 14
     const { id } = params;
-
     const widgetId = z.string().uuid().parse(id);
 
     // 3. Parse and validate query parameters

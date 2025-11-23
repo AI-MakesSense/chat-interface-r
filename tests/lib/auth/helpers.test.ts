@@ -2,19 +2,31 @@
  * Tests for Auth Helper Functions
  */
 
-import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { NextRequest } from 'next/server';
 import { getAuthenticatedUserId } from '@/lib/auth/helpers';
-import { requireAuth } from '@/lib/auth/middleware';
+import { requireAuth } from '@/lib/auth/guard';
+
+// Mock jose library to avoid ESM issues
+jest.mock('jose', () => ({
+  SignJWT: jest.fn().mockImplementation(() => ({
+    setProtectedHeader: jest.fn().mockReturnThis(),
+    setIssuedAt: jest.fn().mockReturnThis(),
+    setExpirationTime: jest.fn().mockReturnThis(),
+    sign: jest.fn().mockResolvedValue('mock-token'),
+  })),
+  jwtVerify: jest.fn().mockResolvedValue({
+    payload: { sub: 'user-123', email: 'test@example.com' },
+  }),
+}));
 
 // Mock the auth module
-vi.mock('@/lib/auth/middleware');
+jest.mock('@/lib/auth/middleware');
 
 describe('Auth Helpers', () => {
-  const mockRequireAuth = vi.mocked(requireAuth);
+  const mockRequireAuth = jest.mocked(requireAuth);
 
   beforeEach(() => {
-    vi.clearAllMocks();
+    jest.clearAllMocks();
   });
 
   describe('getAuthenticatedUserId', () => {

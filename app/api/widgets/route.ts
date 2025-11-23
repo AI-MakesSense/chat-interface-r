@@ -11,7 +11,7 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import { requireAuth } from '@/lib/auth/middleware';
+import { requireAuth } from '@/lib/auth/guard';
 import { db } from '@/lib/db/client';
 import { licenses, widgets } from '@/lib/db/schema';
 import { eq } from 'drizzle-orm';

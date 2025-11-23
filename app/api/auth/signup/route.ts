@@ -13,7 +13,7 @@ import { z } from 'zod';
 import { createUser, getUserByEmail } from '@/lib/db/queries';
 import { hashPassword, validatePasswordStrength } from '@/lib/auth/password';
 import { signJWT } from '@/lib/auth/jwt';
-import { createAuthCookie } from '@/lib/auth/middleware';
+import { createAuthCookie } from '@/lib/auth/guard';
 import { handleAPIError, errorResponse } from '@/lib/utils/api-error';
 
 // Validation schema
