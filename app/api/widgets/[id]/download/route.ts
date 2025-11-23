@@ -1,20 +1,3 @@
-/**
- * Widget Download API Route
- *
- * Purpose: Generate and serve downloadable widget packages as zip files
- * Route: GET /api/widgets/[id]/download?type=website|portal
- *
- * Responsibility:
- * - Authenticate user and verify widget ownership
- * - Generate zip package using ZipGenerator
- * - Return zip file with proper headers
- *
- * Constraints:
- * - Requires authentication
- * - Verifies widget ownership through license
- * - Supports website and portal package types
- */
-
 import { NextRequest, NextResponse } from 'next/server';
 import { requireAuth } from '@/lib/auth/middleware';
 import { getWidgetWithLicense } from '@/lib/db/queries';
@@ -35,16 +18,18 @@ const DownloadQuerySchema = z.object({
 
 export async function GET(
   request: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
+  // FIX: Removed 'Promise' wrapper for Next.js 14 compatibility
+  { params }: { params: { id: string } }
 ) {
   try {
     // 1. Authenticate user
     const user = await requireAuth(request);
 
     // 2. Validate widget ID format
-    const { id } = await params;
-    const idSchema = z.string().uuid();
-    const widgetId = idSchema.parse(id);
+    // FIX: No 'await' needed for params in Next.js 14
+    const { id } = params;
+
+    const widgetId = z.string().uuid().parse(id);
 
     // 3. Parse and validate query parameters
     const searchParams = request.nextUrl.searchParams;
@@ -68,7 +53,7 @@ export async function GET(
       return NextResponse.json({ error: 'Widget not found' }, { status: 404 });
     }
 
-    // 5. Verify ownership through license
+    // 5. Verify ownership
     if (widget.license.userId !== user.sub) {
       return NextResponse.json(
         { error: 'You do not own this widget' },
@@ -76,44 +61,44 @@ export async function GET(
       );
     }
 
-    // 6. Verify widget and license are active
-    if (widget.status !== 'active') {
+    // 6. Verify status
+    if (widget.status !== 'active' || widget.license.status !== 'active') {
       return NextResponse.json(
-        { error: 'Widget is not active' },
+        { error: 'Widget or License is not active' },
         { status: 400 }
       );
     }
 
-    if (widget.license.status !== 'active') {
-      return NextResponse.json(
-        { error: 'License is not active' },
-        { status: 400 }
-      );
-    }
-
-    // 7. Generate zip package based on type
+    // 7. Prepare Generator Data
     const generator = new ZipGenerator();
-    const config = widget.config as any; // WidgetConfig from JSONB
+    const config = widget.config as any;
+    const licenseKey = widget.license.licenseKey;
+
+    // Dynamic Base URL detection
+    const protocol = request.headers.get('x-forwarded-proto') || 'http';
+    const host = request.headers.get('host');
+    const baseUrl = `${protocol}://${host}`;
 
     let zipBuffer: Buffer;
     let filename: string;
 
+    // 8. Generate zip package
     if (type === 'extension') {
-      zipBuffer = await generator.generateExtensionPackage(config, widgetId);
-      filename = `${widget.name.replace(/[^a-z0-9]/gi, '-').toLowerCase()}-extension.zip`;
+      zipBuffer = await generator.generateExtensionPackage(config, widgetId, licenseKey, baseUrl);
+      filename = `${widget.name}-extension.zip`;
     } else if (type === 'portal') {
-      zipBuffer = await generator.generatePortalPackage(config, widgetId);
-      filename = `${widget.name.replace(/[^a-z0-9]/gi, '-').toLowerCase()}-portal.zip`;
+      zipBuffer = await generator.generatePortalPackage(config, widgetId, licenseKey, baseUrl);
+      filename = `${widget.name}-portal.zip`;
     } else {
-      zipBuffer = await generator.generateWebsitePackage(config);
-      filename = `${widget.name.replace(/[^a-z0-9]/gi, '-').toLowerCase()}-website.zip`;
+      zipBuffer = await generator.generateWebsitePackage(config, widgetId, licenseKey, baseUrl);
+      filename = `${widget.name}-website.zip`;
     }
 
-    // 8. Return zip file with appropriate headers
-    // Convert Buffer to Uint8Array for NextResponse compatibility
-    const uint8Array = new Uint8Array(zipBuffer);
+    // Sanitize filename
+    filename = filename.replace(/[^a-z0-9-.]/gi, '-').toLowerCase();
 
-    return new NextResponse(uint8Array, {
+    // 9. Return zip file
+    return new NextResponse(new Uint8Array(zipBuffer), {
       status: 200,
       headers: {
         'Content-Type': 'application/zip',
@@ -126,7 +111,6 @@ export async function GET(
   } catch (error) {
     console.error('[Download API] Error:', error);
 
-    // Handle validation errors
     if (error instanceof z.ZodError) {
       return NextResponse.json(
         { error: 'Invalid request parameters', details: error.issues },
@@ -134,15 +118,6 @@ export async function GET(
       );
     }
 
-    // Handle zip generation errors
-    if (error instanceof Error && error.message.includes('License key is required')) {
-      return NextResponse.json(
-        { error: 'Widget configuration is invalid' },
-        { status: 400 }
-      );
-    }
-
-    // Generic error response
     return NextResponse.json(
       { error: 'Failed to generate package' },
       { status: 500 }
