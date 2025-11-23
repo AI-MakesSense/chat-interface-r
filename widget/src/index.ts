@@ -71,7 +71,7 @@ if (typeof window !== 'undefined') {
       // Determine API base URL from script source if possible, otherwise assume same origin or specific domain
       // For now, we'll try to derive it from the script tag src
       let apiBaseUrl = '';
-      const scriptTag = document.querySelector('script[src*="/chat-widget.js"]') as HTMLScriptElement;
+      const scriptTag = document.querySelector('script[src*="/chat-widget.js"], script[src*="/bundle.js"]') as HTMLScriptElement;
       if (scriptTag && scriptTag.src) {
         const url = new URL(scriptTag.src);
         apiBaseUrl = url.origin;
