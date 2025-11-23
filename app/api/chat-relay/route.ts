@@ -4,7 +4,7 @@ import { getWidgetWithLicense } from '@/lib/db/queries';
 
 // Schema for the relay request payload
 const relayRequestSchema = z.object({
-  widgetId: z.string().uuid(),
+  widgetId: z.string().min(1), // Allow any non-empty string (including 'preview-widget')
   licenseKey: z.string().min(1),
   message: z.string(),
   sessionId: z.string(),
@@ -30,6 +30,17 @@ export async function POST(request: NextRequest) {
     const { widgetId, licenseKey, ...payload } = validationResult.data;
 
     // 2. Fetch widget and license
+    // Skip widget lookup for preview mode
+    if (widgetId === 'preview-widget' || licenseKey === 'preview') {
+      return NextResponse.json(
+        {
+          output: 'Preview mode: This is a simulated response. Configure your webhook URL to test with real n8n.',
+          preview: true
+        },
+        { status: 200 }
+      );
+    }
+
     const widget = await getWidgetWithLicense(widgetId);
 
     if (!widget) {
