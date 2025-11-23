@@ -68,6 +68,7 @@ export interface WidgetConfig {
 export interface Widget {
   id: string;
   licenseId: string;
+  licenseKey: string; // Added for embed code generation
   name: string;
   config: WidgetConfig;
   isDeployed: boolean;

@@ -24,6 +24,7 @@ export function WidgetList({ widgets, onDelete }: WidgetListProps) {
     const router = useRouter();
     const [deleteId, setDeleteId] = useState<string | null>(null);
     const [isDeleting, setIsDeleting] = useState(false);
+    const [copiedId, setCopiedId] = useState<string | null>(null);
 
     const handleDelete = async (id: string) => {
         setIsDeleting(true);
@@ -35,6 +36,17 @@ export function WidgetList({ widgets, onDelete }: WidgetListProps) {
             setIsDeleting(false);
             setDeleteId(null);
         }
+    };
+
+    const handleCopyEmbed = (licenseKey: string) => {
+        // Use the current window location to determine the base URL
+        // This ensures it works on localhost, Vercel, or custom domains
+        const baseUrl = window.location.origin;
+        const embedCode = `<div id="n8n-chat-${licenseKey}"></div>\n<script src="${baseUrl}/api/embed/bundle.js" defer></script>`;
+
+        navigator.clipboard.writeText(embedCode);
+        setCopiedId(licenseKey);
+        setTimeout(() => setCopiedId(null), 2000);
     };
 
     if (widgets.length === 0) {
@@ -71,7 +83,7 @@ export function WidgetList({ widgets, onDelete }: WidgetListProps) {
                                 </CardDescription>
                             </div>
                             <Badge variant={widget.isDeployed ? 'default' : 'secondary'}>
-                                {widget.isDeployed ? 'Deployed' : 'Draft'}
+                                {widget.isDeployed ? 'Active' : 'Draft'}
                             </Badge>
                         </div>
                     </CardHeader>
@@ -94,50 +106,72 @@ export function WidgetList({ widgets, onDelete }: WidgetListProps) {
                             )}
                         </div>
                     </CardContent>
-                    <CardFooter className="flex gap-2 pt-4 border-t">
-                        {deleteId === widget.id ? (
-                            <div className="flex items-center gap-2 w-full animate-in fade-in slide-in-from-right-5 duration-200">
-                                <span className="text-xs font-medium text-destructive flex-1">Confirm delete?</span>
-                                <Button
-                                    variant="ghost"
-                                    size="icon"
-                                    className="h-8 w-8"
-                                    onClick={() => setDeleteId(null)}
-                                    disabled={isDeleting}
-                                >
-                                    <X className="h-4 w-4" />
-                                </Button>
-                                <Button
-                                    variant="destructive"
-                                    size="icon"
-                                    className="h-8 w-8"
-                                    onClick={() => handleDelete(widget.id)}
-                                    disabled={isDeleting}
-                                >
-                                    <Check className="h-4 w-4" />
-                                </Button>
-                            </div>
-                        ) : (
-                            <>
-                                <Button
-                                    variant="outline"
-                                    size="sm"
-                                    className="flex-1 gap-2"
-                                    onClick={() => router.push(`/configurator?widgetId=${widget.id}`)}
-                                >
-                                    <Edit className="h-4 w-4" />
-                                    Edit
-                                </Button>
-                                <Button
-                                    variant="outline"
-                                    size="sm"
-                                    className="text-destructive hover:text-destructive"
-                                    onClick={() => setDeleteId(widget.id)}
-                                >
-                                    <Trash2 className="h-4 w-4" />
-                                </Button>
-                            </>
-                        )}
+                    <CardFooter className="flex flex-col gap-2 pt-4 border-t">
+                        <div className="flex w-full gap-2">
+                            <Button
+                                variant="secondary"
+                                size="sm"
+                                className="flex-1 gap-2"
+                                onClick={() => handleCopyEmbed(widget.licenseKey)}
+                            >
+                                {copiedId === widget.licenseKey ? (
+                                    <>
+                                        <Check className="h-4 w-4" />
+                                        Copied
+                                    </>
+                                ) : (
+                                    <>
+                                        <Globe className="h-4 w-4" />
+                                        Copy Embed
+                                    </>
+                                )}
+                            </Button>
+                        </div>
+                        <div className="flex w-full gap-2">
+                            {deleteId === widget.id ? (
+                                <div className="flex items-center gap-2 w-full animate-in fade-in slide-in-from-right-5 duration-200">
+                                    <span className="text-xs font-medium text-destructive flex-1">Confirm delete?</span>
+                                    <Button
+                                        variant="ghost"
+                                        size="icon"
+                                        className="h-8 w-8"
+                                        onClick={() => setDeleteId(null)}
+                                        disabled={isDeleting}
+                                    >
+                                        <X className="h-4 w-4" />
+                                    </Button>
+                                    <Button
+                                        variant="destructive"
+                                        size="icon"
+                                        className="h-8 w-8"
+                                        onClick={() => handleDelete(widget.id)}
+                                        disabled={isDeleting}
+                                    >
+                                        <Check className="h-4 w-4" />
+                                    </Button>
+                                </div>
+                            ) : (
+                                <>
+                                    <Button
+                                        variant="outline"
+                                        size="sm"
+                                        className="flex-1 gap-2"
+                                        onClick={() => router.push(`/configurator?widgetId=${widget.id}`)}
+                                    >
+                                        <Edit className="h-4 w-4" />
+                                        Edit
+                                    </Button>
+                                    <Button
+                                        variant="outline"
+                                        size="sm"
+                                        className="text-destructive hover:text-destructive"
+                                        onClick={() => setDeleteId(widget.id)}
+                                    >
+                                        <Trash2 className="h-4 w-4" />
+                                    </Button>
+                                </>
+                            )}
+                        </div>
                     </CardFooter>
                 </Card>
             ))}

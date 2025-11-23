@@ -51,15 +51,16 @@ export interface FeaturesConfig {
 }
 
 export interface ConnectionConfig {
-  routeParam?: string;
-  webhookUrl?: string; // n8n webhook URL for sending messages
-  captureContext?: boolean; // Capture page URL and query params
-  customContext?: Record<string, any>; // User-defined metadata
-  extraInputs?: Record<string, any>;
+  webhookUrl: string;
+  relayEndpoint?: string;
+  [key: string]: any;
 }
 
 export interface LicenseConfig {
-  brandingEnabled: boolean;
+  key?: string;
+  active?: boolean;
+  plan?: string;
+  [key: string]: any;
 }
 
 export interface RelayConfig {

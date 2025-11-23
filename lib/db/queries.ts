@@ -552,6 +552,7 @@ export async function getWidgetsByUserId(
   return results.map(r => ({
     ...r.widgets,
     license: r.licenses,
+    licenseKey: r.licenses.licenseKey, // Explicitly add licenseKey for frontend convenience
   }));
 }
 
@@ -677,6 +678,7 @@ export async function getWidgetsPaginated(
   const widgetsWithLicenses = results.map(r => ({
     ...r.widgets,
     license: r.licenses,
+    licenseKey: r.licenses.licenseKey, // Explicitly add licenseKey for frontend convenience
   }));
 
   return { widgets: widgetsWithLicenses, total };
