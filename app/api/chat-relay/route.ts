@@ -1,6 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
-import { getWidgetWithLicense } from '@/lib/db/queries';
+
+// NOTE: We removed the top-level import of getWidgetWithLicense
+// to prevent the DB client from initializing immediately and crashing
+// if environment variables are missing during preview.
 
 // Schema for the relay request payload
 const relayRequestSchema = z.object({
@@ -53,6 +56,10 @@ export async function POST(request: NextRequest) {
     }
     // CASE B: Production/Saved Widget Mode
     else {
+      // DYNAMIC IMPORT: Only import DB functions when we know we aren't in preview mode.
+      // This prevents the app from crashing on Vercel if DB vars are missing.
+      const { getWidgetWithLicense } = await import('@/lib/db/queries');
+
       const widget = await getWidgetWithLicense(widgetId);
 
       if (!widget) {
