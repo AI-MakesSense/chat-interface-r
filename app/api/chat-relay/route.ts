@@ -1,15 +1,16 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 
-// NOTE: We removed the top-level import of getWidgetWithLicense
-// to prevent the DB client from initializing immediately and crashing
-// if environment variables are missing during preview.
+// NOTE: We use dynamic imports for DB queries to prevent crashes 
+// if environment variables are missing during preview mode.
 
 // Schema for the relay request payload
 const relayRequestSchema = z.object({
   widgetId: z.string().min(1), // Allow any non-empty string (including 'preview-widget')
   licenseKey: z.string().min(1),
   message: z.string(),
+  // ADDED: Allow 'chatInput' to pass through to n8n
+  chatInput: z.string().optional(),
   sessionId: z.string(),
   context: z.record(z.string(), z.any()).optional(),
   customContext: z.record(z.string(), z.any()).optional(),
@@ -57,7 +58,6 @@ export async function POST(request: NextRequest) {
     // CASE B: Production/Saved Widget Mode
     else {
       // DYNAMIC IMPORT: Only import DB functions when we know we aren't in preview mode.
-      // This prevents the app from crashing on Vercel if DB vars are missing.
       const { getWidgetWithLicense } = await import('@/lib/db/queries');
 
       const widget = await getWidgetWithLicense(widgetId);

@@ -510,7 +510,9 @@ export function PreviewFrame({ config, className = '' }: PreviewFrameProps) {
               body: JSON.stringify({
                 widgetId: config.widgetId || 'preview-widget',
                 licenseKey: config.license?.key || 'preview',
+                // Send both message AND chatInput to support n8n defaults
                 message: text,
+                chatInput: text,
                 sessionId: 'preview-' + Date.now(),
                 previewWebhookUrl: currentWebhookUrl, // Send current unsaved URL
               }),
