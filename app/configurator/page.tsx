@@ -396,16 +396,62 @@ function ConfiguratorPage() {
               <CardContent className="space-y-4">
                 <div>
                   <Label htmlFor="webhookUrl">N8n Webhook URL *</Label>
-                  <Input
-                    id="webhookUrl"
-                    value={currentConfig.connection.webhookUrl}
-                    onChange={(e) =>
-                      updateConfig({
-                        connection: { ...currentConfig.connection, webhookUrl: e.target.value },
-                      })
-                    }
-                    placeholder="https://your-n8n.com/webhook/your-id"
-                  />
+                  <div className="flex gap-2 items-center">
+                    <Input
+                      id="webhookUrl"
+                      value={currentConfig.connection.webhookUrl}
+                      onChange={(e) =>
+                        updateConfig({
+                          connection: { ...currentConfig.connection, webhookUrl: e.target.value },
+                        })
+                      }
+                      placeholder="https://your-n8n.com/webhook/your-id"
+                      className="flex-1"
+                    />
+                    <Button
+                      variant="outline"
+                      size="icon"
+                      onClick={handleSave}
+                      disabled={!hasUnsavedChanges || isSaving}
+                      title="Save webhook URL"
+                    >
+                      <svg
+                        xmlns="http://www.w3.org/2000/svg"
+                        width="16"
+                        height="16"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        strokeWidth="2"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                      >
+                        <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z" />
+                        <polyline points="17 21 17 13 7 13 7 21" />
+                        <polyline points="7 3 7 8 15 8" />
+                      </svg>
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="icon"
+                      onClick={() => window.location.reload()}
+                      title="Refresh connection"
+                    >
+                      <svg
+                        xmlns="http://www.w3.org/2000/svg"
+                        width="16"
+                        height="16"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        strokeWidth="2"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                      >
+                        <path d="M21.5 2v6h-6M2.5 22v-6h6M2 11.5a10 10 0 0 1 18.8-4.3M22 12.5a10 10 0 0 1-18.8 4.2" />
+                      </svg>
+                    </Button>
+                  </div>
                   <p className="text-xs text-muted-foreground mt-1">
                     Must be an HTTPS URL from your N8n instance
                   </p>
