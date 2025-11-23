@@ -35,7 +35,8 @@ export class ZipGenerator {
     zip.file('chat-widget.js', widgetScript);
 
     // 2. Add index.html
-    const indexHtml = HTMLTemplates.generateWebsiteHTML(config);
+    const sanitizedConfig = this.sanitizeConfig(config);
+    const indexHtml = HTMLTemplates.generateWebsiteHTML(sanitizedConfig);
     zip.file('index.html', indexHtml);
 
     // 3. Add README (Dynamic)
@@ -64,7 +65,8 @@ export class ZipGenerator {
     zip.file('chat-widget.js', widgetScript);
 
     // 2. Add portal.html
-    const portalHtml = HTMLTemplates.generatePortalHTML(config, widgetId);
+    const sanitizedConfig = this.sanitizeConfig(config);
+    const portalHtml = HTMLTemplates.generatePortalHTML(sanitizedConfig, widgetId);
     zip.file('portal.html', portalHtml);
 
     // 3. Add README (Dynamic)
@@ -93,10 +95,11 @@ export class ZipGenerator {
     zip.file('chat-widget.js', widgetScript);
 
     // 2. Add extension files
-    const manifest = ExtensionTemplates.generateManifest(config);
+    const sanitizedConfig = this.sanitizeConfig(config);
+    const manifest = ExtensionTemplates.generateManifest(sanitizedConfig);
     zip.file('manifest.json', JSON.stringify(manifest, null, 2));
 
-    const sidepanelHtml = ExtensionTemplates.generateSidepanel(config, widgetId);
+    const sidepanelHtml = ExtensionTemplates.generateSidepanel(sanitizedConfig, widgetId);
     zip.file('sidepanel.html', sidepanelHtml);
 
     const backgroundScript = ExtensionTemplates.generateBackground();
@@ -134,6 +137,31 @@ export class ZipGenerator {
     if (!config) {
       throw new Error('Widget config is required');
     }
+  }
+
+  private sanitizeConfig(config: WidgetConfig): any {
+    // Ensure all required fields for the widget runtime are present
+    return {
+      ...config,
+      branding: {
+        ...config.branding,
+        companyName: config.branding.companyName || '',
+        welcomeText: config.branding.welcomeText || '',
+        firstMessage: config.branding.firstMessage || '',
+      },
+      style: {
+        ...config.style,
+        backgroundColor: config.style.backgroundColor || '#ffffff',
+        textColor: config.style.textColor || '#000000',
+        fontFamily: config.typography?.fontFamily || 'Inter, sans-serif',
+        fontSize: config.typography?.fontSize || 16,
+      },
+      features: {
+        fileAttachmentsEnabled: config.features?.fileAttachments || false,
+        allowedExtensions: config.features?.allowedExtensions || [],
+        maxFileSizeKB: (config.features?.maxFileSize || 5) * 1024,
+      }
+    };
   }
 
   private async createZip(zip: JSZip): Promise<Buffer> {
