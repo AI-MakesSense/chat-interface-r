@@ -359,16 +359,6 @@ export function PreviewFrame({ config, className = '' }: PreviewFrameProps) {
               const bubble = lastMsg.querySelector('div > div'); // The bubble is inside the messageEl
               if (bubble) bubble.innerHTML = renderMarkdown(reply);
             }
-            // Also update internal state if we were tracking it, but here we just update DOM
-            this.addMessage('assistant', reply); // Wait, this adds a NEW message. We want to replace.
-            
-            // Correction: The production widget updates the existing message. 
-            // In this simple preview, let's just remove the loading message and add the new one for simplicity, 
-            // OR better, let's implement a simple update mechanism.
-            
-            // Let's remove the last message (loading) and add the new one.
-            this.messagesContainer.removeChild(lastMsg);
-            this.addMessage('assistant', reply);
 
           } catch (error) {
             console.error('Preview Error:', error);

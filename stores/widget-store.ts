@@ -110,12 +110,26 @@ export interface UpdateWidgetData {
 }
 
 /**
+ * License object (simplified from license-store)
+ */
+export interface WidgetLicense {
+  id: string;
+  licenseKey: string;
+  tier: string;
+  status: string;
+  domains: string[];
+  domainLimit: number;
+  brandingEnabled: boolean;
+}
+
+/**
  * Widget store state interface
  */
 interface WidgetState {
   // State
   widgets: Widget[];
   currentWidget: Widget | null;
+  currentLicense: WidgetLicense | null;
   currentConfig: WidgetConfig;
   isLoading: boolean;
   isSaving: boolean;
@@ -165,6 +179,7 @@ export const useWidgetStore = create<WidgetState>((set, get) => ({
   // Initial state
   widgets: [],
   currentWidget: null,
+  currentLicense: null,
   currentConfig: defaultConfig,
   isLoading: false,
   isSaving: false,
@@ -248,6 +263,7 @@ export const useWidgetStore = create<WidgetState>((set, get) => ({
 
   /**
    * Get single widget by ID
+   * Also fetches the associated license
    */
   getWidget: async (id: string) => {
     set({ isLoading: true, error: null });
@@ -265,8 +281,24 @@ export const useWidgetStore = create<WidgetState>((set, get) => ({
       const data = await response.json();
       const widget = data.widget;
 
+      // Fetch the associated license
+      let license: WidgetLicense | null = null;
+      try {
+        const licenseResponse = await fetch(`/api/licenses/${widget.licenseId}`, {
+          credentials: 'include',
+        });
+        if (licenseResponse.ok) {
+          const licenseData = await licenseResponse.json();
+          license = licenseData.license;
+        }
+      } catch (err) {
+        console.error('Failed to fetch license:', err);
+        // Don't fail the entire operation if license fetch fails
+      }
+
       set({
         currentWidget: widget,
+        currentLicense: license,
         currentConfig: widget.config,
         isLoading: false,
         error: null,
@@ -405,6 +437,7 @@ export const useWidgetStore = create<WidgetState>((set, get) => ({
   setCurrentWidget: (widget: Widget | null) => {
     set({
       currentWidget: widget,
+      currentLicense: null, // Clear license when setting widget manually
       currentConfig: widget?.config || defaultConfig,
       hasUnsavedChanges: false,
     });
