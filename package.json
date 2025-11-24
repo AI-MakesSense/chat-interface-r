@@ -16,7 +16,7 @@
     "test": "jest",
     "test:watch": "jest --watch",
     "test:coverage": "jest --coverage",
-    "build:widget": "esbuild widget/src/index.ts --bundle --outfile=public/widget/chat-widget.iife.js --format=iife --global-name=ChatWidget --minify"
+    "build:widget": "npx esbuild widget/src/index.ts --bundle --outfile=public/widget/chat-widget.iife.js --format=iife --global-name=ChatWidget --minify"
   },
   "dependencies": {
     "@hookform/resolvers": "^5.2.2",
@@ -57,6 +57,7 @@
     "@types/react-dom": "^18",
     "dotenv": "^17.2.3",
     "drizzle-kit": "^0.31.6",
+    "esbuild": "^0.21.5",
     "eslint": "^9",
     "eslint-config-next": "16.0.1",
     "jest": "^29.7.0",

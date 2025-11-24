@@ -32,7 +32,7 @@ const CACHE_TTL = 60000; // 60 seconds
  * @returns Raw widget bundle content
  */
 async function readWidgetBundle(): Promise<string> {
-  const bundlePath = join(process.cwd(), 'public', 'widget', 'chat-widget.js');
+  const bundlePath = join(process.cwd(), 'public', 'widget', 'chat-widget.iife.js');
   const content = await readFile(bundlePath, 'utf-8');
   return content;
 }
