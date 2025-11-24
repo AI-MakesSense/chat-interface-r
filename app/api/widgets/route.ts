@@ -175,7 +175,10 @@ export async function GET(request: NextRequest) {
 
     // 6. Return 200 OK with widgets and pagination
     return NextResponse.json({
-      widgets: result.widgets,
+      widgets: result.widgets.map(w => ({
+        ...w,
+        licenseKey: (w as any).licenseKey || w.license?.licenseKey
+      })),
       pagination: {
         page,
         limit,

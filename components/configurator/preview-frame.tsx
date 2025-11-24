@@ -703,7 +703,7 @@ export function PreviewFrame({ config, className = '' }: PreviewFrameProps) {
           ref={iframeRef}
           title="Widget Preview"
           srcDoc={getPreviewHTML()}
-          sandbox="allow-scripts allow-same-origin allow-forms"
+          sandbox="allow-scripts allow-forms"
           className="border-0 bg-white rounded-lg shadow-lg transition-all duration-300"
           style={{
             width: `${dimensions.width}px`,
