@@ -3,12 +3,6 @@
  *
  * Purpose: Embeddable chat widget for N8n workflows
  * Responsibility: Initialize widget, create UI, handle user interaction
- *
- * Constraints:
- * - Must work without any framework dependencies
- * - Bundle size target: <50KB gzipped
- * - IIFE format for single script tag deployment
- * - Reads config from window.ChatWidgetConfig OR fetches dynamically
  */
 
 import { createChatWidget } from './widget';
@@ -27,12 +21,6 @@ if (typeof window !== 'undefined') {
 
   console.log('%c[N8n Chat Widget] Script Loaded', 'background: #222; color: #bada55; padding: 4px; border-radius: 4px;');
 
-  // Injection point for server-side license flags
-  const __INJECT_START__ = '__START_LICENSE_FLAGS__'; const __INJECT_END__ = '__END_LICENSE_FLAGS__';
-
-
-
-
   // Wait for DOM to be ready
   if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', init);
@@ -41,12 +29,17 @@ if (typeof window !== 'undefined') {
   }
 
   async function init() {
-    // 1. Check for existing runtime config (Legacy/Portal mode)
-    const legacyConfig = (window as any).ChatWidgetConfig as WidgetRuntimeConfig;
-    if (legacyConfig && legacyConfig.relay?.relayUrl) {
-      console.log('[N8n Chat Widget] Using legacy/portal configuration');
+    // 1. Get Injected Configuration (Pre-injected by serve.ts or manual embed)
+    const injectedConfig = (window as any).ChatWidgetConfig || {};
+    // Handle case where injectedConfig might be nested or flat
+    const injectedRelay = injectedConfig.relay || (injectedConfig.uiConfig ? injectedConfig.uiConfig.relay : {});
+
+    // Check if we have a FULL configuration (Legacy or fully injected mode)
+    // We check both flat structure and nested uiConfig structure
+    if (injectedRelay && injectedRelay.relayUrl && (injectedConfig.branding || (injectedConfig.uiConfig && injectedConfig.uiConfig.branding))) {
+      console.log('[N8n Chat Widget] Using existing full configuration');
       try {
-        createChatWidget(legacyConfig);
+        createChatWidget(injectedConfig as WidgetRuntimeConfig);
         return;
       } catch (error) {
         console.error('[N8n Chat Widget] Initialization error:', error);
@@ -55,72 +48,65 @@ if (typeof window !== 'undefined') {
     }
 
     // 2. Determine License Key & API Base URL
-    let licenseKey = '';
+    let licenseKey = injectedRelay.licenseKey || '';
     let apiBaseUrl = '';
 
-    // Strategy A: Check for container with ID (Legacy/Manual Embed)
+    // Strategy A: Check container ID
     const container = document.querySelector('div[id^="n8n-chat-"]');
-    if (container) {
-      const containerId = container.id;
-      licenseKey = containerId.replace('n8n-chat-', '');
-      console.log(`[N8n Chat Widget] Found container for license: ${licenseKey}`);
+    if (!licenseKey && container) {
+      licenseKey = container.id.replace('n8n-chat-', '');
     }
 
-    // Strategy B: Extract from Script Tag (Auto-Embed)
+    // Strategy B: Check script tag
     const scriptTag = document.querySelector('script[src*="/chat-widget.js"], script[src*="/bundle.js"]') as HTMLScriptElement;
     if (scriptTag && scriptTag.src) {
       const url = new URL(scriptTag.src);
       apiBaseUrl = url.origin;
 
-      // Try to extract license key from URL if not found in container
-      // Pattern: /api/widget/[LICENSE_KEY]/chat-widget.js
       if (!licenseKey) {
-        const match = url.pathname.match(/\/api\/widget\/([^\/]+)\/chat-widget\.js/);
-        if (match && match[1]) {
-          licenseKey = match[1];
-          console.log(`[N8n Chat Widget] Extracted license from script URL: ${licenseKey}`);
-        }
+        const match = url.pathname.match(/\/api\/widget\/([^\/]+)\/chat-widget/);
+        if (match && match[1]) licenseKey = match[1];
       }
     }
 
-    // If we still don't have a license key, we can't proceed
-    if (!licenseKey) {
-      console.warn('[N8n Chat Widget] Could not determine license key from container or script URL');
-      return;
-    }
-
-    // Fallback for API Base URL if script tag wasn't found (unlikely)
+    // Fallback: If no script tag found, default to window origin (e.g. development)
     if (!apiBaseUrl) {
       apiBaseUrl = window.location.origin;
     }
 
-    // 3. Fetch configuration
+    if (!licenseKey) {
+      console.warn('[N8n Chat Widget] Could not determine license key.');
+      return;
+    }
+
+    // 3. Fetch UI Configuration
     try {
       const response = await fetch(`${apiBaseUrl}/api/widget/${licenseKey}/config`);
-      if (!response.ok) {
-        throw new Error(`Failed to fetch config: ${response.status} ${response.statusText}`);
-      }
+      if (!response.ok) throw new Error('Config fetch failed');
 
-      const config: WidgetConfig = await response.json();
+      const remoteConfig: WidgetConfig = await response.json();
 
       // 4. Construct Runtime Config
+      // CRITICAL FIX: Nest the remoteConfig inside 'uiConfig' to match widget.ts expectations
       const runtimeConfig: WidgetRuntimeConfig = {
-        ...config,
+        uiConfig: remoteConfig, // Nesting the config here!
         relay: {
-          relayUrl: config.connection?.relayEndpoint || `${apiBaseUrl}/api/chat-relay`,
-          widgetId: '', // Will be filled by relay response or not needed if relay handles it
+          relayUrl: injectedRelay.relayUrl || remoteConfig.connection?.relayEndpoint || `${apiBaseUrl}/api/chat-relay`,
+          widgetId: injectedRelay.widgetId || '', // Use injected ID if available
           licenseKey: licenseKey
         }
       } as unknown as WidgetRuntimeConfig;
+
+      // Save config to window so the internal message handler can find it if needed
+      (window as any).ChatWidgetConfig = runtimeConfig;
 
       // 5. Initialize
       createChatWidget(runtimeConfig);
 
     } catch (error) {
-      console.error('[N8n Chat Widget] Auto-discovery initialization error:', error);
-      // Optional: Render error state in container if it exists
+      console.error('[N8n Chat Widget] Boot error:', error);
       if (container) {
-        container.innerHTML = '<div style="color: red; padding: 10px; border: 1px solid red;">Widget Error: Failed to load configuration</div>';
+        container.innerHTML = '<div style="color:red;padding:10px;border:1px solid red">Widget Error: Config Load Failed</div>';
       }
     }
   }

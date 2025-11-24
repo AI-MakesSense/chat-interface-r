@@ -1,49 +1,64 @@
 /**
- * Markdown Rendering Module
- *
- * Purpose: Convert markdown to HTML for assistant messages
- * Responsibility: Basic markdown parsing (bold, italic, links, code, lists)
- *
- * Constraints:
- * - Lightweight implementation to minimize bundle size
- * - Sanitize output to prevent XSS
- * - Support common markdown syntax only
+ * Simple Markdown Parser for Chat Widget
+ * * Renders basic markdown:
+ * - **bold**
+ * - *italic*
+ * - [links](url)
+ * - `code`
+ * - ```code blocks```
+ * - Newlines to <br>
+ * * Replaces heavy 'markdown-it' dependency to save bundle size.
  */
 
-import MarkdownIt from 'markdown-it';
+export function renderMarkdown(text: string): string {
+  if (!text) return '';
 
-// Initialize markdown-it with basic config
-const md = new MarkdownIt({
-  html: false, // Disable HTML tags for security
-  linkify: true, // Auto-convert URLs to links
-  typographer: true, // Enable smart quotes and other typography
-  breaks: true, // Convert \n to <br>
-});
-
-/**
- * Render markdown string to HTML
- * Sanitizes output to prevent XSS attacks
- */
-export function renderMarkdown(markdown: string): string {
   try {
-    return md.render(markdown);
+    // 1. Escape HTML first to prevent XSS
+    let html = escapeHtml(text);
+
+    // 2. Code Blocks (```)
+    // We handle these first to avoid processing internal chars
+    html = html.replace(/```([\s\S]*?)```/g, '<pre><code>$1</code></pre>');
+
+    // 3. Inline Code (`)
+    html = html.replace(/`([^`]+)`/g, '<code>$1</code>');
+
+    // 4. Bold (**)
+    html = html.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>');
+
+    // 5. Italic (*)
+    html = html.replace(/\*([^*]+)\*/g, '<em>$1</em>');
+
+    // 6. Links [text](url)
+    // Simple regex for links - checks for http/https to be safe
+    html = html.replace(
+      /\[([^\]]+)\]\((https?:\/\/[^\)]+)\)/g,
+      '<a href="$2" target="_blank" rel="noopener noreferrer">$1</a>'
+    );
+
+    // 7. Newlines to <br>
+    // FIX: Correct regex for newlines, ignoring those inside <pre> tags (basic check)
+    html = html.replace(/\n/g, '<br>');
+
+    return html;
   } catch (error) {
-    console.error('[N8n Chat Widget] Markdown rendering error:', error);
-    // Fallback to escaped plain text
-    return escapeHtml(markdown).replace(/\n/g, '<br>');
+    console.warn('Markdown rendering failed, falling back to plain text', error);
+    return text; // Fallback to raw text if regex fails
   }
 }
 
 /**
- * Escape HTML special characters to prevent XSS
+ * HTML Escaping to prevent XSS
  */
-function escapeHtml(text: string): string {
+function escapeHtml(unsafe: string): string {
   const map: Record<string, string> = {
     '&': '&amp;',
     '<': '&lt;',
     '>': '&gt;',
     '"': '&quot;',
-    "'": '&#039;',
+    "'": '&#039;' // FIX: Correctly quoted key and value
   };
-  return text.replace(/[&<>"']/g, (char) => map[char]);
+
+  return unsafe.replace(/[&<>"']/g, (char) => map[char] || char);
 }

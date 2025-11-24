@@ -255,6 +255,24 @@ function ConfiguratorPage() {
                 </CardDescription>
               </CardHeader>
               <CardContent className="space-y-4">
+                {/* NEW: Logo URL Input */}
+                <div>
+                  <Label htmlFor="logoUrl">Logo URL</Label>
+                  <Input
+                    id="logoUrl"
+                    value={currentConfig.branding.logoUrl || ''}
+                    onChange={(e) =>
+                      updateConfig({
+                        branding: { ...currentConfig.branding, logoUrl: e.target.value },
+                      })
+                    }
+                    placeholder="https://your-website.com/logo.png"
+                  />
+                  <p className="text-xs text-muted-foreground mt-1">
+                    Leave empty to hide the logo, or paste a link to an image (PNG/JPG).
+                  </p>
+                </div>
+
                 <div>
                   <Label htmlFor="companyName">Company Name</Label>
                   <Input
