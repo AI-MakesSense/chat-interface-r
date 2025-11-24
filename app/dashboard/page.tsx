@@ -40,14 +40,10 @@ export default function DashboardPage() {
   // Fetch data when authenticated
   useEffect(() => {
     if (isAuthenticated) {
-      if (!licensesLoading && licenses.length === 0) {
-        fetchLicenses().catch(console.error);
-      }
-      if (!widgetsLoading && widgets.length === 0) {
-        fetchWidgets().catch(console.error);
-      }
+      fetchLicenses().catch(console.error);
+      fetchWidgets().catch(console.error);
     }
-  }, [isAuthenticated, licenses.length, licensesLoading, fetchLicenses, widgets.length, widgetsLoading, fetchWidgets]);
+  }, [isAuthenticated, fetchLicenses, fetchWidgets]);
 
   // Handle logout
   const handleLogout = async () => {

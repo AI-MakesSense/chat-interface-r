@@ -193,7 +193,7 @@ export async function GET(
     // Agency tier allows any domain
     if (license.tier !== 'agency') {
       // Check if domain is in allowed list
-      const isAuthorized = license.domains.some(allowedDomain => {
+      const isAuthorized = normalizedRequestDomain === 'localhost' || license.domains.some(allowedDomain => {
         const normalizedAllowed = normalizeDomain(allowedDomain);
         return normalizedAllowed === normalizedRequestDomain;
       });

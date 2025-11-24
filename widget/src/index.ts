@@ -27,6 +27,12 @@ if (typeof window !== 'undefined') {
 
   console.log('%c[N8n Chat Widget] Script Loaded', 'background: #222; color: #bada55; padding: 4px; border-radius: 4px;');
 
+  // Injection point for server-side license flags
+  const __INJECT_START__ = '__START_LICENSE_FLAGS__'; const __INJECT_END__ = '__END_LICENSE_FLAGS__';
+
+
+
+
   // Wait for DOM to be ready
   if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', init);

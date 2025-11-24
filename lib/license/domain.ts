@@ -72,9 +72,9 @@ export function isValidDomain(domain: string): boolean {
     return false;
   }
 
-  // Special case: reject localhost
+  // Allow localhost for development/testing
   if (trimmed === 'localhost') {
-    return false;
+    return true;
   }
 
   // Special case: reject IP addresses (simple check for 4 numeric segments)

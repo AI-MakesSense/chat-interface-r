@@ -156,13 +156,13 @@ export function LicenseCard({ license, onUpdate, onDelete }: LicenseCardProps) {
         <div>
           <div className="flex items-center justify-between mb-2">
             <p className="text-sm font-medium">Allowed Domains</p>
-            {canAddDomain && !showDomainInput && (
+            {!showDomainInput && (
               <Button
                 size="sm"
                 variant="outline"
                 onClick={() => setShowDomainInput(true)}
               >
-                Add Domain
+                {canAddDomain ? 'Add Domain' : 'Manage Domains'}
               </Button>
             )}
           </div>

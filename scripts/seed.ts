@@ -16,7 +16,7 @@ config({ path: '.env.local' });
 
 // Now import db client (which needs env vars)
 import { db } from '../lib/db/client';
-import { users, licenses, widgetConfigs } from '../lib/db/schema';
+import { users, licenses, widgets } from '../lib/db/schema';
 import { hashPassword } from '../lib/auth/password';
 import { randomBytes } from 'crypto';
 
@@ -61,7 +61,7 @@ const sampleConfig = {
     maxFileSize: 5242880, // 5MB
   },
   connection: {
-    webhookUrl: 'https://example.com/webhook/test',
+    webhookUrl: 'https://infinitesystems.app.n8n.cloud/webhook/d3421cff-f72f-423f-a4d3-d0571a0c93ab/chat',
     route: null,
   },
 };
@@ -72,7 +72,7 @@ async function seed() {
   try {
     // 0. Clear existing data (for idempotent seeding)
     console.log('Clearing existing data...');
-    await db.delete(widgetConfigs); // Delete child records first
+    await db.delete(widgets); // Delete child records first
     await db.delete(licenses);
     await db.delete(users);
     console.log('✓ Cleared existing data\n');
@@ -147,17 +147,18 @@ async function seed() {
     console.log(`  - Pro: ${proLicense[0].licenseKey}`);
     console.log(`  - Agency: ${agencyLicense[0].licenseKey}`);
 
-    // 3. Create widget configs
-    console.log('\nCreating widget configurations...');
+    // 3. Create widgets
+    console.log('\nCreating widgets...');
 
-    await db.insert(widgetConfigs).values({
+    await db.insert(widgets).values({
       licenseId: basicLicense[0].id,
+      name: 'Basic Widget',
       config: sampleConfig,
-      version: 1,
     });
 
-    await db.insert(widgetConfigs).values({
+    await db.insert(widgets).values({
       licenseId: proLicense[0].id,
+      name: 'Pro Widget',
       config: {
         ...sampleConfig,
         branding: {
@@ -169,11 +170,11 @@ async function seed() {
           primaryColor: '#9333ea', // Purple
         },
       },
-      version: 1,
     });
 
-    await db.insert(widgetConfigs).values({
+    await db.insert(widgets).values({
       licenseId: agencyLicense[0].id,
+      name: 'Agency Widget',
       config: {
         ...sampleConfig,
         branding: {
@@ -185,10 +186,9 @@ async function seed() {
           primaryColor: '#f59e0b', // Amber
         },
       },
-      version: 1,
     });
 
-    console.log('✓ Created 3 widget configurations');
+    console.log('✓ Created 3 widgets');
 
     // Print summary
     console.log('\n✅ Seed completed successfully!\n');

@@ -168,7 +168,7 @@ export const useLicenseStore = create<LicenseState>((set, get) => ({
 
     try {
       const response = await fetch(`/api/licenses/${id}`, {
-        method: 'PUT',
+        method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
         body: JSON.stringify(data),

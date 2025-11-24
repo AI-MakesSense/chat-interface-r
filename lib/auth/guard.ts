@@ -63,7 +63,9 @@ export async function optionalAuth(request: NextRequest): Promise<JWTPayload | n
  * @returns Cookie string for Set-Cookie header
  */
 export function createAuthCookie(token: string, maxAge = 60 * 60 * 24 * 7): string {
-  return `auth-token=${token}; HttpOnly; Secure; SameSite=Lax; Path=/; Max-Age=${maxAge}`;
+  const isProduction = process.env.NODE_ENV === 'production';
+  const secureFlag = isProduction ? 'Secure;' : '';
+  return `auth-token=${token}; HttpOnly; ${secureFlag} SameSite=Lax; Path=/; Max-Age=${maxAge}`;
 }
 
 /**
@@ -72,5 +74,7 @@ export function createAuthCookie(token: string, maxAge = 60 * 60 * 24 * 7): stri
  * @returns Cookie string for Set-Cookie header
  */
 export function clearAuthCookie(): string {
-  return 'auth-token=; HttpOnly; Secure; SameSite=Strict; Path=/; Max-Age=0';
+  const isProduction = process.env.NODE_ENV === 'production';
+  const secureFlag = isProduction ? 'Secure;' : '';
+  return `auth-token=; HttpOnly; ${secureFlag} SameSite=Strict; Path=/; Max-Age=0`;
 }

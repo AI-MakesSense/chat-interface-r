@@ -9,16 +9,18 @@ export async function GET(
     try {
         const { license: licenseKey } = await params;
 
-        return new NextResponse(
-            JSON.stringify({ error: 'License key is required' }),
-            {
-                status: 400,
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Access-Control-Allow-Origin': '*'
+        if (!licenseKey) {
+            return new NextResponse(
+                JSON.stringify({ error: 'License key is required' }),
+                {
+                    status: 400,
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Access-Control-Allow-Origin': '*'
+                    }
                 }
-            }
-        );
+            );
+        }
 
 
         // Find the license
@@ -129,7 +131,12 @@ export async function GET(
         console.error('Error fetching widget config:', error);
         return NextResponse.json(
             { error: 'Internal server error' },
-            { status: 500 }
+            {
+                status: 500,
+                headers: {
+                    'Access-Control-Allow-Origin': '*'
+                }
+            }
         );
     }
 }
