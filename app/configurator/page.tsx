@@ -482,6 +482,7 @@ function ConfiguratorPage() {
               <WidgetDownloadButtons
                 widgetId={currentWidget.id}
                 widgetName={currentWidget.name}
+                licenseKey={currentWidget.licenseKey}
               />
             )}
           </div>

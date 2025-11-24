@@ -3,10 +3,11 @@
 /**
  * Widget Download Buttons Component
  *
- * Purpose: Provides download buttons for widget packages
+ * Purpose: Provides download buttons for widget packages and copy-paste embed code
  * Supports: Website widget, Portal page, and Chrome Extension packages
  *
  * Features:
+ * - Copy embed code snippet
  * - Download website widget package (HTML + JS + README)
  * - Download portal page package (fullscreen HTML + JS + README)
  * - Download Chrome extension package (manifest + sidepanel + icons + README)
@@ -15,22 +16,38 @@
  * - Beautiful UI with icons
  */
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Alert, AlertDescription } from '@/components/ui/alert';
-import { Download, Globe, ExternalLink, Puzzle, Loader2 } from 'lucide-react';
+import { Download, Globe, ExternalLink, Puzzle, Loader2, Copy, Check, Code } from 'lucide-react';
+import { Input } from '@/components/ui/input';
 
 interface WidgetDownloadButtonsProps {
   widgetId: string;
   widgetName: string;
+  licenseKey: string;
 }
 
-export function WidgetDownloadButtons({ widgetId, widgetName }: WidgetDownloadButtonsProps) {
+export function WidgetDownloadButtons({ widgetId, widgetName, licenseKey }: WidgetDownloadButtonsProps) {
   const [isDownloadingWebsite, setIsDownloadingWebsite] = useState(false);
   const [isDownloadingPortal, setIsDownloadingPortal] = useState(false);
   const [isDownloadingExtension, setIsDownloadingExtension] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [copied, setCopied] = useState(false);
+  const [origin, setOrigin] = useState('');
+
+  useEffect(() => {
+    setOrigin(window.location.origin);
+  }, []);
+
+  const embedCode = `<script src="${origin}/api/widget/${licenseKey}/chat-widget.js" async></script>`;
+
+  const copyToClipboard = () => {
+    navigator.clipboard.writeText(embedCode);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  };
 
   /**
    * Download package from API
@@ -94,19 +111,60 @@ export function WidgetDownloadButtons({ widgetId, widgetName }: WidgetDownloadBu
       <CardHeader>
         <CardTitle className="flex items-center gap-2">
           <Download className="h-5 w-5" />
-          Download Widget Packages
+          Install Widget
         </CardTitle>
         <CardDescription>
-          Download ready-to-use code packages for your website, portal, or browser extension
+          Embed the widget on your site or download a package
         </CardDescription>
       </CardHeader>
-      <CardContent className="space-y-4">
+      <CardContent className="space-y-6">
         {/* Error Alert */}
         {error && (
           <Alert variant="destructive">
             <AlertDescription>{error}</AlertDescription>
           </Alert>
         )}
+
+        {/* Embed Code Section */}
+        <div className="space-y-3">
+          <div className="flex items-center gap-2 text-sm font-semibold">
+            <Code className="h-4 w-4" />
+            <h3>Embed Code</h3>
+          </div>
+          <p className="text-sm text-muted-foreground">
+            Copy and paste this code snippet into your website's HTML, just before the closing <code>&lt;/body&gt;</code> tag.
+          </p>
+          <div className="flex gap-2">
+            <Input
+              readOnly
+              value={embedCode}
+              className="font-mono text-xs bg-slate-50 dark:bg-slate-950"
+            />
+            <Button
+              variant="outline"
+              size="icon"
+              onClick={copyToClipboard}
+              title="Copy to clipboard"
+            >
+              {copied ? (
+                <Check className="h-4 w-4 text-green-500" />
+              ) : (
+                <Copy className="h-4 w-4" />
+              )}
+            </Button>
+          </div>
+        </div>
+
+        <div className="relative">
+          <div className="absolute inset-0 flex items-center">
+            <span className="w-full border-t" />
+          </div>
+          <div className="relative flex justify-center text-xs uppercase">
+            <span className="bg-background px-2 text-muted-foreground">
+              Or Download Package
+            </span>
+          </div>
+        </div>
 
         {/* Website Widget Package */}
         <div className="flex items-start gap-4 p-4 border rounded-lg">
