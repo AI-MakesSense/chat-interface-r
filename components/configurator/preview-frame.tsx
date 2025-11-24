@@ -106,6 +106,13 @@ export function PreviewFrame({ config, className = '' }: PreviewFrameProps) {
     }
     h1 { margin-bottom: 16px; color: #1a202c; }
     p { color: #4a5568; line-height: 1.6; margin-bottom: 12px; }
+
+    /* Markdown Styles */
+    pre { background: #f1f5f9; padding: 12px; border-radius: 8px; overflow-x: auto; margin: 8px 0; font-family: monospace; font-size: 13px; }
+    code { background: #f1f5f9; padding: 2px 4px; border-radius: 4px; font-family: monospace; font-size: 13px; }
+    pre code { background: transparent; padding: 0; }
+    a { color: #3182ce; text-decoration: underline; }
+    strong { font-weight: 600; }
   </style>
 </head>
 <body>
@@ -135,6 +142,34 @@ export function PreviewFrame({ config, className = '' }: PreviewFrameProps) {
     (function() {
       // FIX: Generate Session ID ONCE per load, not per message
       const sessionId = 'preview-' + Math.random().toString(36).substring(7);
+
+      function renderMarkdown(text) {
+        if (!text) return '';
+        try {
+          let html = escapeHtml(text);
+          // Code Blocks
+          html = html.replace(/\`\`\`([\\s\\S]*?)\`\`\`/g, '<pre><code>$1</code></pre>');
+          // Inline Code
+          html = html.replace(/\`([^\`]+)\`/g, '<code>$1</code>');
+          // Bold
+          html = html.replace(/\\*\\*([^*]+)\\*\\*/g, '<strong>$1</strong>');
+          // Italic
+          html = html.replace(/\\*([^*]+)\\*/g, '<em>$1</em>');
+          // Links
+          html = html.replace(/\\[([^\\]]+)\\]\\((https?:\\/\\/[^\\)]+)\\)/g, '<a href="$2" target="_blank" rel="noopener noreferrer">$1</a>');
+          // Newlines
+          html = html.replace(/\\n/g, '<br>');
+          return html;
+        } catch (error) {
+          console.warn('Markdown rendering failed', error);
+          return text;
+        }
+      }
+
+      function escapeHtml(unsafe) {
+        const map = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#039;' };
+        return unsafe.replace(/[&<>"']/g, (char) => map[char] || char);
+      }
 
       const widget = {
         isOpen: false,
@@ -237,7 +272,11 @@ export function PreviewFrame({ config, className = '' }: PreviewFrameProps) {
             color: \${isUser ? 'white' : '#1a202c'};
             box-shadow: 0 1px 2px rgba(0,0,0,0.1);
           \`;
-          bubble.textContent = content;
+          if (role === 'assistant') {
+            bubble.innerHTML = renderMarkdown(content);
+          } else {
+            bubble.textContent = content;
+          }
           
           messageEl.appendChild(bubble);
           this.messagesContainer.appendChild(messageEl);
