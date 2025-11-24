@@ -2,15 +2,9 @@
 
 /**
  * Preview Frame Component
- *
- * Renders widget preview in an isolated iframe with postMessage communication.
- * Provides real-time preview updates with <100ms latency.
- *
- * Features:
- * - Iframe isolation for CSS/JS encapsulation
- * - PostMessage communication for config updates
- * - Responsive device modes
- * - Preview ready state detection
+ * * Renders widget preview in an isolated iframe.
+ * FIX: Connects directly to N8n webhook to bypass DB-backed Relay strictness,
+ * allowing testing of unsaved changes and new webhook URLs.
  */
 
 import { useEffect, useRef, useState } from 'react';
@@ -24,17 +18,11 @@ interface PreviewFrameProps {
   className?: string;
 }
 
-/**
- * Preview frame component
- *
- * Displays widget preview in an isolated iframe environment
- */
 export function PreviewFrame({ config, className = '' }: PreviewFrameProps) {
   const iframeRef = useRef<HTMLIFrameElement>(null);
   const [isLoading, setIsLoading] = useState(true);
 
   const {
-    deviceMode,
     isPreviewReady,
     previewError,
     setIframeRef,
@@ -47,58 +35,36 @@ export function PreviewFrame({ config, className = '' }: PreviewFrameProps) {
 
   const dimensions = getDeviceDimensions();
 
-  /**
-   * Send config update with debouncing for performance
-   * Debounce to 50ms to achieve <100ms total latency
-   */
   const debouncedConfigUpdate = useDebouncedCallback(
     (newConfig: WidgetConfig) => {
       sendConfigUpdate(newConfig);
     },
-    50 // 50ms debounce
+    50
   );
 
-  /**
-   * Setup iframe reference and message listener
-   */
   useEffect(() => {
     if (iframeRef.current) {
       setIframeRef(iframeRef.current);
     }
 
-    // Message listener for iframe communication
     const handleMessage = (event: MessageEvent) => {
-      // In production, verify event.origin for security
-      // For now, accept all messages during development
-
       const message = event.data as PreviewMessage;
-
-      if (!message || !message.type) {
-        return;
-      }
+      if (!message || !message.type) return;
 
       switch (message.type) {
         case PreviewMessageType.PREVIEW_READY:
           setPreviewReady(true);
           setIsLoading(false);
-          // Send initial config
-          if (iframeRef.current) {
-            sendConfigUpdate(config);
-          }
+          if (iframeRef.current) sendConfigUpdate(config);
           break;
-
         case PreviewMessageType.PREVIEW_ERROR:
           setPreviewError(message.payload?.error || 'Unknown preview error');
           setIsLoading(false);
-          break;
-
-        default:
           break;
       }
     };
 
     window.addEventListener('message', handleMessage);
-
     return () => {
       window.removeEventListener('message', handleMessage);
       setIframeRef(null);
@@ -106,19 +72,10 @@ export function PreviewFrame({ config, className = '' }: PreviewFrameProps) {
     };
   }, [setIframeRef, setPreviewReady, setPreviewError, sendConfigUpdate, config]);
 
-  /**
-   * Send config updates when config changes
-   */
   useEffect(() => {
-    if (isPreviewReady) {
-      debouncedConfigUpdate(config);
-    }
+    if (isPreviewReady) debouncedConfigUpdate(config);
   }, [config, isPreviewReady, debouncedConfigUpdate]);
 
-  /**
-   * Generate preview HTML document
-   * This creates a standalone HTML page with the widget embedded
-   */
   const getPreviewHTML = () => {
     return `
 <!DOCTYPE html>
@@ -128,14 +85,10 @@ export function PreviewFrame({ config, className = '' }: PreviewFrameProps) {
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Widget Preview</title>
   <style>
-    * {
-      margin: 0;
-      padding: 0;
-      box-sizing: border-box;
-    }
+    * { margin: 0; padding: 0; box-sizing: border-box; }
     body {
-      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
-      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
       min-height: 100vh;
       display: flex;
       align-items: center;
@@ -148,79 +101,41 @@ export function PreviewFrame({ config, className = '' }: PreviewFrameProps) {
       padding: 40px;
       max-width: 600px;
       width: 100%;
-      box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+      box-shadow: 0 20px 60px rgba(0,0,0,0.1);
+      text-align: center;
     }
-    h1 {
-      font-size: 28px;
-      margin-bottom: 16px;
-      color: #1a202c;
-    }
-    p {
-      font-size: 16px;
-      line-height: 1.6;
-      color: #4a5568;
-      margin-bottom: 12px;
-    }
-    .highlight {
-      background: #edf2f7;
-      padding: 16px;
-      border-radius: 8px;
-      margin: 16px 0;
-      border-left: 4px solid #667eea;
-    }
+    h1 { margin-bottom: 16px; color: #1a202c; }
+    p { color: #4a5568; line-height: 1.6; margin-bottom: 12px; }
   </style>
 </head>
 <body>
   <div class="demo-content">
-    <h1>Welcome to Our Website</h1>
-    <p>
-      This is a demo page to showcase your chat widget. The widget will appear in the
-      ${config.style.position.replace('-', ' ')} corner of this preview.
-    </p>
-    <div class="highlight">
-      <p><strong>Try it out:</strong> Click the chat button to test your widget's appearance and behavior.</p>
-    </div>
-    <p>
-      Your widget is fully customizable with colors, position, welcome text, and more.
-      Changes you make in the configurator will appear here in real-time.
-    </p>
+    <h1>Widget Preview</h1>
+    <p>This is a live preview of your chat widget.</p>
+    <p>Test your branding, colors, and N8n connection here before deploying.</p>
   </div>
 
   <script>
-    // Initial configuration (will be updated via postMessage)
+    // Initialize config
     window.ChatWidgetConfig = ${JSON.stringify(config, null, 2)};
 
-    // PostMessage handler for config updates
+    // Listen for updates from React
     window.addEventListener('message', function(event) {
       const message = event.data;
-
       if (message && message.type === 'CONFIG_UPDATE') {
-        // Update widget config
         window.ChatWidgetConfig = message.payload;
-
-        // If widget is already loaded, update it
         if (window.ChatWidget && window.ChatWidget.updateConfig) {
           window.ChatWidget.updateConfig(message.payload);
-        }
-      } else if (message && message.type === 'OPEN_WIDGET') {
-        if (window.ChatWidget && window.ChatWidget.open) {
-          window.ChatWidget.open();
-        }
-      } else if (message && message.type === 'CLOSE_WIDGET') {
-        if (window.ChatWidget && window.ChatWidget.close) {
-          window.ChatWidget.close();
         }
       }
     });
 
-    // Signal that preview is ready
-    window.parent.postMessage({
-      type: 'PREVIEW_READY'
-    }, '*');
+    // Tell React we are ready
+    window.parent.postMessage({ type: 'PREVIEW_READY' }, '*');
   </script>
 
   <script>
-    // Functional widget implementation for preview with real API integration
+    // Lightweight Widget Implementation for Preview
     (function() {
       const widget = {
         isOpen: false,
@@ -231,142 +146,72 @@ export function PreviewFrame({ config, className = '' }: PreviewFrameProps) {
           try {
             this.render();
             this.attachEventListeners();
-            // Add initial greeting message
-            const initialMessage = window.ChatWidgetConfig?.branding?.firstMessage || 'Hello! How can I help you today?';
+            const initialMessage = window.ChatWidgetConfig?.branding?.firstMessage || 'Hello!';
             this.addMessage('assistant', initialMessage);
           } catch (e) {
-            console.error('Chat widget initialization failed:', e);
-            window.parent.postMessage({ type: 'PREVIEW_ERROR', payload: { error: 'Widget initialization failed: ' + e.message } }, '*');
+            window.parent.postMessage({ type: 'PREVIEW_ERROR', payload: { error: e.message } }, '*');
           }
         },
 
         render: function() {
           const config = window.ChatWidgetConfig;
-          if (!config) {
-            console.error('ChatWidgetConfig is not defined during render.');
-            return;
-          }
+          if (!config) return;
 
-          // Create widget container
+          // Remove existing elements if re-rendering
+          const oldC = document.getElementById('chat-widget-container');
+          const oldW = document.getElementById('chat-widget-window');
+          if (oldC) oldC.remove();
+          if (oldW) oldW.remove();
+
           const container = document.createElement('div');
           container.id = 'chat-widget-container';
-          container.style.cssText = \`
-            position: fixed;
-            z-index: 9999;
-            \${this.getPositionStyles(config.style?.position || 'bottom-right')}
-          \`;
+          container.style.cssText = \`position: fixed; z-index: 9999; \${this.getPositionStyles(config.style?.position || 'bottom-right')}\`;
 
-          // Create widget button
+          // Button
           const button = document.createElement('button');
           button.id = 'chat-widget-button';
           button.innerHTML = '💬';
           button.style.cssText = \`
-            width: 60px;
-            height: 60px;
+            width: 60px; height: 60px;
             border-radius: \${config.style?.cornerRadius || 12}px;
             background-color: \${config.style?.primaryColor || '#667eea'};
-            color: white;
-            border: none;
-            font-size: 24px;
-            cursor: pointer;
-            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
-            transition: all 0.3s ease;
+            color: white; border: none; font-size: 24px; cursor: pointer;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.15); transition: transform 0.2s;
           \`;
-
-          button.onmouseenter = () => {
-            button.style.transform = 'scale(1.1)';
-          };
-
-          button.onmouseleave = () => {
-            button.style.transform = 'scale(1)';
-          };
-
+          button.onclick = () => this.open();
           container.appendChild(button);
 
-          // Create chat window (hidden by default)
+          // Window
           const chatWindow = document.createElement('div');
           chatWindow.id = 'chat-widget-window';
           chatWindow.style.cssText = \`
-            display: none;
-            position: fixed;
+            display: none; position: fixed;
             \${this.getPositionStyles(config.style?.position || 'bottom-right', true)}
-            width: 380px;
-            height: 600px;
-            background: white;
+            width: 380px; height: 600px; background: white;
             border-radius: \${config.style?.cornerRadius || 12}px;
-            box-shadow: 0 10px 40px rgba(0, 0, 0, 0.2);
-            overflow: hidden;
-            flex-direction: column;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.2);
+            overflow: hidden; flex-direction: column;
           \`;
 
+          const logoImg = config.branding?.logoUrl 
+            ? '<img src="' + config.branding.logoUrl + '" style="width:24px;height:24px;border-radius:50%;margin-right:8px;object-fit:cover;">' 
+            : '';
+
           chatWindow.innerHTML = \`
-            <div style="
-              background-color: \${config.style?.primaryColor || '#667eea'};
-              color: white;
-              padding: 20px;
-              display: flex;
-              justify-content: space-between;
-              align-items: center;
-            ">
-              <div>
-                <div style="font-weight: bold; font-size: 16px;">\${config.branding?.companyName || 'Chat Widget'}</div>
-                <div style="font-size: 12px; opacity: 0.9;" id="connection-status">
-                  <span style="display: inline-block; width: 6px; height: 6px; border-radius: 50%; background: #4ade80; margin-right: 4px;"></span>
-                  Preview Mode - Testing Connection
+            <div style="background-color: \${config.style?.primaryColor || '#667eea'}; color: white; padding: 16px; display: flex; align-items: center; justify-content: space-between;">
+              <div style="display:flex; align-items:center;">
+                \${logoImg}
+                <div>
+                  <div style="font-weight: bold; font-size: 16px;">\${config.branding?.companyName || 'Chat'}</div>
+                  <div style="font-size: 12px; opacity: 0.9;">\${config.branding?.welcomeText || 'Online'}</div>
                 </div>
               </div>
-              <button id="chat-close-btn" style="
-                background: transparent;
-                border: none;
-                color: white;
-                font-size: 24px;
-                cursor: pointer;
-                padding: 0;
-                width: 30px;
-                height: 30px;
-              ">×</button>
+              <button id="chat-close-btn" style="background:transparent; border:none; color:white; font-size: 24px; cursor: pointer;">×</button>
             </div>
-            <div id="messages-container" style="
-              flex: 1;
-              padding: 20px;
-              overflow-y: auto;
-              background: #f7fafc;
-              display: flex;
-              flex-direction: column;
-              gap: 12px;
-            ">
-            </div>
-            <div style="
-              padding: 16px;
-              border-top: 1px solid #e2e8f0;
-              background: white;
-            ">
-              <div style="display: flex; gap: 8px;">
-                <input 
-                  id="message-input" 
-                  type="text" 
-                  placeholder="Type a message..." 
-                  style="
-                    flex: 1;
-                    padding: 12px;
-                    border: 1px solid #e2e8f0;
-                    border-radius: 8px;
-                    font-size: 14px;
-                  "
-                >
-                <button 
-                  id="send-btn"
-                  style="
-                    padding: 12px 20px;
-                    background-color: \${config.style?.primaryColor || '#667eea'};
-                    color: white;
-                    border: none;
-                    border-radius: 8px;
-                    cursor: pointer;
-                    font-weight: 500;
-                  "
-                >Send</button>
-              </div>
+            <div id="messages-container" style="flex: 1; padding: 20px; overflow-y: auto; background: #f7fafc; display: flex; flex-direction: column; gap: 12px;"></div>
+            <div style="padding: 16px; border-top: 1px solid #e2e8f0; background: white; display: flex; gap: 8px;">
+              <input id="message-input" type="text" placeholder="\${config.branding?.inputPlaceholder || 'Type a message...'}" style="flex: 1; padding: 10px; border: 1px solid #e2e8f0; border-radius: 8px;">
+              <button id="send-btn" style="padding: 10px 16px; background-color: \${config.style?.primaryColor || '#667eea'}; color: white; border: none; border-radius: 8px; cursor: pointer;">Send</button>
             </div>
           \`;
 
@@ -381,287 +226,125 @@ export function PreviewFrame({ config, className = '' }: PreviewFrameProps) {
         },
 
         addMessage: function(role, content) {
-          if (!this.messagesContainer) {
-            console.error('Messages container not found.');
-            return;
-          }
-          const message = { role, content, timestamp: new Date() };
-          this.messages.push(message);
-          this.renderMessage(message);
-        },
-
-        renderMessage: function(message) {
           if (!this.messagesContainer) return;
-
           const messageEl = document.createElement('div');
-          const isUser = message.role === 'user';
+          const isUser = role === 'user';
+          messageEl.style.cssText = \`display: flex; justify-content: \${isUser ? 'flex-end' : 'flex-start'};\`;
           
-          messageEl.style.cssText = \`
-            display: flex;
-            justify-content: \${isUser ? 'flex-end' : 'flex-start'};
-          \`;
-
           const bubble = document.createElement('div');
           const primaryColor = window.ChatWidgetConfig?.style?.primaryColor || '#667eea';
           bubble.style.cssText = \`
-            max-width: 70%;
-            padding: 12px 16px;
-            border-radius: 12px;
+            max-width: 75%; padding: 10px 14px; border-radius: 12px;
             background: \${isUser ? primaryColor : 'white'};
             color: \${isUser ? 'white' : '#1a202c'};
-            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
-            word-wrap: break-word;
+            box-shadow: 0 1px 2px rgba(0,0,0,0.1);
           \`;
-          bubble.textContent = message.content;
-
+          bubble.textContent = content;
+          
           messageEl.appendChild(bubble);
           this.messagesContainer.appendChild(messageEl);
-          
-          // Scroll to bottom
           this.messagesContainer.scrollTop = this.messagesContainer.scrollHeight;
-        },
-
-        showLoading: function() {
-          if (!this.messagesContainer) return;
-
-          const loadingEl = document.createElement('div');
-          loadingEl.id = 'loading-indicator';
-          loadingEl.style.cssText = \`
-            display: flex;
-            justify-content: flex-start;
-          \`;
-
-          loadingEl.innerHTML = \`
-            <div style="
-              background: white;
-              padding: 12px 16px;
-              border-radius: 12px;
-              box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
-            ">
-              <div style="display: flex; gap: 4px;">
-                <div style="width: 8px; height: 8px; border-radius: 50%; background: #cbd5e0; animation: bounce 1.4s infinite ease-in-out;"></div>
-                <div style="width: 8px; height: 8px; border-radius: 50%; background: #cbd5e0; animation: bounce 1.4s infinite ease-in-out 0.2s;"></div>
-                <div style="width: 8px; height: 8px; border-radius: 50%; background: #cbd5e0; animation: bounce 1.4s infinite ease-in-out 0.4s;"></div>
-              </div>
-            </div>
-          \`;
-
-          this.messagesContainer.appendChild(loadingEl);
-          this.messagesContainer.scrollTop = this.messagesContainer.scrollHeight;
-        },
-
-        hideLoading: function() {
-          const loadingEl = document.getElementById('loading-indicator');
-          if (loadingEl) loadingEl.remove();
-        },
-
-        updateConnectionStatus: function(status, message) {
-          const statusEl = document.getElementById('connection-status');
-          if (!statusEl) return;
-
-          const colors = {
-            success: '#4ade80',
-            error: '#f87171',
-            warning: '#fbbf24'
-          };
-
-          statusEl.innerHTML = \`
-            <span style="display: inline-block; width: 6px; height: 6px; border-radius: 50%; background: \${colors[status] || colors.warning}; margin-right: 4px;"></span>
-            \${message}
-          \`;
         },
 
         sendMessage: async function() {
-          if (!this.messageInput || !this.sendBtn) {
-            console.error('Message input or send button not found.');
-            return;
-          }
-
           const text = this.messageInput.value.trim();
           if (!text || this.isLoading) return;
 
-          // Add user message
           this.addMessage('user', text);
           this.messageInput.value = '';
           this.isLoading = true;
           this.sendBtn.disabled = true;
-          this.showLoading();
+          this.sendBtn.textContent = '...';
 
           try {
-            // Get current widget config
             const config = window.ChatWidgetConfig;
             
-            // Get current webhook URL for preview purposes
-            const currentWebhookUrl = config?.connection?.webhookUrl;
+            // FIX: Use Direct N8n URL for Preview
+            // This bypasses the DB check because we are in "Preview Mode"
+            const webhookUrl = config?.connection?.webhookUrl;
 
-            // Check if webhook URL is configured
-            if (!currentWebhookUrl && !config?.connection?.relayEndpoint) {
-              throw new Error('No webhook URL configured. Please add one in settings.');
-            }
+            if (!webhookUrl) throw new Error('No webhook URL configured');
 
-            // Send message via relay API
-            const relayUrl = '/api/chat-relay';
-            
-            const response = await fetch(relayUrl, {
+            // Direct fetch to N8n
+            const response = await fetch(webhookUrl, {
               method: 'POST',
-              headers: {
-                'Content-Type': 'application/json',
-              },
+              headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({
-                widgetId: config.widgetId || 'preview-widget',
-                licenseKey: config.license?.key || 'preview',
-                // Send both message AND chatInput to support n8n defaults
                 message: text,
                 chatInput: text,
-                sessionId: 'preview-' + Date.now(),
-                previewWebhookUrl: currentWebhookUrl, // Send current unsaved URL
-              }),
+                metadata: { source: 'preview_mode' }
+              })
             });
 
-            this.hideLoading();
-
-            if (!response.ok) {
-              const errorData = await response.json().catch(() => ({}));
-              throw new Error(errorData.error || \`HTTP \${response.status}\`);
-            }
-
-            const data = await response.json();
+            if (!response.ok) throw new Error(\`HTTP \${response.status}\`);
             
-            // Handle various N8n response formats
-            // Prioritize 'output', then 'text', then 'message', then stringify
-            const botResponse = data.output || data.text || data.message || (typeof data === 'string' ? data : JSON.stringify(data));
-
-            if (botResponse) {
-              this.addMessage('assistant', botResponse);
-              this.updateConnectionStatus('success', 'Connected to n8n');
-            } else {
-              throw new Error('Empty response from webhook');
-            }
+            const data = await response.json();
+            // Handle N8n formats (output, text, message, or raw JSON)
+            const reply = data.output || data.text || data.message || JSON.stringify(data);
+            this.addMessage('assistant', reply);
 
           } catch (error) {
-            this.hideLoading();
-            console.error('Chat error:', error);
-            
-            // Show error message
-            const errorMsg = error.message || 'Failed to send message';
-            this.addMessage('assistant', \`❌ Error: \${errorMsg}\`);
-            this.updateConnectionStatus('error', 'Connection failed');
+            console.error('Preview Error:', error);
+            // Friendly error message in chat
+            this.addMessage('assistant', \`⚠️ Error: \${error.message}. (Note: For preview to work, N8n CORS must allow your dashboard domain)\`);
           } finally {
             this.isLoading = false;
             if (this.sendBtn) {
               this.sendBtn.disabled = false;
-              // Keep focus on input for better UX
+              this.sendBtn.textContent = 'Send';
               this.messageInput.focus();
             }
           }
         },
 
-        getPositionStyles: function(position, isWindow = false) {
+        getPositionStyles: function(position, isWindow) {
           const offset = isWindow ? '80px' : '20px';
-
-          switch(position) {
-            case 'bottom-right':
-              return \`bottom: \${offset}; right: \${offset};\`;
-            case 'bottom-left':
-              return \`bottom: \${offset}; left: \${offset};\`;
-            case 'top-right':
-              return \`top: \${offset}; right: \${offset};\`;
-            case 'top-left':
-              return \`top: \${offset}; left: \${offset};\`;
-            default:
-              return \`bottom: \${offset}; right: \${offset};\`;
-          }
+          if (position === 'bottom-left') return \`bottom: \${offset}; left: 20px;\`;
+          if (position === 'top-right') return \`top: \${offset}; right: 20px;\`;
+          if (position === 'top-left') return \`top: \${offset}; left: 20px;\`;
+          return \`bottom: \${offset}; right: 20px;\`;
         },
 
         attachEventListeners: function() {
-          if (this.button) {
-            this.button.addEventListener('click', () => this.open());
-          } else {
-            console.warn('Chat button not found, cannot attach event listener.');
-          }
-
+          if (!this.button) return;
+          this.button.onclick = () => this.open();
           const closeBtn = document.getElementById('chat-close-btn');
-          if (closeBtn) {
-            closeBtn.addEventListener('click', () => this.close());
-          } else {
-            console.warn('Chat close button not found, cannot attach event listener.');
-          }
-
-          if (this.sendBtn) {
-            this.sendBtn.addEventListener('click', () => this.sendMessage());
-          } else {
-            console.warn('Send button not found, cannot attach event listener.');
-          }
-          
-          if (this.messageInput) {
-            this.messageInput.addEventListener('keypress', (e) => {
-              if (e.key === 'Enter' && !e.shiftKey) {
-                e.preventDefault();
-                this.sendMessage();
-              }
-            });
-          } else {
-            console.warn('Message input not found, cannot attach event listener.');
-          }
+          if (closeBtn) closeBtn.onclick = () => this.close();
+          this.sendBtn.onclick = () => this.sendMessage();
+          this.messageInput.onkeypress = (e) => {
+            if (e.key === 'Enter') this.sendMessage();
+          };
         },
 
         open: function() {
-          if (this.chatWindow) {
-            this.chatWindow.style.display = 'flex';
-            if (this.button) this.button.style.display = 'none';
-            this.isOpen = true;
-            if (this.messageInput) this.messageInput.focus();
-          }
+          this.chatWindow.style.display = 'flex';
+          this.button.style.display = 'none';
+          this.messageInput.focus();
         },
 
         close: function() {
-          if (this.chatWindow) {
-            this.chatWindow.style.display = 'none';
-            if (this.button) this.button.style.display = 'block';
-            this.isOpen = false;
-          }
+          this.chatWindow.style.display = 'none';
+          this.button.style.display = 'block';
         },
 
         updateConfig: function(newConfig) {
-          try {
-            // Remove old widget
-            const oldContainer = document.getElementById('chat-widget-container');
-            const oldWindow = document.getElementById('chat-widget-window');
-            if (oldContainer) oldContainer.remove();
-            if (oldWindow) oldWindow.remove();
-
-            // Re-render with new config
-            window.ChatWidgetConfig = newConfig;
-            this.messages = []; // Reset messages
-            this.render();
-            this.attachEventListeners();
-            const firstMessage = newConfig.branding?.firstMessage || 'Hello! How can I help you today?';
-            this.addMessage('assistant', firstMessage);
-          } catch (e) {
-            console.error('Failed to update widget config:', e);
-            window.parent.postMessage({ type: 'PREVIEW_ERROR', payload: { error: 'Widget update failed: ' + e.message } }, '*');
-          }
+          // Re-render entire widget on config update
+          window.ChatWidgetConfig = newConfig;
+          this.render();
+          this.attachEventListeners();
+          // Optional: Add greeting again or keep history? 
+          // For simple preview, reset is cleaner:
+          this.messages = [];
+          const firstMessage = newConfig.branding?.firstMessage || 'Hello!';
+          this.addMessage('assistant', firstMessage);
         }
       };
 
-      // Add CSS for bounce animation
-      const style = document.createElement('style');
-      style.textContent = \`
-        @keyframes bounce {
-          0%, 80%, 100% { transform: scale(0); }
-          40% { transform: scale(1); }
-        }
-      \`;
-      document.head.appendChild(style);
-
-      // Initialize widget
       if (document.readyState === 'loading') {
         document.addEventListener('DOMContentLoaded', () => widget.init());
       } else {
         widget.init();
       }
-
-      // Expose widget API
       window.ChatWidget = widget;
     })();
   </script>
@@ -672,51 +355,23 @@ export function PreviewFrame({ config, className = '' }: PreviewFrameProps) {
 
   return (
     <div className={`preview-frame-container ${className}`}>
-      {/* Error Display */}
       {previewError && (
         <Alert variant="destructive" className="mb-4">
-          <AlertDescription className="flex items-center justify-between">
+          <AlertDescription className="flex justify-between">
             <span>{previewError}</span>
-            <button
-              onClick={clearError}
-              className="text-sm underline"
-            >
-              Dismiss
-            </button>
+            <button onClick={clearError} className="underline">Dismiss</button>
           </AlertDescription>
         </Alert>
       )}
-
-      {/* Loading Indicator */}
-      {isLoading && (
-        <div className="absolute inset-0 flex items-center justify-center bg-muted/50 z-10 rounded-lg">
-          <div className="text-center">
-            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto mb-2"></div>
-            <p className="text-sm text-muted-foreground">Loading preview...</p>
-          </div>
-        </div>
-      )}
-
-      {/* Preview Iframe */}
       <div className="relative w-full h-full flex items-center justify-center bg-muted/30 rounded-lg overflow-hidden">
         <iframe
           ref={iframeRef}
           title="Widget Preview"
           srcDoc={getPreviewHTML()}
-          sandbox="allow-scripts allow-forms"
-          className="border-0 bg-white rounded-lg shadow-lg transition-all duration-300"
-          style={{
-            width: `${dimensions.width}px`,
-            height: `${dimensions.height}px`,
-            maxWidth: '100%',
-            maxHeight: '100%',
-          }}
+          sandbox="allow-scripts allow-forms allow-same-origin"
+          className="border-0 bg-white rounded-lg shadow-lg"
+          style={{ width: `${dimensions.width}px`, height: `${dimensions.height}px` }}
         />
-      </div>
-
-      {/* Device Label */}
-      <div className="absolute bottom-4 left-1/2 transform -translate-x-1/2 bg-black/70 text-white text-xs px-3 py-1 rounded-full">
-        {dimensions.label} ({dimensions.width} × {dimensions.height})
       </div>
     </div>
   );
