@@ -90,7 +90,10 @@ export function WidgetList({ widgets, onDelete }: WidgetListProps) {
         // Use the current window location to determine the base URL
         // This ensures it works on localhost, Vercel, or custom domains
         const baseUrl = window.location.origin;
-        const embedCode = `<div id="n8n-chat-${licenseKey}"></div>\n<script src="${baseUrl}/api/embed/bundle.js" defer></script>`;
+
+        // Updated to use authenticated widget endpoint (matches configurator format)
+        // This enables proper domain validation and license authentication
+        const embedCode = `<script src="${baseUrl}/api/widget/${licenseKey}/chat-widget.js" async></script>`;
 
         navigator.clipboard.writeText(embedCode);
         setCopiedId(licenseKey);
