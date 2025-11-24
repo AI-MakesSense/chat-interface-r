@@ -43,5 +43,30 @@ export function injectStyles(config: WidgetConfig): void {
 
   // Generate and inject CSS variables
   const cssVariables = generateCSSVariables(config);
-  styleElement.textContent = cssVariables;
+
+  // Add typing animation styles
+  const animationStyles = `
+    @keyframes n8n-bounce {
+      0%, 60%, 100% { transform: translateY(0); }
+      30% { transform: translateY(-4px); }
+    }
+    .n8n-typing-dot {
+      width: 6px;
+      height: 6px;
+      background: #9ca3af;
+      border-radius: 50%;
+      animation: n8n-bounce 1.4s infinite ease-in-out both;
+    }
+    .n8n-typing-dot:nth-child(1) { animation-delay: -0.32s; }
+    .n8n-typing-dot:nth-child(2) { animation-delay: -0.16s; }
+    .n8n-typing-container {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      padding: 4px 2px;
+      min-height: 20px;
+    }
+  `;
+
+  styleElement.textContent = cssVariables + '\n' + animationStyles;
 }

@@ -289,7 +289,7 @@ export function createChatWidget(runtimeConfig: WidgetRuntimeConfig): void {
   }
 
   // Add message to UI
-  function addMessage(role: 'user' | 'assistant', content: string): Message {
+  function addMessage(role: 'user' | 'assistant', content: string, isLoading = false): Message {
     const message: Message = {
       id: `msg-${++messageIdCounter}`,
       role,
@@ -320,7 +320,17 @@ export function createChatWidget(runtimeConfig: WidgetRuntimeConfig): void {
 
     // Render markdown for assistant messages
     if (role === 'assistant') {
-      bubble.innerHTML = renderMarkdown(content);
+      if (isLoading) {
+        bubble.innerHTML = `
+          <div class="n8n-typing-container">
+            <div class="n8n-typing-dot"></div>
+            <div class="n8n-typing-dot"></div>
+            <div class="n8n-typing-dot"></div>
+          </div>
+        `;
+      } else {
+        bubble.innerHTML = renderMarkdown(content);
+      }
     } else {
       bubble.textContent = content;
     }
@@ -364,7 +374,7 @@ export function createChatWidget(runtimeConfig: WidgetRuntimeConfig): void {
     input.value = '';
 
     // Create placeholder for assistant response
-    const assistantMessage = addMessage('assistant', '...');
+    const assistantMessage = addMessage('assistant', '', true);
 
     // Send to N8n webhook with SSE streaming
     try {
@@ -431,7 +441,7 @@ export function createChatWidget(runtimeConfig: WidgetRuntimeConfig): void {
 
     try {
       const shouldCaptureContext = mergedConfig.connection?.captureContext !== false;
-      
+
       // Encode file attachments if present
       let fileAttachments: FileAttachment[] | undefined;
       if (selectedFiles.length > 0 && mergedConfig.features.fileAttachmentsEnabled) {

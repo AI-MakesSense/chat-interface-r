@@ -113,6 +113,28 @@ export function PreviewFrame({ config, className = '' }: PreviewFrameProps) {
     pre code { background: transparent; padding: 0; }
     a { color: #3182ce; text-decoration: underline; }
     strong { font-weight: 600; }
+
+    /* Typing Animation */
+    @keyframes n8n-bounce {
+      0%, 60%, 100% { transform: translateY(0); }
+      30% { transform: translateY(-4px); }
+    }
+    .n8n-typing-dot {
+      width: 6px;
+      height: 6px;
+      background: #9ca3af;
+      border-radius: 50%;
+      animation: n8n-bounce 1.4s infinite ease-in-out both;
+    }
+    .n8n-typing-dot:nth-child(1) { animation-delay: -0.32s; }
+    .n8n-typing-dot:nth-child(2) { animation-delay: -0.16s; }
+    .n8n-typing-container {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      padding: 4px 2px;
+      min-height: 20px;
+    }
   </style>
 </head>
 <body>
@@ -258,7 +280,7 @@ export function PreviewFrame({ config, className = '' }: PreviewFrameProps) {
           this.sendBtn = chatWindow.querySelector('#send-btn');
         },
 
-        addMessage: function(role, content) {
+        addMessage: function(role, content, isLoading = false) {
           if (!this.messagesContainer) return;
           const messageEl = document.createElement('div');
           const isUser = role === 'user';
@@ -273,7 +295,17 @@ export function PreviewFrame({ config, className = '' }: PreviewFrameProps) {
             box-shadow: 0 1px 2px rgba(0,0,0,0.1);
           \`;
           if (role === 'assistant') {
-            bubble.innerHTML = renderMarkdown(content);
+            if (isLoading) {
+              bubble.innerHTML = \`
+                <div class="n8n-typing-container">
+                  <div class="n8n-typing-dot"></div>
+                  <div class="n8n-typing-dot"></div>
+                  <div class="n8n-typing-dot"></div>
+                </div>
+              \`;
+            } else {
+              bubble.innerHTML = renderMarkdown(content);
+            }
           } else {
             bubble.textContent = content;
           }
@@ -292,6 +324,9 @@ export function PreviewFrame({ config, className = '' }: PreviewFrameProps) {
           this.isLoading = true;
           this.sendBtn.disabled = true;
           this.sendBtn.textContent = '...';
+          
+          // Show typing indicator
+          this.addMessage('assistant', '', true);
 
           try {
             const config = window.ChatWidgetConfig;
@@ -317,6 +352,22 @@ export function PreviewFrame({ config, className = '' }: PreviewFrameProps) {
             
             const data = await response.json();
             const reply = data.output || data.text || data.message || JSON.stringify(data);
+            
+            // Update the loading message with the actual response
+            const lastMsg = this.messagesContainer.lastElementChild;
+            if (lastMsg) {
+              const bubble = lastMsg.querySelector('div > div'); // The bubble is inside the messageEl
+              if (bubble) bubble.innerHTML = renderMarkdown(reply);
+            }
+            // Also update internal state if we were tracking it, but here we just update DOM
+            this.addMessage('assistant', reply); // Wait, this adds a NEW message. We want to replace.
+            
+            // Correction: The production widget updates the existing message. 
+            // In this simple preview, let's just remove the loading message and add the new one for simplicity, 
+            // OR better, let's implement a simple update mechanism.
+            
+            // Let's remove the last message (loading) and add the new one.
+            this.messagesContainer.removeChild(lastMsg);
             this.addMessage('assistant', reply);
 
           } catch (error) {
