@@ -14,6 +14,7 @@ import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle }
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Edit, Trash2, Globe, Calendar, X, Check, Download, ChevronDown } from 'lucide-react';
+import { DomainManager } from './domain-manager';
 
 interface WidgetListProps {
     widgets: Widget[];
@@ -178,6 +179,14 @@ export function WidgetList({ widgets, onDelete }: WidgetListProps) {
                             <div className="flex-1">
                                 <DownloadButton widgetId={widget.id} widgetName={widget.name} />
                             </div>
+                            {widget.license && (
+                                <div className="flex-1">
+                                    <DomainManager
+                                        licenseId={widget.license.id}
+                                        initialDomains={widget.license.domains || []}
+                                    />
+                                </div>
+                            )}
                         </div>
                         <div className="flex w-full gap-2">
                             {deleteId === widget.id ? (

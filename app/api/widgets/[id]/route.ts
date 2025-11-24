@@ -59,8 +59,13 @@ export async function GET(
       return NextResponse.json({ error: 'You do not own this widget' }, { status: 403 });
     }
 
-    // 5. Return widget data
-    return NextResponse.json({ widget });
+    // 5. Return widget data with licenseKey
+    return NextResponse.json({
+      widget: {
+        ...widget,
+        licenseKey: widget.license.licenseKey
+      }
+    });
 
   } catch (error) {
     if (error instanceof z.ZodError) {

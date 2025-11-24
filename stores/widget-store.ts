@@ -84,6 +84,12 @@ export interface Widget {
   deployUrl: string | null;
   createdAt: string;
   updatedAt: string;
+  license?: {
+    id: string;
+    domains: string[];
+    tier: string;
+    status: string;
+  };
 }
 
 /**
