@@ -3,8 +3,8 @@
 /**
  * Preview Frame Component
  * * Renders widget preview in an isolated iframe.
- * FIX: Connects directly to N8n webhook to bypass DB-backed Relay strictness,
- * allowing testing of unsaved changes and new webhook URLs.
+ * FIX: Matches the exact payload structure of the working Relay (route.ts)
+ * ensuring N8n receives 'chatInput' and a persistent 'sessionId'.
  */
 
 import { useEffect, useRef, useState } from 'react';
@@ -116,10 +116,8 @@ export function PreviewFrame({ config, className = '' }: PreviewFrameProps) {
   </div>
 
   <script>
-    // Initialize config
     window.ChatWidgetConfig = ${JSON.stringify(config, null, 2)};
 
-    // Listen for updates from React
     window.addEventListener('message', function(event) {
       const message = event.data;
       if (message && message.type === 'CONFIG_UPDATE') {
@@ -130,13 +128,14 @@ export function PreviewFrame({ config, className = '' }: PreviewFrameProps) {
       }
     });
 
-    // Tell React we are ready
     window.parent.postMessage({ type: 'PREVIEW_READY' }, '*');
   </script>
 
   <script>
-    // Lightweight Widget Implementation for Preview
     (function() {
+      // FIX: Generate Session ID ONCE per load, not per message
+      const sessionId = 'preview-' + Math.random().toString(36).substring(7);
+
       const widget = {
         isOpen: false,
         messages: [],
@@ -157,7 +156,6 @@ export function PreviewFrame({ config, className = '' }: PreviewFrameProps) {
           const config = window.ChatWidgetConfig;
           if (!config) return;
 
-          // Remove existing elements if re-rendering
           const oldC = document.getElementById('chat-widget-container');
           const oldW = document.getElementById('chat-widget-window');
           if (oldC) oldC.remove();
@@ -258,20 +256,20 @@ export function PreviewFrame({ config, className = '' }: PreviewFrameProps) {
 
           try {
             const config = window.ChatWidgetConfig;
-            
-            // FIX: Use Direct N8n URL for Preview
-            // This bypasses the DB check because we are in "Preview Mode"
             const webhookUrl = config?.connection?.webhookUrl;
 
             if (!webhookUrl) throw new Error('No webhook URL configured');
 
-            // Direct fetch to N8n
+            // FIX: This payload now matches EXACTLY what route.ts sends
             const response = await fetch(webhookUrl, {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({
                 message: text,
-                chatInput: text,
+                chatInput: text,     // REQUIRED by N8n
+                sessionId: sessionId, // REQUIRED for memory
+                widgetId: 'preview-widget',
+                licenseKey: 'preview-license',
                 metadata: { source: 'preview_mode' }
               })
             });
@@ -279,14 +277,12 @@ export function PreviewFrame({ config, className = '' }: PreviewFrameProps) {
             if (!response.ok) throw new Error(\`HTTP \${response.status}\`);
             
             const data = await response.json();
-            // Handle N8n formats (output, text, message, or raw JSON)
             const reply = data.output || data.text || data.message || JSON.stringify(data);
             this.addMessage('assistant', reply);
 
           } catch (error) {
             console.error('Preview Error:', error);
-            // Friendly error message in chat
-            this.addMessage('assistant', \`⚠️ Error: \${error.message}. (Note: For preview to work, N8n CORS must allow your dashboard domain)\`);
+            this.addMessage('assistant', \`⚠️ Error: \${error.message}\`);
           } finally {
             this.isLoading = false;
             if (this.sendBtn) {
@@ -328,15 +324,17 @@ export function PreviewFrame({ config, className = '' }: PreviewFrameProps) {
         },
 
         updateConfig: function(newConfig) {
-          // Re-render entire widget on config update
+          const oldC = document.getElementById('chat-widget-container');
+          const oldW = document.getElementById('chat-widget-window');
+          if (oldC) oldC.remove();
+          if (oldW) oldW.remove();
+          
           window.ChatWidgetConfig = newConfig;
           this.render();
           this.attachEventListeners();
-          // Optional: Add greeting again or keep history? 
-          // For simple preview, reset is cleaner:
+          // Reset messages for clean preview update
           this.messages = [];
-          const firstMessage = newConfig.branding?.firstMessage || 'Hello!';
-          this.addMessage('assistant', firstMessage);
+          this.addMessage('assistant', newConfig.branding?.firstMessage || 'Hello!');
         }
       };
 
