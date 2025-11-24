@@ -28,7 +28,7 @@ import { Alert, AlertDescription } from '@/components/ui/alert';
 import { PreviewFrame } from '@/components/configurator/preview-frame';
 import { DeviceSwitcher } from '@/components/configurator/device-switcher';
 import { WidgetDownloadButtons } from '@/components/dashboard/widget-download-buttons';
-import { DomainInput } from '@/components/dashboard/domain-input';
+import { DomainInfoCard } from '@/components/configurator/domain-info-card';
 
 /**
  * Suspense wrapper for the configurator page
@@ -69,7 +69,7 @@ function ConfiguratorPage() {
 
   const [widgetName, setWidgetName] = useState('');
   const [showCreateForm, setShowCreateForm] = useState(false);
-  const [showDomainInput, setShowDomainInput] = useState(false);
+
 
   // Load widget if widgetId is provided
   useEffect(() => {
@@ -116,20 +116,7 @@ function ConfiguratorPage() {
   };
 
   // Handle domain updates
-  const handleDomainUpdate = async (domains: string[]) => {
-    if (!currentLicense) return;
 
-    try {
-      await updateLicense(currentLicense.id, { domains });
-      // Refresh widget to get updated license data
-      if (currentWidget) {
-        await getWidget(currentWidget.id);
-      }
-      setShowDomainInput(false);
-    } catch (error) {
-      console.error('Failed to update domains:', error);
-    }
-  };
 
   // Loading state
   if (authLoading || isLoading) {
@@ -496,73 +483,8 @@ function ConfiguratorPage() {
               </CardContent>
             </Card>
 
-            {/* Domain Authorization Section */}
-            {currentLicense && (
-              <Card>
-                <CardHeader>
-                  <CardTitle>Domain Authorization</CardTitle>
-                  <CardDescription>
-                    Manage authorized domains for widget security (CORS)
-                  </CardDescription>
-                </CardHeader>
-                <CardContent className="space-y-4">
-                  {/* Warning if no domains configured */}
-                  {currentLicense.domains.length === 0 && (
-                    <Alert>
-                      <AlertDescription>
-                        ⚠️ No domains configured. Add authorized domains to ensure your widget works on your website.
-                      </AlertDescription>
-                    </Alert>
-                  )}
-
-                  {/* Domain List/Input */}
-                  <div>
-                    <div className="flex items-center justify-between mb-2">
-                      <Label>Allowed Domains ({currentLicense.domains.length} / {currentLicense.domainLimit})</Label>
-                      {!showDomainInput && (
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          onClick={() => setShowDomainInput(true)}
-                        >
-                          {currentLicense.domains.length < currentLicense.domainLimit ? 'Add Domain' : 'Manage Domains'}
-                        </Button>
-                      )}
-                    </div>
-
-                    {showDomainInput ? (
-                      <DomainInput
-                        currentDomains={currentLicense.domains}
-                        domainLimit={currentLicense.domainLimit}
-                        onSave={handleDomainUpdate}
-                        onCancel={() => setShowDomainInput(false)}
-                      />
-                    ) : (
-                      <>
-                        {currentLicense.domains.length === 0 ? (
-                          <p className="text-sm text-muted-foreground">No domains configured</p>
-                        ) : (
-                          <div className="space-y-1">
-                            {currentLicense.domains.map((domain, index) => (
-                              <div
-                                key={index}
-                                className="flex items-center gap-2 text-sm px-3 py-2 rounded-md bg-muted"
-                              >
-                                <span className="font-mono">{domain}</span>
-                              </div>
-                            ))}
-                          </div>
-                        )}
-                      </>
-                    )}
-                  </div>
-
-                  <p className="text-xs text-muted-foreground">
-                    The widget will only load on these authorized domains. Add your website domain (e.g., example.com) to enable the widget.
-                  </p>
-                </CardContent>
-              </Card>
-            )}
+            {/* Domain Authorization Info - Read Only */}
+            <DomainInfoCard license={currentLicense} isLoading={isLoading} />
 
             {/* Download Packages Section */}
             {currentWidget && (
