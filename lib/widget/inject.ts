@@ -3,25 +3,15 @@
  *
  * Purpose: Create license flags JSON and inject them into widget bundle
  * Responsibility: Flag generation and bundle modification
- * Assumptions: Widget bundle contains specific markers for flag injection
  */
 
 import { License } from '@/lib/db/schema';
-
-// Markers used in the widget bundle to identify injection point
-const START_MARKER = '__START_LICENSE_FLAGS__';
-const END_MARKER = '__END_LICENSE_FLAGS__';
 
 /**
  * Create JSON string containing license flags
  *
  * @param license - License object from database
  * @returns JSON string with tier, branding, and domain limit info
- *
- * Included flags:
- * - tier: 'basic' | 'pro' | 'agency'
- * - brandingEnabled: boolean (true for basic, false for pro/agency)
- * - domainLimit: number (1 for basic/pro, 999 for agency)
  */
 export function createFlagsJSON(license: License): string {
   const flags = {
@@ -40,60 +30,40 @@ export function createFlagsJSON(license: License): string {
  * @param license - License object from database
  * @param widgetId - Widget ID for relay authentication (optional, will skip relay if not provided)
  * @returns Modified bundle with injected license flags and relay config
- * @throws Error if markers are not found in bundle
- *
- * The function looks for comment markers in the bundle:
- * // __START_LICENSE_FLAGS__
- * // __END_LICENSE_FLAGS__
- *
- * And replaces the content between them with:
- * window.N8N_LICENSE_FLAGS = {tier, brandingEnabled, domainLimit};
- * window.ChatWidgetConfig = {..., relay: {relayUrl, widgetId, licenseKey}};
+ * * Strategy:
+ * We prepend the configuration variables to the top of the bundle.
+ * Since the widget is an IIFE (Immediately Invoked Function Expression),
+ * these variables will be available on the 'window' object before the widget executes.
  */
 export function injectLicenseFlags(
   bundleContent: string,
   license: License,
   widgetId?: string
 ): string {
-  // Find start marker - try with different whitespace variations
-  let startIdx = bundleContent.indexOf(START_MARKER);
-  if (startIdx === -1) {
-    throw new Error('License flags start marker not found in bundle');
-  }
-
-  // Find end marker
-  let endIdx = bundleContent.indexOf(END_MARKER);
-  if (endIdx === -1) {
-    throw new Error('License flags end marker not found in bundle');
-  }
-
-  // Find the beginning of the line containing the start marker
-  let startLineBegin = bundleContent.lastIndexOf('\n', startIdx);
-  startLineBegin = startLineBegin === -1 ? 0 : startLineBegin;
-
-  // Find the end of the line containing the end marker
-  let endLineEnd = bundleContent.indexOf('\n', endIdx + END_MARKER.length);
-  endLineEnd = endLineEnd === -1 ? bundleContent.length : endLineEnd;
-
-  // Create the flags JSON
+  // 1. Generate the Flags configuration
   const flagsJSON = createFlagsJSON(license);
 
-  // Create the injection code
-  let injectionCode = `\n  window.N8N_LICENSE_FLAGS = ${flagsJSON};`;
+  // 2. Build the configuration script
+  // We use a safe property assignment on window to ensure it exists
+  let injectionCode = `
+/** N8n Widget Configuration (Injected) */
+window.N8N_LICENSE_FLAGS = ${flagsJSON};`;
 
-  // Add relay configuration if widgetId is provided
+  // 3. Add relay configuration if widgetId is provided
   if (widgetId) {
     const relayConfig = {
       relayUrl: '/api/chat-relay',
       widgetId: widgetId,
       licenseKey: license.licenseKey
     };
-    injectionCode += `\n  window.ChatWidgetConfig = window.ChatWidgetConfig || {};\n  window.ChatWidgetConfig.relay = ${JSON.stringify(relayConfig)};`;
+
+    // We ensure ChatWidgetConfig exists, then assign the relay property
+    injectionCode += `
+window.ChatWidgetConfig = window.ChatWidgetConfig || {};
+window.ChatWidgetConfig.relay = ${JSON.stringify(relayConfig)};`;
   }
 
-  // Build the new bundle
-  const before = bundleContent.slice(0, startLineBegin);
-  const after = bundleContent.slice(endLineEnd);
-
-  return before + injectionCode + after;
+  // 4. Prepend configuration to the bundle
+  // Newline ensures separation from the banner or bundle code
+  return injectionCode + '\n\n' + bundleContent;
 }

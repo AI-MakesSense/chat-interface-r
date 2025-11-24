@@ -1,160 +1,134 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { z } from 'zod';
+import { getWidgetById, getLicenseByKey } from '@/lib/db/queries';
 
-// NOTE: We use dynamic imports for DB queries to prevent crashes 
-// if environment variables are missing during preview mode.
-
-// Schema for the relay request payload
-const relayRequestSchema = z.object({
-  widgetId: z.string().min(1), // Allow any non-empty string (including 'preview-widget')
-  licenseKey: z.string().min(1),
-  message: z.string(),
-  // ADDED: Allow 'chatInput' to pass through to n8n
-  chatInput: z.string().optional(),
-  sessionId: z.string(),
-  context: z.record(z.string(), z.any()).optional(),
-  customContext: z.record(z.string(), z.any()).optional(),
-  attachments: z.array(z.any()).optional(),
-  extraInputs: z.record(z.string(), z.any()).optional(),
-  // Add this field to allow testing unsaved URLs
-  previewWebhookUrl: z.string().optional(),
-});
-
-export async function POST(request: NextRequest) {
-  try {
-    // 1. Parse and validate request body
-    const body = await request.json();
-    const validationResult = relayRequestSchema.safeParse(body);
-
-    if (!validationResult.success) {
-      return NextResponse.json(
-        { error: 'Invalid request body', details: validationResult.error.format() },
-        { status: 400 }
-      );
-    }
-
-    const { widgetId, licenseKey, previewWebhookUrl, ...payload } = validationResult.data;
-
-    // Ensure chatInput is present for n8n compatibility (some workflows expect this)
-    if (!payload.chatInput && payload.message) {
-      (payload as any).chatInput = payload.message;
-    }
-
-    let targetWebhookUrl: string | null = null;
-
-    // 2. Determine Webhook URL
-
-    // CASE A: Preview Mode
-    if (widgetId === 'preview-widget' || licenseKey === 'preview') {
-      if (previewWebhookUrl) {
-        // If the frontend sent a URL, use it (Real N8n connection test)
-        targetWebhookUrl = previewWebhookUrl;
-      } else {
-        // Fallback to dummy response if no URL provided
-        return NextResponse.json(
-          {
-            output: 'Preview mode: No webhook URL provided. Please enter a URL to test.',
-            preview: true
-          },
-          { status: 200 }
-        );
-      }
-    }
-    // CASE B: Production/Saved Widget Mode
-    else {
-      // DYNAMIC IMPORT: Only import DB functions when we know we aren't in preview mode.
-      const { getWidgetWithLicense } = await import('@/lib/db/queries');
-
-      const widget = await getWidgetWithLicense(widgetId);
-
-      if (!widget) {
-        return NextResponse.json(
-          { error: 'Widget not found' },
-          { status: 404 }
-        );
-      }
-
-      // Validate license key
-      if (widget.license.licenseKey !== licenseKey) {
-        return NextResponse.json(
-          { error: 'Invalid license key' },
-          { status: 401 }
-        );
-      }
-
-      // Validate license status
-      if (widget.license.status !== 'active') {
-        return NextResponse.json(
-          { error: 'License is not active' },
-          { status: 403 }
-        );
-      }
-
-      // Extract webhook URL from DB config
-      const config = widget.config as any;
-      targetWebhookUrl = config?.connection?.webhookUrl;
-    }
-
-    if (!targetWebhookUrl) {
-      return NextResponse.json(
-        { error: 'Webhook URL not configured for this widget' },
-        { status: 400 }
-      );
-    }
-
-    // 3. Forward request to N8n
-    try {
-      const n8nResponse = await fetch(targetWebhookUrl, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'User-Agent': 'N8n-Widget-Relay/1.0',
-        },
-        body: JSON.stringify(payload),
-      });
-
-      // Get the response from N8n
-      const contentType = n8nResponse.headers.get('content-type');
-      let responseData;
-
-      if (contentType && contentType.includes('application/json')) {
-        responseData = await n8nResponse.json();
-      } else {
-        responseData = { output: await n8nResponse.text() };
-      }
-
-      // Return the N8n response to the client
-      return NextResponse.json(responseData, {
-        status: n8nResponse.status,
-        headers: {
-          'Access-Control-Allow-Origin': '*',
-        },
-      });
-
-    } catch (error) {
-      console.error('Error forwarding to N8n:', error);
-      return NextResponse.json(
-        { error: 'Failed to communicate with upstream webhook' },
-        { status: 502 }
-      );
-    }
-
-  } catch (error) {
-    console.error('DEBUG: Error in chat relay:', error);
-    return NextResponse.json(
-      { error: 'Internal server error', details: String(error) },
-      { status: 500 }
-    );
-  }
+/**
+ * Interface for the expected incoming request body
+ */
+interface RelayBody {
+  widgetId: string;
+  licenseKey: string;
+  message: string;
+  metadata?: Record<string, any>;
+  // Allow other optional properties
+  [key: string]: any;
 }
 
-export async function OPTIONS(request: NextRequest) {
-  return new NextResponse(null, {
-    status: 200,
-    headers: {
-      'Access-Control-Allow-Origin': '*',
-      'Access-Control-Allow-Methods': 'POST, OPTIONS',
-      'Access-Control-Allow-Headers': 'Content-Type, Authorization',
-    },
-  });
+/**
+ * Relay endpoint that forwards chat messages to the N8N webhook URL.
+ * * Features:
+ * - Validates ownership (Widget must belong to License)
+ * - Adds 'chatInput' alias for N8n compatibility
+ * - Handles N8n errors gracefully
+ */
+export async function POST(request: NextRequest): Promise<NextResponse> {
+  try {
+    const body: RelayBody = await request.json();
+    const { widgetId, licenseKey, message, metadata } = body;
+
+    // 1. Input Validation
+    if (!widgetId || !licenseKey || !message) {
+      return new NextResponse(
+        JSON.stringify({ error: 'Missing required fields: widgetId, licenseKey, or message' }),
+        { status: 400, headers: { 'Content-Type': 'application/json' } }
+      );
+    }
+
+    // 2. Database Lookup
+    const widget = await getWidgetById(widgetId);
+    if (!widget) {
+      return new NextResponse(
+        JSON.stringify({ error: 'Widget not found' }),
+        { status: 404, headers: { 'Content-Type': 'application/json' } }
+      );
+    }
+
+    const license = await getLicenseByKey(licenseKey);
+    if (!license) {
+      return new NextResponse(
+        JSON.stringify({ error: 'License not found' }),
+        { status: 404, headers: { 'Content-Type': 'application/json' } }
+      );
+    }
+
+    // 3. SECURITY CHECK: Verify Ownership
+    if (widget.licenseId !== license.id) {
+      console.warn(`[Chat Relay] Unauthorized access: License ${licenseKey} tried to use Widget ${widgetId}`);
+      return new NextResponse(
+        JSON.stringify({ error: 'Unauthorized: Widget does not belong to the provided license' }),
+        { status: 403, headers: { 'Content-Type': 'application/json' } }
+      );
+    }
+
+    // 4. Get Webhook URL
+    const webhookUrl = widget.config.connection?.webhookUrl;
+    if (!webhookUrl) {
+      return new NextResponse(
+        JSON.stringify({ error: 'Webhook URL not configured for this widget' }),
+        { status: 500, headers: { 'Content-Type': 'application/json' } }
+      );
+    }
+
+    // 5. Construct N8n Payload
+    // We strictly define what we send to N8n to avoid "undefined" errors
+    const payload = {
+      ...body,                  // Pass through any extra fields
+      message: message,
+      // COMPATIBILITY: Map message to chatInput for standard N8n chat triggers
+      chatInput: message,
+      widgetId: widgetId,
+      licenseKey: licenseKey,
+      metadata: {
+        ...(metadata || {}),
+        tier: license.tier,
+        domainLimit: license.domainLimit
+      }
+    };
+
+    // 6. Forward to N8n
+    try {
+      const response = await fetch(webhookUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
+
+      // Parse response (Handle text/JSON/HTML)
+      const responseText = await response.text();
+      let responseJson;
+
+      try {
+        responseJson = JSON.parse(responseText);
+      } catch (e) {
+        // Fallback if N8n returns plain text
+        responseJson = { message: responseText };
+      }
+
+      if (!response.ok) {
+        console.error(`[Chat Relay] N8n Error (${response.status}):`, responseText);
+        return new NextResponse(
+          JSON.stringify({ error: 'Workflow execution failed', details: responseJson }),
+          { status: response.status, headers: { 'Content-Type': 'application/json' } }
+        );
+      }
+
+      return new NextResponse(JSON.stringify(responseJson), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' }
+      });
+
+    } catch (networkError) {
+      console.error('[Chat Relay] Network Error:', networkError);
+      return new NextResponse(
+        JSON.stringify({ error: 'Failed to connect to workflow backend' }),
+        { status: 502, headers: { 'Content-Type': 'application/json' } }
+      );
+    }
+
+  } catch (err) {
+    console.error('[Chat Relay] Internal Server Error:', err);
+    return new NextResponse(
+      JSON.stringify({ error: 'Internal server error' }),
+      { status: 500, headers: { 'Content-Type': 'application/json' } }
+    );
+  }
 }
