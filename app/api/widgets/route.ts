@@ -91,7 +91,12 @@ export async function POST(request: NextRequest) {
     });
 
     // 8. Return 201 Created with widget data
-    return NextResponse.json({ widget }, { status: 201 });
+    return NextResponse.json({
+      widget: {
+        ...widget,
+        licenseKey: license.licenseKey
+      }
+    }, { status: 201 });
 
   } catch (error) {
     if (error instanceof z.ZodError) {

@@ -69,7 +69,8 @@ export default function InterfaceTestingPage() {
             </main>
 
             {/* Widget Script */}
-            <script src="https://chat-interface-revqaqv2v-polingerai.vercel.app/api/widget/969e51816d9a9474d2b9d7018581f0b0/chat-widget.js"></script>
+            <div id="n8n-chat-undefined"></div>
+            <script src="https://chat-interface-r.vercel.app/api/embed/bundle.js" defer></script>
         </div>
     );
 }
