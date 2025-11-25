@@ -338,16 +338,18 @@ export const ChatPreview: React.FC<ChatPreviewProps> = ({ config }) => {
     const loadingMsgId = Date.now() + 1;
     setMessages((prev) => [...prev, { id: loadingMsgId, text: '', isUser: false, isLoading: true }]);
 
-    // Get webhook URL from config
+    // Check which connection mode is active
     const webhookUrl = config.n8nWebhookUrl || config.connection?.webhookUrl;
+    const isAgentKitMode = config.enableAgentKit && config.agentKitApiKey && config.agentKitWorkflowId;
+    const isN8nMode = config.enableN8n && webhookUrl;
 
-    if (!webhookUrl) {
-      // No webhook configured - simulate response
+    if (!isAgentKitMode && !isN8nMode) {
+      // No connection configured - simulate response
       setTimeout(() => {
         setMessages((prev) =>
           prev.map((msg) =>
             msg.id === loadingMsgId
-              ? { ...msg, text: 'This is a simulated response. Configure an n8n webhook URL in the Connect section to enable real responses.', isLoading: false }
+              ? { ...msg, text: 'This is a simulated response. Configure a connection in the Connect section to enable real responses.', isLoading: false }
               : msg
           )
         );
@@ -357,19 +359,38 @@ export const ChatPreview: React.FC<ChatPreviewProps> = ({ config }) => {
     }
 
     try {
-      // Call the n8n webhook
-      const response = await fetch(webhookUrl, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          message: txt,
-          chatInput: txt,
-          sessionId: sessionId,
-          widgetId: 'preview-widget',
-          licenseKey: 'preview-license',
-          metadata: { source: 'preview_mode' }
-        })
-      });
+      let response: Response;
+
+      if (isAgentKitMode) {
+        // Call OpenAI ChatKit via our relay
+        response = await fetch('/api/chat-relay/openai', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            message: txt,
+            sessionId: sessionId,
+            // For preview, we need to pass the credentials directly since there's no saved widget
+            // The relay will use these from the request in preview mode
+            previewMode: true,
+            apiKey: config.agentKitApiKey,
+            workflowId: config.agentKitWorkflowId,
+          })
+        });
+      } else {
+        // Call the n8n webhook
+        response = await fetch(webhookUrl!, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            message: txt,
+            chatInput: txt,
+            sessionId: sessionId,
+            widgetId: 'preview-widget',
+            licenseKey: 'preview-license',
+            metadata: { source: 'preview_mode' }
+          })
+        });
+      }
 
       if (!response.ok) {
         throw new Error(`HTTP ${response.status}`);

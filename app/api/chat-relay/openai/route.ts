@@ -5,12 +5,16 @@ import { getWidgetById, getLicenseByKey } from '@/lib/db/queries';
  * Interface for the expected incoming request body
  */
 interface OpenAIRelayBody {
-  widgetId: string;
-  licenseKey: string;
+  widgetId?: string;
+  licenseKey?: string;
   message: string;
   sessionId?: string;
   threadId?: string; // ChatKit thread ID for conversation continuity
   metadata?: Record<string, unknown>;
+  // Preview mode fields - credentials passed directly (only from configurator preview)
+  previewMode?: boolean;
+  apiKey?: string;
+  workflowId?: string;
 }
 
 /**
@@ -44,62 +48,92 @@ const CHATKIT_API_URL = 'https://api.openai.com/v1/chatkit/sessions';
 export async function POST(request: NextRequest): Promise<NextResponse> {
   try {
     const body: OpenAIRelayBody = await request.json();
-    const { widgetId, licenseKey, message, threadId, metadata } = body;
+    const { widgetId, licenseKey, message, threadId, metadata, previewMode } = body;
 
-    // 1. Input Validation
-    if (!widgetId || !licenseKey || !message) {
-      return new NextResponse(
-        JSON.stringify({ error: 'Missing required fields: widgetId, licenseKey, or message' }),
-        { status: 400, headers: { 'Content-Type': 'application/json', ...corsHeaders } }
-      );
+    // Variables for credentials
+    let apiKey: string | undefined;
+    let workflowId: string | undefined;
+
+    // Check if this is preview mode (configurator testing)
+    if (previewMode) {
+      // Preview mode: credentials are passed directly in the request
+      apiKey = body.apiKey;
+      workflowId = body.workflowId;
+
+      if (!message) {
+        return new NextResponse(
+          JSON.stringify({ error: 'Missing required field: message' }),
+          { status: 400, headers: { 'Content-Type': 'application/json', ...corsHeaders } }
+        );
+      }
+
+      if (!apiKey || !workflowId) {
+        return new NextResponse(
+          JSON.stringify({ error: 'Preview mode requires apiKey and workflowId' }),
+          { status: 400, headers: { 'Content-Type': 'application/json', ...corsHeaders } }
+        );
+      }
+
+      console.log('[OpenAI Relay] Preview mode - using provided credentials');
+    } else {
+      // Production mode: look up credentials from widget config
+      // 1. Input Validation
+      if (!widgetId || !licenseKey || !message) {
+        return new NextResponse(
+          JSON.stringify({ error: 'Missing required fields: widgetId, licenseKey, or message' }),
+          { status: 400, headers: { 'Content-Type': 'application/json', ...corsHeaders } }
+        );
+      }
+
+      // 2. Database Lookup
+      const widget = await getWidgetById(widgetId);
+      if (!widget) {
+        return new NextResponse(
+          JSON.stringify({ error: 'Widget not found' }),
+          { status: 404, headers: { 'Content-Type': 'application/json', ...corsHeaders } }
+        );
+      }
+
+      const license = await getLicenseByKey(licenseKey);
+      if (!license) {
+        return new NextResponse(
+          JSON.stringify({ error: 'License not found' }),
+          { status: 404, headers: { 'Content-Type': 'application/json', ...corsHeaders } }
+        );
+      }
+
+      // 3. SECURITY CHECK: Verify Ownership
+      if (widget.licenseId !== license.id) {
+        console.warn(`[OpenAI Relay] Unauthorized access: License ${licenseKey} tried to use Widget ${widgetId}`);
+        return new NextResponse(
+          JSON.stringify({ error: 'Unauthorized: Widget does not belong to the provided license' }),
+          { status: 403, headers: { 'Content-Type': 'application/json', ...corsHeaders } }
+        );
+      }
+
+      // 4. Get AgentKit Configuration from widget config
+      const config = widget.config as Record<string, unknown>;
+      apiKey = config?.agentKitApiKey as string | undefined;
+      workflowId = config?.agentKitWorkflowId as string | undefined;
+
+      if (!apiKey) {
+        return new NextResponse(
+          JSON.stringify({ error: 'OpenAI API key not configured for this widget' }),
+          { status: 400, headers: { 'Content-Type': 'application/json', ...corsHeaders } }
+        );
+      }
+
+      if (!workflowId) {
+        return new NextResponse(
+          JSON.stringify({ error: 'OpenAI Workflow ID not configured for this widget' }),
+          { status: 400, headers: { 'Content-Type': 'application/json', ...corsHeaders } }
+        );
+      }
+
+      console.log('[OpenAI Relay] Processing request for widget:', widgetId);
     }
 
-    // 2. Database Lookup
-    const widget = await getWidgetById(widgetId);
-    if (!widget) {
-      return new NextResponse(
-        JSON.stringify({ error: 'Widget not found' }),
-        { status: 404, headers: { 'Content-Type': 'application/json', ...corsHeaders } }
-      );
-    }
-
-    const license = await getLicenseByKey(licenseKey);
-    if (!license) {
-      return new NextResponse(
-        JSON.stringify({ error: 'License not found' }),
-        { status: 404, headers: { 'Content-Type': 'application/json', ...corsHeaders } }
-      );
-    }
-
-    // 3. SECURITY CHECK: Verify Ownership
-    if (widget.licenseId !== license.id) {
-      console.warn(`[OpenAI Relay] Unauthorized access: License ${licenseKey} tried to use Widget ${widgetId}`);
-      return new NextResponse(
-        JSON.stringify({ error: 'Unauthorized: Widget does not belong to the provided license' }),
-        { status: 403, headers: { 'Content-Type': 'application/json', ...corsHeaders } }
-      );
-    }
-
-    // 4. Get AgentKit Configuration
-    const config = widget.config as Record<string, unknown>;
-    const apiKey = config?.agentKitApiKey as string | undefined;
-    const workflowId = config?.agentKitWorkflowId as string | undefined;
-
-    if (!apiKey) {
-      return new NextResponse(
-        JSON.stringify({ error: 'OpenAI API key not configured for this widget' }),
-        { status: 400, headers: { 'Content-Type': 'application/json', ...corsHeaders } }
-      );
-    }
-
-    if (!workflowId) {
-      return new NextResponse(
-        JSON.stringify({ error: 'OpenAI Workflow ID not configured for this widget' }),
-        { status: 400, headers: { 'Content-Type': 'application/json', ...corsHeaders } }
-      );
-    }
-
-    console.log('[OpenAI Relay] Processing request for widget:', widgetId, 'workflowId:', workflowId);
+    console.log('[OpenAI Relay] Using workflowId:', workflowId);
 
     // 5. Call ChatKit Sessions API
     try {
