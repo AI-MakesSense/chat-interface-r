@@ -82,9 +82,9 @@ export const CodeModal: React.FC<CodeModalProps> = ({ config, isOpen, onClose, l
         modelPicker: config.enableModelPicker
       },
       connection: {
-        n8n: config.enableN8n ? { webhookUrl: config.n8nWebhookUrl } : undefined,
-        agentKit: config.enableAgentKit
-          ? { workflowId: config.agentKitWorkflowId, apiKey: '***' }
+        n8n: (config.connection?.provider === 'n8n' || !config.connection?.provider) ? { webhookUrl: config.connection?.webhookUrl } : undefined,
+        agentKit: config.connection?.provider === 'agentkit'
+          ? { workflowId: config.connection?.agentKitWorkflowId, apiKey: '***' }
           : undefined
       }
     };
@@ -117,21 +117,19 @@ export const CodeModal: React.FC<CodeModalProps> = ({ config, isOpen, onClose, l
             <div className="flex gap-1 p-1 bg-neutral-100 rounded-lg">
               <button
                 onClick={() => setActiveTab('embed')}
-                className={`px-3 py-1 text-sm font-medium rounded-md transition-colors ${
-                  activeTab === 'embed'
+                className={`px-3 py-1 text-sm font-medium rounded-md transition-colors ${activeTab === 'embed'
                     ? 'bg-white text-neutral-900 shadow-sm'
                     : 'text-neutral-500 hover:text-neutral-700'
-                }`}
+                  }`}
               >
                 Embed Code
               </button>
               <button
                 onClick={() => setActiveTab('config')}
-                className={`px-3 py-1 text-sm font-medium rounded-md transition-colors ${
-                  activeTab === 'config'
+                className={`px-3 py-1 text-sm font-medium rounded-md transition-colors ${activeTab === 'config'
                     ? 'bg-white text-neutral-900 shadow-sm'
                     : 'text-neutral-500 hover:text-neutral-700'
-                }`}
+                  }`}
               >
                 Config Preview
               </button>

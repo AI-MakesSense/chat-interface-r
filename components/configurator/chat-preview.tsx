@@ -339,9 +339,10 @@ export const ChatPreview: React.FC<ChatPreviewProps> = ({ config }) => {
     setMessages((prev) => [...prev, { id: loadingMsgId, text: '', isUser: false, isLoading: true }]);
 
     // Check which connection mode is active
-    const webhookUrl = config.n8nWebhookUrl || config.connection?.webhookUrl;
-    const isAgentKitMode = config.enableAgentKit && config.agentKitApiKey && config.agentKitWorkflowId;
-    const isN8nMode = config.enableN8n && webhookUrl;
+    // Check which connection mode is active
+    const webhookUrl = config.connection?.webhookUrl;
+    const isAgentKitMode = config.connection?.provider === 'agentkit' && config.connection?.agentKitApiKey && config.connection?.agentKitWorkflowId;
+    const isN8nMode = (config.connection?.provider === 'n8n' || !config.connection?.provider) && webhookUrl;
 
     if (!isAgentKitMode && !isN8nMode) {
       // No connection configured - simulate response
@@ -372,8 +373,8 @@ export const ChatPreview: React.FC<ChatPreviewProps> = ({ config }) => {
             // For preview, we need to pass the credentials directly since there's no saved widget
             // The relay will use these from the request in preview mode
             previewMode: true,
-            apiKey: config.agentKitApiKey,
-            workflowId: config.agentKitWorkflowId,
+            apiKey: config.connection?.agentKitApiKey,
+            workflowId: config.connection?.agentKitWorkflowId,
           })
         });
       } else {
@@ -444,7 +445,8 @@ export const ChatPreview: React.FC<ChatPreviewProps> = ({ config }) => {
       )}
 
       {/* Typing Animation Styles */}
-      <style dangerouslySetInnerHTML={{ __html: `
+      <style dangerouslySetInnerHTML={{
+        __html: `
         @keyframes bounce {
           0%, 60%, 100% { transform: translateY(0); }
           30% { transform: translateY(-4px); }
@@ -483,15 +485,13 @@ export const ChatPreview: React.FC<ChatPreviewProps> = ({ config }) => {
         {!hasMessages ? (
           // Start Screen
           <div
-            className={`flex-1 flex flex-col justify-center animate-in fade-in duration-500 ${
-              isWide ? 'items-center' : ''
-            }`}
+            className={`flex-1 flex flex-col justify-center animate-in fade-in duration-500 ${isWide ? 'items-center' : ''
+              }`}
           >
             <div className={`mb-8 ${isWide ? 'w-full max-w-2xl px-8' : ''}`}>
               <h2
-                className={`text-2xl font-semibold mb-6 leading-tight tracking-tight ${
-                  isWide ? 'text-center' : ''
-                }`}
+                className={`text-2xl font-semibold mb-6 leading-tight tracking-tight ${isWide ? 'text-center' : ''
+                  }`}
                 style={{ color: text }}
               >
                 {config.greeting || 'How can I help you today?'}
@@ -503,8 +503,8 @@ export const ChatPreview: React.FC<ChatPreviewProps> = ({ config }) => {
                     isWide
                       ? 'flex flex-wrap justify-center gap-3'
                       : config.density === 'compact'
-                      ? 'space-y-1'
-                      : 'space-y-2'
+                        ? 'space-y-1'
+                        : 'space-y-2'
                   }
                 >
                   {config.starterPrompts.map((item: StarterPrompt, i: number) => {
@@ -537,9 +537,8 @@ export const ChatPreview: React.FC<ChatPreviewProps> = ({ config }) => {
                           className="opacity-70 group-hover:opacity-100 transition-opacity"
                         />
                         <span
-                          className={`font-medium transition-colors ${
-                            isWide ? 'text-xs leading-relaxed line-clamp-2' : 'text-sm'
-                          }`}
+                          className={`font-medium transition-colors ${isWide ? 'text-xs leading-relaxed line-clamp-2' : 'text-sm'
+                            }`}
                           style={{ color: text }}
                         >
                           {item.label}
@@ -557,9 +556,8 @@ export const ChatPreview: React.FC<ChatPreviewProps> = ({ config }) => {
             {messages.map((msg) => (
               <div
                 key={msg.id}
-                className={`flex flex-col ${
-                  msg.isUser ? 'items-end' : 'items-start'
-                } animate-in slide-in-from-bottom-2 duration-300`}
+                className={`flex flex-col ${msg.isUser ? 'items-end' : 'items-start'
+                  } animate-in slide-in-from-bottom-2 duration-300`}
               >
                 <div
                   className={`max-w-[85%] leading-relaxed shadow-sm transition-colors duration-300 ${bubblePadding}`}
@@ -630,20 +628,20 @@ export const ChatPreview: React.FC<ChatPreviewProps> = ({ config }) => {
                 ? useAccent
                   ? accentColor
                   : isDark
-                  ? '#e5e5e5'
-                  : '#171717'
+                    ? '#e5e5e5'
+                    : '#171717'
                 : isDark
-                ? '#404040'
-                : '#f3f4f6',
+                  ? '#404040'
+                  : '#f3f4f6',
               color: inputValue.trim() && !isLoading
                 ? useAccent
                   ? '#ffffff'
                   : isDark
-                  ? '#171717'
-                  : '#ffffff'
+                    ? '#171717'
+                    : '#ffffff'
                 : isDark
-                ? '#737373'
-                : '#a3a3a3'
+                  ? '#737373'
+                  : '#a3a3a3'
             }}
           >
             <ArrowUp size={16} strokeWidth={3} />
