@@ -9,12 +9,15 @@
  * - Minimal DOM manipulation for performance
  * - POST requests to N8n webhook for responses
  * - Markdown rendering for assistant messages
+ *
+ * Extended to support ChatKit-compatible theming options.
  */
 
 import { WidgetRuntimeConfig, WidgetConfig, Message } from './types';
 import { renderMarkdown } from './markdown';
 import { buildRelayPayload } from './services/messaging/payload';
 import { SessionManager } from './services/messaging/session-manager';
+import { createCSSVariables, createFontFaceCSS } from './theming/css-variables';
 import type { FileAttachment } from './services/messaging/types';
 
 export function createChatWidget(runtimeConfig: WidgetRuntimeConfig): void {
@@ -27,32 +30,131 @@ export function createChatWidget(runtimeConfig: WidgetRuntimeConfig): void {
   // Initialize SessionManager for session continuity
   const sessionManager = new SessionManager(runtimeConfig.relay.licenseKey || 'default');
 
-  // Apply default config
+  // Determine color scheme from extended theme or legacy style
+  const colorScheme = config.theme?.colorScheme || config.style?.theme || 'light';
+  const isDark = colorScheme === 'dark';
+
+  // Apply default config with extended theme support
   const mergedConfig: WidgetConfig = {
     branding: {
       companyName: config.branding?.companyName || 'Support',
-      welcomeText: config.branding?.welcomeText || 'How can we help you?',
+      welcomeText: config.branding?.welcomeText || config.startScreen?.greeting || 'How can we help you?',
       firstMessage: config.branding?.firstMessage || 'Hello! Ask me anything.',
       logoUrl: config.branding?.logoUrl,
     },
     style: {
-      theme: config.style?.theme || 'light',
-      primaryColor: config.style?.primaryColor || '#00bfff',
-      backgroundColor: config.style?.backgroundColor || '#ffffff',
-      textColor: config.style?.textColor || '#333333',
-      fontFamily: config.style?.fontFamily || '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
-      fontSize: config.style?.fontSize || 14,
+      theme: colorScheme as 'light' | 'dark' | 'auto',
+      primaryColor: config.theme?.color?.accent?.primary || config.style?.primaryColor || '#0ea5e9',
+      backgroundColor: config.theme?.color?.surface?.background || config.style?.backgroundColor || (isDark ? '#1a1a1a' : '#ffffff'),
+      textColor: config.style?.textColor || (isDark ? '#e5e5e5' : '#1f2937'),
+      fontFamily: config.theme?.typography?.fontFamily || config.style?.fontFamily || '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
+      fontSize: config.theme?.typography?.baseSize || config.style?.fontSize || 14,
       position: config.style?.position || 'bottom-right',
       cornerRadius: config.style?.cornerRadius || 12,
     },
     features: {
-      fileAttachmentsEnabled: config.features?.fileAttachmentsEnabled || false,
-      allowedExtensions: config.features?.allowedExtensions || ['jpg', 'jpeg', 'png', 'gif', 'pdf', 'doc', 'docx'],
-      maxFileSizeKB: config.features?.maxFileSizeKB || 5000,
+      fileAttachmentsEnabled: config.composer?.attachments?.enabled || config.features?.fileAttachmentsEnabled || false,
+      allowedExtensions: config.composer?.attachments?.accept || config.features?.allowedExtensions || ['jpg', 'jpeg', 'png', 'gif', 'pdf', 'doc', 'docx'],
+      maxFileSizeKB: config.composer?.attachments?.maxSize ? config.composer.attachments.maxSize / 1024 : config.features?.maxFileSizeKB || 5000,
     },
     connection: config.connection,
     license: config.license,
+    // Preserve extended config
+    theme: config.theme,
+    startScreen: config.startScreen,
+    composer: config.composer,
   };
+
+  // Generate CSS variables
+  const cssVariables = createCSSVariables(mergedConfig);
+  const fontFaceCSS = createFontFaceCSS(mergedConfig);
+
+  // Inject CSS variables and styles
+  const styleEl = document.createElement('style');
+  styleEl.id = 'n8n-chat-widget-styles';
+  styleEl.textContent = `
+    ${fontFaceCSS}
+
+    #n8n-chat-widget-container {
+      ${Object.entries(cssVariables).map(([key, value]) => `${key}: ${value};`).join('\n      ')}
+    }
+
+    /* Typing animation */
+    .n8n-typing-container {
+      display: flex;
+      gap: 4px;
+      padding: 4px 0;
+    }
+    .n8n-typing-dot {
+      width: 8px;
+      height: 8px;
+      background: var(--cw-icon-color, #64748b);
+      border-radius: 50%;
+      animation: n8n-typing 1.4s infinite ease-in-out both;
+    }
+    .n8n-typing-dot:nth-child(1) { animation-delay: -0.32s; }
+    .n8n-typing-dot:nth-child(2) { animation-delay: -0.16s; }
+    @keyframes n8n-typing {
+      0%, 80%, 100% { transform: scale(0.6); opacity: 0.5; }
+      40% { transform: scale(1); opacity: 1; }
+    }
+
+    /* Scrollbar styling */
+    #n8n-chat-messages::-webkit-scrollbar {
+      width: 6px;
+    }
+    #n8n-chat-messages::-webkit-scrollbar-track {
+      background: transparent;
+    }
+    #n8n-chat-messages::-webkit-scrollbar-thumb {
+      background: var(--cw-border-color-strong, rgba(0,0,0,0.15));
+      border-radius: 3px;
+    }
+
+    /* Starter prompts */
+    .n8n-starter-prompt {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: var(--cw-spacing-sm, 8px) var(--cw-spacing-md, 12px);
+      background: var(--cw-surface-fg, #f8fafc);
+      border: 1px solid var(--cw-border-color, rgba(0,0,0,0.1));
+      border-radius: var(--cw-radius-md, 12px);
+      cursor: pointer;
+      font-size: var(--cw-font-size-sm, 13px);
+      color: var(--cw-text-color, #1f2937);
+      transition: all 0.15s ease;
+    }
+    .n8n-starter-prompt:hover {
+      background: var(--cw-accent-lighter, #f0f9ff);
+      border-color: var(--cw-accent-primary, #0ea5e9);
+    }
+
+    /* Markdown content styling */
+    .n8n-message-content p { margin: 0 0 0.5em 0; }
+    .n8n-message-content p:last-child { margin-bottom: 0; }
+    .n8n-message-content code {
+      background: var(--cw-surface-fg, #f1f5f9);
+      padding: 2px 6px;
+      border-radius: 4px;
+      font-family: var(--cw-font-family-mono, ui-monospace, monospace);
+      font-size: 0.9em;
+    }
+    .n8n-message-content pre {
+      background: ${isDark ? '#0d0d0d' : '#1e293b'};
+      color: #e2e8f0;
+      padding: var(--cw-spacing-md, 12px);
+      border-radius: var(--cw-radius-sm, 8px);
+      overflow-x: auto;
+      margin: 0.5em 0;
+    }
+    .n8n-message-content pre code {
+      background: none;
+      padding: 0;
+      color: inherit;
+    }
+  `;
+  document.head.appendChild(styleEl);
 
   // Create container
   const container = document.createElement('div');
@@ -62,7 +164,8 @@ export function createChatWidget(runtimeConfig: WidgetRuntimeConfig): void {
     ${mergedConfig.style.position === 'bottom-right' ? 'right: 20px;' : 'left: 20px;'}
     bottom: 20px;
     z-index: 999999;
-    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    font-family: var(--cw-font-family, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif);
+    font-size: var(--cw-font-size, 14px);
   `;
   document.body.appendChild(container);
 
@@ -73,15 +176,15 @@ export function createChatWidget(runtimeConfig: WidgetRuntimeConfig): void {
   bubble.style.cssText = `
     width: 60px;
     height: 60px;
-    border-radius: 50%;
-    background: ${mergedConfig.style.primaryColor};
+    border-radius: var(--cw-radius-full, 50%);
+    background: var(--cw-accent-primary, ${mergedConfig.style.primaryColor});
     border: none;
     cursor: pointer;
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+    box-shadow: var(--cw-shadow-lg, 0 4px 12px rgba(0, 0, 0, 0.15));
     display: flex;
     align-items: center;
     justify-content: center;
-    transition: transform 0.2s;
+    transition: transform 0.2s, box-shadow 0.2s;
   `;
   bubble.innerHTML = `
     <svg width="28" height="28" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
@@ -103,37 +206,39 @@ export function createChatWidget(runtimeConfig: WidgetRuntimeConfig): void {
   chatWindow.id = 'n8n-chat-window';
   chatWindow.style.cssText = `
     display: none;
-    width: 380px;
+    width: 400px;
     height: 600px;
     max-height: 80vh;
-    background: white;
-    border-radius: ${mergedConfig.style.cornerRadius}px;
-    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.15);
+    background: var(--cw-surface-bg, ${isDark ? '#1a1a1a' : '#ffffff'});
+    color: var(--cw-text-color, ${isDark ? '#e5e5e5' : '#1f2937'});
+    border-radius: var(--cw-radius-xl, ${mergedConfig.style.cornerRadius}px);
+    box-shadow: var(--cw-shadow-lg, 0 8px 24px rgba(0, 0, 0, 0.15));
     flex-direction: column;
     overflow: hidden;
     margin-bottom: 12px;
+    border: 1px solid var(--cw-border-color, ${isDark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.1)'});
   `;
   container.appendChild(chatWindow);
 
   // Create header
   const header = document.createElement('div');
   header.style.cssText = `
-    background: ${mergedConfig.style.primaryColor};
+    background: var(--cw-accent-primary, ${mergedConfig.style.primaryColor});
     color: white;
-    padding: 16px;
+    padding: var(--cw-spacing-lg, 16px);
     display: flex;
     align-items: center;
     justify-content: space-between;
   `;
   header.innerHTML = `
-    <div style="display: flex; align-items: center; gap: 12px;">
-      ${mergedConfig.branding.logoUrl ? `<img src="${mergedConfig.branding.logoUrl}" alt="Logo" style="width: 32px; height: 32px; border-radius: 50%; object-fit: cover;" />` : ''}
+    <div style="display: flex; align-items: center; gap: var(--cw-spacing-md, 12px);">
+      ${mergedConfig.branding.logoUrl ? `<img src="${mergedConfig.branding.logoUrl}" alt="Logo" style="width: 36px; height: 36px; border-radius: var(--cw-radius-full, 50%); object-fit: cover;" />` : ''}
       <div>
-        <div style="font-weight: 600; font-size: 16px;">${mergedConfig.branding.companyName}</div>
-        <div style="font-size: 13px; opacity: 0.9;">${mergedConfig.branding.welcomeText}</div>
+        <div style="font-weight: 600; font-size: var(--cw-font-size-lg, 16px);">${mergedConfig.branding.companyName}</div>
+        <div style="font-size: var(--cw-font-size-sm, 13px); opacity: 0.9;">${mergedConfig.branding.welcomeText}</div>
       </div>
     </div>
-    <button id="n8n-chat-close" style="background: none; border: none; color: white; cursor: pointer; font-size: 24px; line-height: 1; padding: 0; width: 28px; height: 28px;">×</button>
+    <button id="n8n-chat-close" style="background: none; border: none; color: white; cursor: pointer; font-size: 24px; line-height: 1; padding: 0; width: 28px; height: 28px; opacity: 0.8; transition: opacity 0.15s;" onmouseover="this.style.opacity='1'" onmouseout="this.style.opacity='0.8'">×</button>
   `;
   chatWindow.appendChild(header);
 
@@ -147,96 +252,193 @@ export function createChatWidget(runtimeConfig: WidgetRuntimeConfig): void {
   messagesContainer.style.cssText = `
     flex: 1;
     overflow-y: auto;
-    padding: 16px;
-    background: #f8f9fa;
+    padding: var(--cw-spacing-lg, 16px);
+    background: var(--cw-surface-fg, ${isDark ? '#0d0d0d' : '#f8fafc'});
   `;
   chatWindow.appendChild(messagesContainer);
 
-  // Create input container
+  // Create starter prompts container (if prompts exist)
+  const starterPrompts = mergedConfig.startScreen?.prompts || [];
+  let starterPromptsContainer: HTMLElement | null = null;
+  if (starterPrompts.length > 0) {
+    starterPromptsContainer = document.createElement('div');
+    starterPromptsContainer.id = 'n8n-starter-prompts';
+    starterPromptsContainer.style.cssText = `
+      padding: var(--cw-spacing-md, 12px) var(--cw-spacing-lg, 16px);
+      display: flex;
+      flex-wrap: wrap;
+      gap: var(--cw-spacing-sm, 8px);
+      background: var(--cw-surface-fg, ${isDark ? '#0d0d0d' : '#f8fafc'});
+      border-top: 1px solid var(--cw-border-color, ${isDark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.1)'});
+    `;
+
+    starterPrompts.forEach((prompt) => {
+      const promptBtn = document.createElement('button');
+      promptBtn.className = 'n8n-starter-prompt';
+      promptBtn.innerHTML = `
+        ${prompt.icon ? `<span style="font-size: 16px;">${prompt.icon}</span>` : ''}
+        <span>${prompt.label}</span>
+      `;
+      promptBtn.addEventListener('click', () => {
+        const input = document.getElementById('n8n-chat-input') as HTMLInputElement;
+        if (input) {
+          input.value = prompt.prompt || prompt.label;
+          input.focus();
+        }
+      });
+      starterPromptsContainer!.appendChild(promptBtn);
+    });
+
+    chatWindow.appendChild(starterPromptsContainer);
+  }
+
+  // Get placeholder from composer config or use default
+  const inputPlaceholder = mergedConfig.composer?.placeholder || 'Type a message...';
+
+  // Determine if we have accent enabled
+  const hasAccent = !!mergedConfig.theme?.color?.accent;
+
+  // Create input container - matches preview's pill-shaped composer
   const inputContainer = document.createElement('div');
   inputContainer.style.cssText = `
-    padding: 16px;
-    background: white;
-    border-top: 1px solid #e5e7eb;
-    display: flex;
-    gap: 8px;
+    padding: var(--cw-spacing-lg, 16px);
+    padding-top: 0;
+    background: var(--cw-surface-bg, ${isDark ? '#1a1a1a' : '#ffffff'});
   `;
-  inputContainer.innerHTML = `
-    <input
-      type="text"
-      id="n8n-chat-input"
-      placeholder="Type your message..."
-      style="
-        flex: 1;
-        padding: 10px 14px;
-        border: 1px solid #d1d5db;
-        border-radius: 20px;
-        outline: none;
-        font-size: 14px;
-      "
-    />
-    ${mergedConfig.features.fileAttachmentsEnabled ? `
-    <input
-      type="file"
-      id="n8n-chat-file-input"
-      multiple
-      accept="${mergedConfig.features.allowedExtensions.join(',')}"
-      style="display: none;"
-    />
-    <button
-      id="n8n-chat-attach"
-      style="
-        background: transparent;
-        color: ${mergedConfig.style.primaryColor};
-        border: 1px solid ${mergedConfig.style.primaryColor};
-        border-radius: 50%;
-        width: 40px;
-        height: 40px;
-        cursor: pointer;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        font-size: 16px;
-      "
-      title="Attach files"
-    >
-      📎
-    </button>
-    ` : ''}
-    <button
-      id="n8n-chat-send"
-      style="
-        background: ${mergedConfig.style.primaryColor};
-        color: white;
-        border: none;
-        border-radius: 50%;
-        width: 40px;
-        height: 40px;
-        cursor: pointer;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-      "
-    >
-      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-        <path d="M2 21L23 12L2 3V10L17 12L2 14V21Z" fill="white"/>
-      </svg>
-    </button>
+
+  // Build composer form - pill shape like preview
+  const composerRadius = mergedConfig.theme?.radius === 'none' ? '0px' : '999px';
+
+  let inputAreaHTML = `
+    <div style="
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 6px;
+      background: var(--cw-composer-surface, var(--cw-surface-fg, ${isDark ? '#262626' : '#ffffff'}));
+      border-radius: ${composerRadius};
+      border: 1px solid var(--cw-border-color, ${isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.08)'});
+      box-shadow: ${isDark ? 'none' : '0 4px 12px rgba(0,0,0,0.05)'};
+      transition: box-shadow 0.15s;
+    ">
   `;
+
+  // Attachment button (+ icon like preview)
+  if (mergedConfig.features.fileAttachmentsEnabled) {
+    inputAreaHTML += `
+      <input
+        type="file"
+        id="n8n-chat-file-input"
+        multiple
+        accept="${mergedConfig.features.allowedExtensions.join(',')}"
+        style="display: none;"
+      />
+      <button
+        id="n8n-chat-attach"
+        type="button"
+        style="
+          background: transparent;
+          color: var(--cw-icon-color, ${isDark ? '#a1a1aa' : '#6b7280'});
+          border: none;
+          border-radius: 50%;
+          width: 32px;
+          height: 32px;
+          min-width: 32px;
+          cursor: pointer;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          transition: background 0.15s;
+        "
+        title="Attach files"
+      >
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <line x1="12" y1="5" x2="12" y2="19"></line>
+          <line x1="5" y1="12" x2="19" y2="12"></line>
+        </svg>
+      </button>
+    `;
+  } else {
+    // Spacer to maintain layout
+    inputAreaHTML += `<div style="width: 8px;"></div>`;
+  }
+
+  // Input field
+  inputAreaHTML += `
+      <input
+        type="text"
+        id="n8n-chat-input"
+        placeholder="${inputPlaceholder}"
+        style="
+          flex: 1;
+          border: none;
+          background: transparent;
+          outline: none;
+          font-size: var(--cw-font-size-sm, 14px);
+          font-family: inherit;
+          color: var(--cw-text-color, ${isDark ? '#e5e5e5' : '#111827'});
+          padding: 4px 8px;
+        "
+      />
+  `;
+
+  // Send button - matches preview styling
+  inputAreaHTML += `
+      <button
+        id="n8n-chat-send"
+        type="button"
+        style="
+          background: ${hasAccent ? `var(--cw-accent-primary, ${mergedConfig.style.primaryColor})` : (isDark ? '#e5e5e5' : '#171717')};
+          color: ${hasAccent ? '#ffffff' : (isDark ? '#171717' : '#ffffff')};
+          border: none;
+          border-radius: 50%;
+          width: 32px;
+          height: 32px;
+          min-width: 32px;
+          cursor: pointer;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          transition: background 0.15s, opacity 0.15s;
+        "
+      >
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
+          <line x1="12" y1="19" x2="12" y2="5"></line>
+          <polyline points="5 12 12 5 19 12"></polyline>
+        </svg>
+      </button>
+    </div>
+  `;
+
+  inputContainer.innerHTML = inputAreaHTML;
   chatWindow.appendChild(inputContainer);
+
+  // Add disclaimer if configured
+  if (mergedConfig.composer?.disclaimer) {
+    const disclaimer = document.createElement('div');
+    disclaimer.style.cssText = `
+      padding: var(--cw-spacing-xs, 4px) var(--cw-spacing-lg, 16px) var(--cw-spacing-sm, 8px);
+      background: var(--cw-surface-bg, ${isDark ? '#1a1a1a' : '#ffffff'});
+      font-size: var(--cw-font-size-sm, 12px);
+      color: var(--cw-icon-color, ${isDark ? '#71717a' : '#9ca3af'});
+      text-align: center;
+    `;
+    disclaimer.textContent = mergedConfig.composer.disclaimer;
+    chatWindow.appendChild(disclaimer);
+  }
 
   // Add branding footer if enabled
   if (mergedConfig.license?.brandingEnabled) {
     const footer = document.createElement('div');
     footer.style.cssText = `
-      padding: 8px 16px;
-      background: #f8f9fa;
-      border-top: 1px solid #e5e7eb;
+      padding: var(--cw-spacing-sm, 8px) var(--cw-spacing-lg, 16px);
+      background: var(--cw-surface-fg, ${isDark ? '#1a1a1a' : '#f8f9fa'});
+      border-top: 1px solid var(--cw-border-color, ${isDark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.1)'});
       text-align: center;
-      font-size: 12px;
-      color: #6b7280;
+      font-size: var(--cw-font-size-sm, 12px);
+      color: var(--cw-icon-color, ${isDark ? '#71717a' : '#6b7280'});
     `;
-    footer.innerHTML = `Powered by <a href="https://n8n.io" target="_blank" style="color: ${mergedConfig.style.primaryColor}; text-decoration: none;">n8n</a>`;
+    footer.innerHTML = `Powered by <a href="https://n8n.io" target="_blank" style="color: var(--cw-accent-primary, ${mergedConfig.style.primaryColor}); text-decoration: none;">n8n</a>`;
     chatWindow.appendChild(footer);
   }
 
@@ -301,21 +503,22 @@ export function createChatWidget(runtimeConfig: WidgetRuntimeConfig): void {
     const messageEl = document.createElement('div');
     messageEl.id = message.id;
     messageEl.style.cssText = `
-      margin-bottom: 12px;
+      margin-bottom: var(--cw-spacing-md, 12px);
       display: flex;
       ${role === 'user' ? 'justify-content: flex-end;' : 'justify-content: flex-start;'}
     `;
 
     const bubble = document.createElement('div');
+    bubble.className = 'n8n-message-content';
     bubble.style.cssText = `
       max-width: 75%;
-      padding: 10px 14px;
-      border-radius: 12px;
-      font-size: 14px;
-      line-height: 1.4;
+      padding: var(--cw-spacing-sm, 10px) var(--cw-spacing-md, 14px);
+      border-radius: var(--cw-radius-lg, 12px);
+      font-size: var(--cw-font-size, 14px);
+      line-height: 1.5;
       ${role === 'user'
-        ? `background: ${mergedConfig.style.primaryColor}; color: white;`
-        : 'background: white; color: #1f2937; box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);'}
+        ? `background: var(--cw-user-msg-bg, var(--cw-accent-primary, ${mergedConfig.style.primaryColor})); color: var(--cw-user-msg-text, #ffffff);`
+        : `background: var(--cw-assistant-msg-bg, ${isDark ? '#2a2a2a' : '#f3f4f6'}); color: var(--cw-assistant-msg-text, ${isDark ? '#e5e5e5' : '#1f2937'}); box-shadow: var(--cw-shadow-sm, 0 1px 2px rgba(0, 0, 0, 0.05));`}
     `;
 
     // Render markdown for assistant messages

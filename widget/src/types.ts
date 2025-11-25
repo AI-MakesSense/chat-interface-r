@@ -13,6 +13,13 @@ export interface WidgetConfig {
   connection?: ConnectionConfig;
   license?: LicenseConfig; // Injected by server at serve time
   portal?: PortalConfig;
+
+  // =========================================================================
+  // Extended theming options (ChatKit-compatible)
+  // =========================================================================
+  theme?: ThemeConfig;
+  startScreen?: StartScreenConfig;
+  composer?: ComposerConfig;
 }
 
 export interface PortalConfig {
@@ -85,4 +92,148 @@ export interface WidgetState {
   currentStreamingMessage: string | null;
   currentTheme?: 'light' | 'dark';
   attachedFile?: File | null;
+}
+
+// =========================================================================
+// Extended Theme Configuration (ChatKit-compatible)
+// =========================================================================
+
+export type ColorScheme = 'light' | 'dark';
+export type RadiusOption = 'none' | 'small' | 'medium' | 'large' | 'pill';
+export type DensityOption = 'compact' | 'normal' | 'spacious';
+
+export interface ThemeConfig {
+  /** Color scheme: light or dark */
+  colorScheme?: ColorScheme;
+
+  /** Corner radius style */
+  radius?: RadiusOption;
+
+  /** UI density/spacing */
+  density?: DensityOption;
+
+  /** Typography options */
+  typography?: TypographyConfig;
+
+  /** Color customization */
+  color?: ColorConfig;
+}
+
+export interface TypographyConfig {
+  /** Base font size in pixels (14-18) */
+  baseSize?: number;
+
+  /** Primary font family */
+  fontFamily?: string;
+
+  /** Monospace font family for code */
+  fontFamilyMono?: string;
+
+  /** Custom font sources */
+  fontSources?: FontSource[];
+}
+
+export interface FontSource {
+  family: string;
+  src: string;
+  weight?: number | string;
+  style?: 'normal' | 'italic' | 'oblique';
+  display?: 'auto' | 'block' | 'swap' | 'fallback' | 'optional';
+}
+
+export interface ColorConfig {
+  /** Grayscale palette with tinted hue */
+  grayscale?: GrayscaleConfig;
+
+  /** Accent/primary color */
+  accent?: AccentConfig;
+
+  /** Surface background/foreground colors */
+  surface?: SurfaceConfig;
+
+  /** Icon color override */
+  icon?: string;
+
+  /** User message bubble colors */
+  userMessage?: UserMessageColorConfig;
+}
+
+export interface GrayscaleConfig {
+  /** Hue in degrees (0-360) */
+  hue: number;
+
+  /** Tint intensity (0-9) */
+  tint: number;
+
+  /** Shade adjustment (-4 to 4) */
+  shade?: number;
+}
+
+export interface AccentConfig {
+  /** Primary accent color (hex, rgb, hsl) */
+  primary: string;
+
+  /** Accent intensity level (0-3) */
+  level?: number;
+}
+
+export interface SurfaceConfig {
+  /** Background color for surfaces */
+  background: string;
+
+  /** Foreground color for surfaces */
+  foreground: string;
+}
+
+export interface UserMessageColorConfig {
+  /** Text color for user messages */
+  text: string;
+
+  /** Background color for user messages */
+  background: string;
+}
+
+export interface StartScreenConfig {
+  /** Greeting text shown in new thread view */
+  greeting?: string;
+
+  /** Starter prompts shown above composer */
+  prompts?: StarterPrompt[];
+}
+
+export interface StarterPrompt {
+  /** Display label */
+  label: string;
+
+  /** Icon name */
+  icon?: string;
+
+  /** Text inserted when clicked (defaults to label) */
+  prompt?: string;
+}
+
+export interface ComposerConfig {
+  /** Placeholder text in input */
+  placeholder?: string;
+
+  /** Disclaimer text below composer */
+  disclaimer?: string;
+
+  /** Enable file attachments */
+  attachments?: {
+    enabled: boolean;
+    maxSize?: number;
+    maxCount?: number;
+    accept?: string[];
+  };
+
+  /** Show model picker */
+  models?: ModelOption[];
+}
+
+export interface ModelOption {
+  id: string;
+  label: string;
+  description?: string;
+  default?: boolean;
 }
