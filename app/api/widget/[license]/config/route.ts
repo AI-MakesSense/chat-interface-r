@@ -190,12 +190,12 @@ function translateConfig(dbConfig: any, requestUrl: string): WidgetConfig {
             relayEndpoint: `${new URL(requestUrl).origin}/api/chat-relay`,
         },
         // AgentKit / OpenAI configuration
-        // Note: API key is NOT sent to client - it stays server-side
+        // Note: API key and workflow ID are NOT sent to client - they stay server-side
         agentKit: dbConfig.enableAgentKit ? {
             enabled: true,
-            workflowId: dbConfig.agentKitWorkflowId || undefined,
             relayEndpoint: `${new URL(requestUrl).origin}/api/chat-relay/openai`,
-            // hasApiKey indicates if API key is configured (without exposing it)
+            // Indicate if credentials are configured (without exposing them)
+            hasWorkflowId: !!dbConfig.agentKitWorkflowId,
             hasApiKey: !!dbConfig.agentKitApiKey,
         } : {
             enabled: false,

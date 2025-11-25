@@ -68,10 +68,10 @@ export interface ConnectionConfig {
 export interface AgentKitConfig {
   /** Whether AgentKit/OpenAI mode is enabled */
   enabled: boolean;
-  /** OpenAI Agent Builder workflow ID */
-  workflowId?: string;
   /** Relay endpoint for OpenAI requests */
   relayEndpoint?: string;
+  /** Whether a workflow ID is configured (ID itself is never sent to client) */
+  hasWorkflowId?: boolean;
   /** Whether an API key is configured (key itself is never sent to client) */
   hasApiKey?: boolean;
 }

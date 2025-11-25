@@ -130,7 +130,6 @@ export interface WidgetConfig {
   enableAgentKit?: boolean;
   agentKitWorkflowId?: string;
   agentKitApiKey?: string;
-  agentKitSystemPrompt?: string;
 }
 
 /**
@@ -280,7 +279,6 @@ const defaultConfig: WidgetConfig = {
   enableAgentKit: false,
   agentKitWorkflowId: '',
   agentKitApiKey: '',
-  agentKitSystemPrompt: '',
 };
 
 /**

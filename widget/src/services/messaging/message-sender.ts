@@ -147,21 +147,16 @@ export class MessageSender {
       let payload: Record<string, unknown>;
 
       if (isAgentKitMode && agentKitConfig?.relayEndpoint) {
-        // AgentKit/OpenAI mode - send to OpenAI relay
+        // AgentKit/OpenAI mode - send to OpenAI ChatKit relay
         relayUrl = agentKitConfig.relayEndpoint;
-
-        // Build conversation history from existing messages
-        const conversationHistory = currentMessages.map((msg) => ({
-          role: msg.role,
-          content: msg.content,
-        }));
 
         payload = {
           widgetId: this.runtimeConfig.relay.widgetId,
           licenseKey: this.runtimeConfig.relay.licenseKey,
           message: text,
           sessionId,
-          conversationHistory,
+          // threadId is stored in sessionStorage for ChatKit conversation continuity
+          threadId: this.getChatKitThreadId(),
           metadata: shouldCaptureContext ? { context: this.capturePageContext() } : undefined,
         };
       } else {
@@ -213,6 +208,11 @@ export class MessageSender {
           };
           const updatedMessages = this.stateManager.getState().messages;
           this.stateManager.setState({ messages: [...updatedMessages, assistantMessage] });
+        }
+
+        // Store ChatKit thread ID for conversation continuity
+        if (data.threadId) {
+          this.setChatKitThreadId(data.threadId);
         }
 
         // Update state: loading finished
@@ -329,5 +329,36 @@ export class MessageSender {
 
       reader.readAsDataURL(file);
     });
+  }
+
+  /**
+   * Storage key for ChatKit thread ID
+   */
+  private get chatKitThreadKey(): string {
+    return `chatkit_thread_${this.runtimeConfig.relay.widgetId}`;
+  }
+
+  /**
+   * Get stored ChatKit thread ID for conversation continuity
+   * @returns The thread ID or undefined if not set
+   */
+  private getChatKitThreadId(): string | undefined {
+    try {
+      return sessionStorage.getItem(this.chatKitThreadKey) || undefined;
+    } catch {
+      return undefined;
+    }
+  }
+
+  /**
+   * Store ChatKit thread ID for conversation continuity
+   * @param threadId - The thread ID from ChatKit response
+   */
+  private setChatKitThreadId(threadId: string): void {
+    try {
+      sessionStorage.setItem(this.chatKitThreadKey, threadId);
+    } catch {
+      // sessionStorage not available, ignore
+    }
   }
 }

@@ -1,6 +1,4 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { Agent, run, setDefaultOpenAIClient } from '@openai/agents';
-import OpenAI from 'openai';
 import { getWidgetById, getLicenseByKey } from '@/lib/db/queries';
 
 /**
@@ -11,9 +9,8 @@ interface OpenAIRelayBody {
   licenseKey: string;
   message: string;
   sessionId?: string;
-  conversationHistory?: Array<{ role: 'user' | 'assistant'; content: string }>;
+  threadId?: string; // ChatKit thread ID for conversation continuity
   metadata?: Record<string, unknown>;
-  stream?: boolean;
 }
 
 /**
@@ -36,13 +33,18 @@ export async function OPTIONS(): Promise<NextResponse> {
 }
 
 /**
- * OpenAI Agents SDK relay endpoint
- * Forwards chat messages to OpenAI using the Agents SDK with workflow configuration
+ * ChatKit Sessions API endpoint
+ */
+const CHATKIT_API_URL = 'https://api.openai.com/v1/chatkit/sessions';
+
+/**
+ * OpenAI ChatKit relay endpoint
+ * Forwards chat messages to OpenAI ChatKit using the workflow ID
  */
 export async function POST(request: NextRequest): Promise<NextResponse> {
   try {
     const body: OpenAIRelayBody = await request.json();
-    const { widgetId, licenseKey, message, conversationHistory = [], metadata } = body;
+    const { widgetId, licenseKey, message, threadId, metadata } = body;
 
     // 1. Input Validation
     if (!widgetId || !licenseKey || !message) {
@@ -82,7 +84,6 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     const config = widget.config as Record<string, unknown>;
     const apiKey = config?.agentKitApiKey as string | undefined;
     const workflowId = config?.agentKitWorkflowId as string | undefined;
-    const systemPrompt = config?.agentKitSystemPrompt as string | undefined;
 
     if (!apiKey) {
       return new NextResponse(
@@ -91,125 +92,102 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
       );
     }
 
+    if (!workflowId) {
+      return new NextResponse(
+        JSON.stringify({ error: 'OpenAI Workflow ID not configured for this widget' }),
+        { status: 400, headers: { 'Content-Type': 'application/json', ...corsHeaders } }
+      );
+    }
+
     console.log('[OpenAI Relay] Processing request for widget:', widgetId, 'workflowId:', workflowId);
 
-    // 5. Configure OpenAI Client with user's API key
-    const openaiClient = new OpenAI({ apiKey });
-    setDefaultOpenAIClient(openaiClient);
-
-    // 6. Build conversation input for the agent
-    // Convert conversation history to the format expected by the agent
-    const previousMessages = conversationHistory.map(msg => ({
-      role: msg.role as 'user' | 'assistant',
-      content: msg.content,
-    }));
-
-    // 7. Create Agent with workflow configuration
-    // If workflowId is provided, we could fetch workflow details from OpenAI
-    // For now, we'll use the system prompt as instructions
-    const agentInstructions = systemPrompt ||
-      'You are a helpful assistant. Respond concisely and helpfully to user questions.';
-
-    const agent = new Agent({
-      name: 'WidgetAssistant',
-      instructions: agentInstructions,
-      model: 'gpt-4o-mini', // Default model, can be made configurable
-    });
-
-    // 8. Build the input with conversation context
-    const fullInput = previousMessages.length > 0
-      ? [...previousMessages, { role: 'user' as const, content: message }]
-      : message;
-
-    // 9. Run the agent (with optional streaming)
+    // 5. Call ChatKit Sessions API
     try {
-      if (body.stream) {
-        // Streaming response via SSE
-        const encoder = new TextEncoder();
-        const stream = new ReadableStream({
-          async start(controller) {
-            try {
-              const streamedResult = await run(agent, fullInput, { stream: true });
-
-              for await (const event of streamedResult) {
-                // Handle different event types from the agent
-                if (event.type === 'raw_model_stream_event') {
-                  const data = event.data as { delta?: { content?: string } };
-                  if (data.delta?.content) {
-                    const sseData = `data: ${JSON.stringify({ type: 'delta', content: data.delta.content })}\n\n`;
-                    controller.enqueue(encoder.encode(sseData));
-                  }
-                }
-              }
-
-              // Get final result
-              const finalResult = streamedResult.finalOutput;
-              const doneData = `data: ${JSON.stringify({ type: 'done', content: finalResult })}\n\n`;
-              controller.enqueue(encoder.encode(doneData));
-              controller.close();
-            } catch (streamError) {
-              console.error('[OpenAI Relay] Stream Error:', streamError);
-              const errorData = `data: ${JSON.stringify({ type: 'error', message: 'Stream error occurred' })}\n\n`;
-              controller.enqueue(encoder.encode(errorData));
-              controller.close();
+      // Build the ChatKit request
+      const chatKitPayload: Record<string, unknown> = {
+        workflow_id: workflowId,
+        input: {
+          messages: [
+            {
+              role: 'user',
+              content: message,
             }
-          }
-        });
+          ]
+        }
+      };
 
-        return new NextResponse(stream, {
-          status: 200,
-          headers: {
-            'Content-Type': 'text/event-stream',
-            'Cache-Control': 'no-cache',
-            'Connection': 'keep-alive',
-            ...corsHeaders
-          }
-        });
+      // Include thread_id if we have one (for conversation continuity)
+      if (threadId) {
+        chatKitPayload.thread_id = threadId;
       }
 
-      // Non-streaming response
-      const result = await run(agent, fullInput);
+      const response = await fetch(CHATKIT_API_URL, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${apiKey}`,
+        },
+        body: JSON.stringify(chatKitPayload),
+      });
 
-      // Extract the final output
-      const response = result.finalOutput || 'I apologize, but I was unable to generate a response.';
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error('[OpenAI Relay] ChatKit API Error:', response.status, errorText);
 
-      console.log('[OpenAI Relay] Agent response received');
+        // Handle specific error codes
+        if (response.status === 401) {
+          return new NextResponse(
+            JSON.stringify({ error: 'Invalid OpenAI API key' }),
+            { status: 401, headers: { 'Content-Type': 'application/json', ...corsHeaders } }
+          );
+        }
+        if (response.status === 404) {
+          return new NextResponse(
+            JSON.stringify({ error: 'Workflow not found. Please check your Workflow ID.' }),
+            { status: 404, headers: { 'Content-Type': 'application/json', ...corsHeaders } }
+          );
+        }
+        if (response.status === 429) {
+          return new NextResponse(
+            JSON.stringify({ error: 'OpenAI rate limit exceeded. Please try again later.' }),
+            { status: 429, headers: { 'Content-Type': 'application/json', ...corsHeaders } }
+          );
+        }
+
+        return new NextResponse(
+          JSON.stringify({ error: 'Failed to process message with ChatKit' }),
+          { status: response.status, headers: { 'Content-Type': 'application/json', ...corsHeaders } }
+        );
+      }
+
+      const data = await response.json();
+      console.log('[OpenAI Relay] ChatKit response received');
+
+      // Extract the assistant's response from ChatKit
+      const assistantMessage = data.output?.messages?.find(
+        (msg: { role: string }) => msg.role === 'assistant'
+      );
+
+      const responseText = assistantMessage?.content || data.output?.text || 'No response generated';
 
       return new NextResponse(
         JSON.stringify({
-          message: response,
-          output: response,
+          message: responseText,
+          output: responseText,
+          threadId: data.thread_id, // Return thread ID for conversation continuity
           metadata: {
-            model: 'gpt-4o-mini',
-            workflowId: workflowId || null,
+            workflowId,
             ...metadata,
           }
         }),
         { status: 200, headers: { 'Content-Type': 'application/json', ...corsHeaders } }
       );
 
-    } catch (agentError) {
-      console.error('[OpenAI Relay] Agent Error:', agentError);
-
-      // Check for specific OpenAI errors
-      if (agentError instanceof Error) {
-        if (agentError.message.includes('API key')) {
-          return new NextResponse(
-            JSON.stringify({ error: 'Invalid OpenAI API key' }),
-            { status: 401, headers: { 'Content-Type': 'application/json', ...corsHeaders } }
-          );
-        }
-        if (agentError.message.includes('rate limit')) {
-          return new NextResponse(
-            JSON.stringify({ error: 'OpenAI rate limit exceeded. Please try again later.' }),
-            { status: 429, headers: { 'Content-Type': 'application/json', ...corsHeaders } }
-          );
-        }
-      }
-
+    } catch (fetchError) {
+      console.error('[OpenAI Relay] Network Error:', fetchError);
       return new NextResponse(
-        JSON.stringify({ error: 'Failed to process message with AI agent' }),
-        { status: 500, headers: { 'Content-Type': 'application/json', ...corsHeaders } }
+        JSON.stringify({ error: 'Failed to connect to OpenAI ChatKit' }),
+        { status: 502, headers: { 'Content-Type': 'application/json', ...corsHeaders } }
       );
     }
 
