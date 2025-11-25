@@ -72,7 +72,7 @@ The **N8n Widget Designer Platform** is a production-ready SaaS application that
 ├── components/                   # React components
 │   ├── auth/                     # login-form, signup-form
 │   ├── dashboard/                # license-card, widget-list, domain-manager, etc.
-│   ├── configurator/             # preview-frame, device-switcher, domain-info-card
+│   ├── configurator/             # config-sidebar, preview-canvas, chat-preview, code-modal, icon-picker, ui/
 │   ├── landing/                  # navbar, hero, features, footer
 │   └── ui/                       # shadcn/ui components (button, input, card, etc.)
 │
