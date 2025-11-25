@@ -14,8 +14,17 @@
 import { create } from 'zustand';
 
 /**
+ * Starter prompt for conversation starters
+ */
+export interface StarterPrompt {
+  label: string;
+  icon: string;
+}
+
+/**
  * Widget configuration structure
  * Matches the JSON schema stored in database
+ * Extended to support playground-style configurator
  */
 export interface WidgetConfig {
   // Widget metadata
@@ -34,7 +43,7 @@ export interface WidgetConfig {
     firstMessage?: string;
   };
 
-  // Theme & Colors
+  // Theme & Colors (legacy structure for backward compatibility)
   style: {
     theme: 'light' | 'dark' | 'auto';
     primaryColor: string;
@@ -44,7 +53,7 @@ export interface WidgetConfig {
     cornerRadius?: number;
   };
 
-  // Typography
+  // Typography (legacy)
   typography?: {
     fontFamily?: string;
     fontSize?: number;
@@ -56,18 +65,71 @@ export interface WidgetConfig {
     routeParam?: string;
   };
 
-  // Features
+  // Features (legacy)
   features?: {
     fileAttachments?: boolean;
     allowedExtensions?: string[];
     maxFileSize?: number;
   };
 
-  // Advanced
+  // Advanced (legacy)
   advanced?: {
     customCss?: string;
     customJs?: string;
   };
+
+  // =========================================================================
+  // NEW: Playground-style configuration (optional for backward compatibility)
+  // =========================================================================
+
+  // Color System
+  themeMode?: 'light' | 'dark';
+  useAccent?: boolean;
+  accentColor?: string;
+  useTintedGrayscale?: boolean;
+  tintHue?: number;
+  tintLevel?: number;
+  shadeLevel?: number;
+  useCustomSurfaceColors?: boolean;
+  surfaceBackgroundColor?: string;
+  surfaceForegroundColor?: string;
+  useCustomTextColor?: boolean;
+  customTextColor?: string;
+
+  // Component Colors
+  useCustomIconColor?: boolean;
+  customIconColor?: string;
+  useCustomUserMessageColors?: boolean;
+  customUserMessageTextColor?: string;
+  customUserMessageBackgroundColor?: string;
+
+  // Typography (new style)
+  fontFamily?: string;
+  fontSize?: number;
+  useCustomFont?: boolean;
+  customFontName?: string;
+  customFontCss?: string;
+
+  // Style
+  radius?: 'none' | 'small' | 'medium' | 'large' | 'pill';
+  density?: 'compact' | 'normal' | 'spacious';
+
+  // Start Screen
+  greeting?: string;
+  starterPrompts?: StarterPrompt[];
+
+  // Composer
+  placeholder?: string;
+  disclaimer?: string;
+  enableAttachments?: boolean;
+  enableModelPicker?: boolean;
+
+  // Connect (new style)
+  enableN8n?: boolean;
+  n8nWebhookUrl?: string;
+  enableAgentKit?: boolean;
+  agentKitWorkflowId?: string;
+  agentKitApiKey?: string;
 }
 
 /**
@@ -152,8 +214,10 @@ interface WidgetState {
 
 /**
  * Default widget configuration
+ * Includes both legacy and new playground-style properties
  */
 const defaultConfig: WidgetConfig = {
+  // Legacy properties (for backward compatibility)
   branding: {
     companyName: 'My Company',
     welcomeText: 'How can we help you today?',
@@ -168,6 +232,53 @@ const defaultConfig: WidgetConfig = {
   connection: {
     webhookUrl: '',
   },
+
+  // New playground-style properties
+  themeMode: 'light',
+  useAccent: true,
+  accentColor: '#0ea5e9',
+  useTintedGrayscale: false,
+  tintHue: 220,
+  tintLevel: 10,
+  shadeLevel: 50,
+  useCustomSurfaceColors: false,
+  surfaceBackgroundColor: '#ffffff',
+  surfaceForegroundColor: '#f8fafc',
+  useCustomTextColor: false,
+  customTextColor: '#1e293b',
+  useCustomIconColor: false,
+  customIconColor: '#64748b',
+  useCustomUserMessageColors: false,
+  customUserMessageTextColor: '#ffffff',
+  customUserMessageBackgroundColor: '#0ea5e9',
+
+  // Typography
+  fontFamily: 'system-ui',
+  fontSize: 16,
+  useCustomFont: false,
+  customFontName: '',
+  customFontCss: '',
+
+  // Style
+  radius: 'medium',
+  density: 'normal',
+
+  // Start Screen
+  greeting: 'How can I help you today?',
+  starterPrompts: [],
+
+  // Composer
+  placeholder: 'Type a message...',
+  disclaimer: '',
+  enableAttachments: false,
+  enableModelPicker: false,
+
+  // Connect
+  enableN8n: true,
+  n8nWebhookUrl: '',
+  enableAgentKit: false,
+  agentKitWorkflowId: '',
+  agentKitApiKey: '',
 };
 
 /**

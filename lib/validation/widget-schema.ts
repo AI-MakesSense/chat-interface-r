@@ -228,6 +228,73 @@ export const featuresSchema = z.object({
 });
 
 // =============================================================================
+// NEW: Playground-style Configuration Schemas
+// =============================================================================
+
+/**
+ * Starter prompt schema for conversation starters
+ */
+const starterPromptSchema = z.object({
+  label: z.string().min(1).max(100),
+  icon: z.string().min(1).max(50),
+});
+
+/**
+ * Playground-style widget configuration schema
+ * These are optional to maintain backward compatibility with existing widgets
+ */
+export const playgroundConfigSchema = z.object({
+  // Color System
+  themeMode: z.enum(['light', 'dark']).optional(),
+  useAccent: z.boolean().optional(),
+  accentColor: hexColorSchema.optional(),
+  useTintedGrayscale: z.boolean().optional(),
+  tintHue: z.number().int().min(0).max(360).optional(),
+  tintLevel: z.number().int().min(0).max(100).optional(),
+  shadeLevel: z.number().int().min(0).max(100).optional(),
+  useCustomSurfaceColors: z.boolean().optional(),
+  surfaceBackgroundColor: hexColorSchema.optional(),
+  surfaceForegroundColor: hexColorSchema.optional(),
+  useCustomTextColor: z.boolean().optional(),
+  customTextColor: hexColorSchema.optional(),
+
+  // Component Colors
+  useCustomIconColor: z.boolean().optional(),
+  customIconColor: hexColorSchema.optional(),
+  useCustomUserMessageColors: z.boolean().optional(),
+  customUserMessageTextColor: hexColorSchema.optional(),
+  customUserMessageBackgroundColor: hexColorSchema.optional(),
+
+  // Typography (new style)
+  fontFamily: z.string().max(100).optional(),
+  fontSize: z.number().int().min(12).max(24).optional(),
+  useCustomFont: z.boolean().optional(),
+  customFontName: z.string().max(100).optional(),
+  customFontCss: z.string().max(2000).optional(),
+
+  // Style
+  radius: z.enum(['none', 'small', 'medium', 'large', 'pill']).optional(),
+  density: z.enum(['compact', 'normal', 'spacious']).optional(),
+
+  // Start Screen
+  greeting: z.string().max(500).optional(),
+  starterPrompts: z.array(starterPromptSchema).max(6).optional(),
+
+  // Composer
+  placeholder: z.string().max(200).optional(),
+  disclaimer: z.string().max(500).optional(),
+  enableAttachments: z.boolean().optional(),
+  enableModelPicker: z.boolean().optional(),
+
+  // Connect (new style)
+  enableN8n: z.boolean().optional(),
+  n8nWebhookUrl: webhookUrlSchema.optional(),
+  enableAgentKit: z.boolean().optional(),
+  agentKitWorkflowId: z.string().max(100).optional(),
+  agentKitApiKey: z.string().max(200).optional(),
+});
+
+// =============================================================================
 // Complete Widget Config Schema (Base - No Tier Restrictions)
 // =============================================================================
 
@@ -238,7 +305,7 @@ export const widgetConfigBaseSchema = z.object({
   behavior: behaviorSchema,
   connection: connectionSchema,
   features: featuresSchema,
-});
+}).merge(playgroundConfigSchema);
 
 // =============================================================================
 // Tier-Aware Validation
@@ -327,4 +394,6 @@ export type AdvancedStylingInput = z.infer<typeof advancedStylingSchema>;
 export type BehaviorInput = z.infer<typeof behaviorSchema>;
 export type ConnectionInput = z.infer<typeof connectionSchema>;
 export type FeaturesInput = z.infer<typeof featuresSchema>;
+export type PlaygroundConfigInput = z.infer<typeof playgroundConfigSchema>;
+export type StarterPromptInput = z.infer<typeof starterPromptSchema>;
 export type WidgetConfigInput = z.infer<typeof widgetConfigBaseSchema>;
