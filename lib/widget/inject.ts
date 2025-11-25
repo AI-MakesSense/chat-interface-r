@@ -50,9 +50,13 @@ export function injectLicenseFlags(
 window.N8N_LICENSE_FLAGS = ${flagsJSON};`;
 
   // 3. Add relay configuration if widgetId is provided
+  // Use production URL for relay endpoint to ensure cross-domain requests work
+  // The widget may be embedded on any domain but must call back to our server
+  const baseUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://chat-interface-r.vercel.app';
+
   if (widgetId) {
     const relayConfig = {
-      relayUrl: '/api/chat-relay',
+      relayUrl: `${baseUrl}/api/chat-relay`,
       widgetId: widgetId,
       licenseKey: license.licenseKey
     };
