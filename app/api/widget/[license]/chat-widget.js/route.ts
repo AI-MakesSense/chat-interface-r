@@ -192,10 +192,12 @@ export async function GET(
 
     // Agency tier allows any domain
     if (license.tier !== 'agency') {
-      // Check if domain is in allowed list
+      // Check if domain is in allowed list (including subdomains)
       const isAuthorized = normalizedRequestDomain === 'localhost' || license.domains.some(allowedDomain => {
         const normalizedAllowed = normalizeDomain(allowedDomain);
-        return normalizedAllowed === normalizedRequestDomain;
+        // Allow exact match OR subdomain match (e.g., project.user.replit.dev matches replit.dev)
+        return normalizedAllowed === normalizedRequestDomain ||
+               normalizedRequestDomain.endsWith('.' + normalizedAllowed);
       });
 
       if (!isAuthorized) {
