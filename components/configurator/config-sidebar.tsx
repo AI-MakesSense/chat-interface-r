@@ -96,14 +96,12 @@ const Label = ({ children, icon = true, isDark }: { children?: React.ReactNode; 
 const Toggle = ({ checked, onChange, isDark }: { checked: boolean; onChange: (v: boolean) => void; isDark: boolean }) => (
   <button
     onClick={() => onChange(!checked)}
-    className={`relative w-8 h-[19px] rounded-full transition-colors duration-200 ease-in-out ${
-      checked ? (isDark ? 'bg-[#0285FF]' : 'bg-blue-600') : (isDark ? 'bg-[#414141]' : 'bg-neutral-200')
-    }`}
+    className={`relative w-8 h-[19px] rounded-full transition-colors duration-200 ease-in-out ${checked ? (isDark ? 'bg-[#0285FF]' : 'bg-blue-600') : (isDark ? 'bg-[#414141]' : 'bg-neutral-200')
+      }`}
   >
     <span
-      className={`absolute top-[2px] left-[2px] w-[15px] h-[15px] bg-white rounded-full shadow-sm transition-transform duration-200 ease-in-out ${
-        checked ? 'translate-x-[13px]' : 'translate-x-0'
-      }`}
+      className={`absolute top-[2px] left-[2px] w-[15px] h-[15px] bg-white rounded-full shadow-sm transition-transform duration-200 ease-in-out ${checked ? 'translate-x-[13px]' : 'translate-x-0'
+        }`}
     />
   </button>
 );
@@ -398,17 +396,15 @@ export const ConfigSidebar: React.FC<ConfigSidebarProps> = ({
               />
               <button
                 onClick={() => handleChange('themeMode', 'light')}
-                className={`relative z-10 px-3 py-0.5 text-xs font-medium rounded-[4px] w-[50px] text-center transition-colors ${
-                  config.themeMode === 'light' ? (isDark ? 'text-[#afafaf]' : 'text-neutral-900') : (isDark ? 'text-white' : 'text-neutral-500')
-                }`}
+                className={`relative z-10 px-3 py-0.5 text-xs font-medium rounded-[4px] w-[50px] text-center transition-colors ${config.themeMode === 'light' ? (isDark ? 'text-[#afafaf]' : 'text-neutral-900') : (isDark ? 'text-white' : 'text-neutral-500')
+                  }`}
               >
                 Light
               </button>
               <button
                 onClick={() => handleChange('themeMode', 'dark')}
-                className={`relative z-10 px-3 py-0.5 text-xs font-medium rounded-[4px] w-[50px] text-center transition-colors ${
-                  config.themeMode === 'dark' ? (isDark ? 'text-white' : 'text-neutral-900') : (isDark ? 'text-[#afafaf]' : 'text-neutral-500')
-                }`}
+                className={`relative z-10 px-3 py-0.5 text-xs font-medium rounded-[4px] w-[50px] text-center transition-colors ${config.themeMode === 'dark' ? (isDark ? 'text-white' : 'text-neutral-900') : (isDark ? 'text-[#afafaf]' : 'text-neutral-500')
+                  }`}
               >
                 Dark
               </button>
@@ -720,32 +716,43 @@ export const ConfigSidebar: React.FC<ConfigSidebarProps> = ({
             <Label isDark={isDark}>Connect</Label>
           </Row>
           <div className="space-y-4">
-            {/* Connection Type Selector - Only one can be active */}
+            {/* Provider Selection */}
             <div className="space-y-2">
               {/* n8n Option */}
               {(() => {
-                const isN8nSelected = !config.enableAgentKit;
+                const isN8nSelected = config.connection?.provider === 'n8n' || !config.connection?.provider;
                 return (
                   <div
-                    className={`p-3 rounded-lg border cursor-pointer transition-all ${
-                      isN8nSelected
+                    className={`p-3 rounded-lg border cursor-pointer transition-all ${isN8nSelected
                         ? isDark
                           ? 'border-blue-500 bg-blue-500/10'
                           : 'border-blue-500 bg-blue-50'
                         : isDark
                           ? 'border-neutral-700 hover:border-neutral-600'
                           : 'border-neutral-200 hover:border-neutral-300'
-                    }`}
+                      }`}
                     onClick={() => {
-                      handleChange('enableAgentKit', false);
-                      handleChange('enableN8n', true);
+                      onChange({
+                        ...config,
+                        connection: {
+                          ...config.connection,
+                          provider: 'n8n',
+                          webhookUrl: config.connection?.webhookUrl || '',
+                        }
+                      });
                     }}
                     role="button"
                     tabIndex={0}
                     onKeyDown={(e) => {
                       if (e.key === 'Enter' || e.key === ' ') {
-                        handleChange('enableAgentKit', false);
-                        handleChange('enableN8n', true);
+                        onChange({
+                          ...config,
+                          connection: {
+                            ...config.connection,
+                            provider: 'n8n',
+                            webhookUrl: config.connection?.webhookUrl || '',
+                          }
+                        });
                       }
                     }}
                   >
@@ -753,11 +760,10 @@ export const ConfigSidebar: React.FC<ConfigSidebarProps> = ({
                       <div className={`font-medium ${isN8nSelected ? (isDark ? 'text-blue-400' : 'text-blue-600') : theme.textMuted}`}>
                         n8n Webhook
                       </div>
-                      <div className={`w-4 h-4 rounded-full border-2 flex items-center justify-center ${
-                        isN8nSelected
+                      <div className={`w-4 h-4 rounded-full border-2 flex items-center justify-center ${isN8nSelected
                           ? 'border-blue-500 bg-blue-500'
                           : isDark ? 'border-neutral-600' : 'border-neutral-300'
-                      }`}>
+                        }`}>
                         {isN8nSelected && (
                           <div className="w-2 h-2 rounded-full bg-white" />
                         )}
@@ -767,10 +773,17 @@ export const ConfigSidebar: React.FC<ConfigSidebarProps> = ({
                       <div className="mt-3 animate-in slide-in-from-top-1 fade-in duration-200">
                         <SidebarInput
                           type="text"
-                          value={config.n8nWebhookUrl || config.connection?.webhookUrl || ''}
-                          onChange={(e) => handleChange('n8nWebhookUrl', e.target.value)}
+                          value={config.connection?.webhookUrl || ''}
+                          onChange={(e) => onChange({
+                            ...config,
+                            connection: {
+                              ...config.connection,
+                              provider: 'n8n',
+                              webhookUrl: e.target.value,
+                            }
+                          })}
                           className="w-full"
-                          placeholder="Webhook URL"
+                          placeholder="https://your-n8n-instance.com/webhook/..."
                           isDark={isDark}
                           onClick={(e) => e.stopPropagation()}
                         />
@@ -782,40 +795,52 @@ export const ConfigSidebar: React.FC<ConfigSidebarProps> = ({
 
               {/* OpenAI AgentKit Option */}
               {(() => {
-                const isAgentKitSelected = config.enableAgentKit === true;
+                const isAgentKitSelected = config.connection?.provider === 'agentkit';
                 return (
                   <div
-                    className={`p-3 rounded-lg border cursor-pointer transition-all ${
-                      isAgentKitSelected
+                    className={`p-3 rounded-lg border cursor-pointer transition-all ${isAgentKitSelected
                         ? isDark
                           ? 'border-green-500 bg-green-500/10'
                           : 'border-green-500 bg-green-50'
                         : isDark
                           ? 'border-neutral-700 hover:border-neutral-600'
                           : 'border-neutral-200 hover:border-neutral-300'
-                    }`}
+                      }`}
                     onClick={() => {
-                      handleChange('enableAgentKit', true);
-                      handleChange('enableN8n', false);
+                      onChange({
+                        ...config,
+                        connection: {
+                          ...config.connection,
+                          provider: 'agentkit',
+                          agentKitWorkflowId: config.connection?.agentKitWorkflowId || '',
+                          agentKitApiKey: config.connection?.agentKitApiKey || '',
+                        }
+                      });
                     }}
                     role="button"
                     tabIndex={0}
                     onKeyDown={(e) => {
                       if (e.key === 'Enter' || e.key === ' ') {
-                        handleChange('enableAgentKit', true);
-                        handleChange('enableN8n', false);
+                        onChange({
+                          ...config,
+                          connection: {
+                            ...config.connection,
+                            provider: 'agentkit',
+                            agentKitWorkflowId: config.connection?.agentKitWorkflowId || '',
+                            agentKitApiKey: config.connection?.agentKitApiKey || '',
+                          }
+                        });
                       }
                     }}
                   >
                     <Row>
                       <div className={`font-medium ${isAgentKitSelected ? (isDark ? 'text-green-400' : 'text-green-600') : theme.textMuted}`}>
-                        OpenAI AgentKit
+                        OpenAI Agent Builder
                       </div>
-                      <div className={`w-4 h-4 rounded-full border-2 flex items-center justify-center ${
-                        isAgentKitSelected
+                      <div className={`w-4 h-4 rounded-full border-2 flex items-center justify-center ${isAgentKitSelected
                           ? 'border-green-500 bg-green-500'
                           : isDark ? 'border-neutral-600' : 'border-neutral-300'
-                      }`}>
+                        }`}>
                         {isAgentKitSelected && (
                           <div className="w-2 h-2 rounded-full bg-white" />
                         )}
@@ -825,25 +850,41 @@ export const ConfigSidebar: React.FC<ConfigSidebarProps> = ({
                       <div className="mt-3 space-y-3 animate-in slide-in-from-top-1 fade-in duration-200" onClick={(e) => e.stopPropagation()}>
                         <p className={`text-xs ${theme.textMuted} opacity-70`}>
                           Connect to OpenAI Agent Builder workflows.{' '}
-                          <a href="https://platform.openai.com/agent-builder" target="_blank" rel="noopener noreferrer" className="underline" onClick={(e) => e.stopPropagation()}>
-                            Create a workflow
+                          <a href="https://platform.openai.com/assistants" target="_blank" rel="noopener noreferrer" className="underline" onClick={(e) => e.stopPropagation()}>
+                            Create an assistant
                           </a>
                         </p>
                         <SidebarInput
-                          type="password"
-                          value={config.agentKitWorkflowId || ''}
-                          onChange={(e) => handleChange('agentKitWorkflowId', e.target.value)}
+                          type="text"
+                          value={config.connection?.agentKitWorkflowId || ''}
+                          onChange={(e) => onChange({
+                            ...config,
+                            connection: {
+                              ...config.connection,
+                              provider: 'agentkit',
+                              agentKitWorkflowId: e.target.value,
+                              agentKitApiKey: config.connection?.agentKitApiKey || '',
+                            }
+                          })}
                           className="w-full"
-                          placeholder="Workflow ID"
+                          placeholder="Assistant ID (asst_...)"
                           isDark={isDark}
                           onClick={(e) => e.stopPropagation()}
                         />
                         <SidebarInput
                           type="password"
-                          value={config.agentKitApiKey || ''}
-                          onChange={(e) => handleChange('agentKitApiKey', e.target.value)}
+                          value={config.connection?.agentKitApiKey || ''}
+                          onChange={(e) => onChange({
+                            ...config,
+                            connection: {
+                              ...config.connection,
+                              provider: 'agentkit',
+                              agentKitWorkflowId: config.connection?.agentKitWorkflowId || '',
+                              agentKitApiKey: e.target.value,
+                            }
+                          })}
                           className="w-full"
-                          placeholder="OpenAI API Key"
+                          placeholder="OpenAI API Key (sk-...)"
                           isDark={isDark}
                           onClick={(e) => e.stopPropagation()}
                         />
