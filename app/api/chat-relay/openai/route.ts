@@ -37,13 +37,14 @@ export async function OPTIONS(): Promise<NextResponse> {
 }
 
 /**
- * ChatKit Sessions API endpoint
+ * OpenAI Responses API endpoint
+ * Used for Agent Builder workflows
  */
-const CHATKIT_API_URL = 'https://api.openai.com/v1/chatkit/sessions';
+const RESPONSES_API_URL = 'https://api.openai.com/v1/responses';
 
 /**
- * OpenAI ChatKit relay endpoint
- * Forwards chat messages to OpenAI ChatKit using the workflow ID
+ * OpenAI Responses API relay endpoint
+ * Forwards chat messages to OpenAI using the workflow ID from Agent Builder
  */
 export async function POST(request: NextRequest): Promise<NextResponse> {
   try {
@@ -135,38 +136,34 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
 
     console.log('[OpenAI Relay] Using workflowId:', workflowId);
 
-    // 5. Call ChatKit Sessions API
+    // 5. Call OpenAI Responses API
     try {
-      // Build the ChatKit request
-      const chatKitPayload: Record<string, unknown> = {
-        workflow_id: workflowId,
-        input: {
-          messages: [
-            {
-              role: 'user',
-              content: message,
-            }
-          ]
-        }
+      // Build the Responses API request payload
+      // The workflow_id tells OpenAI which Agent Builder workflow to use
+      const responsesPayload: Record<string, unknown> = {
+        model: workflowId, // Workflow ID acts as the model identifier
+        input: message,
       };
 
-      // Include thread_id if we have one (for conversation continuity)
+      // Include previous_response_id for conversation continuity
       if (threadId) {
-        chatKitPayload.thread_id = threadId;
+        responsesPayload.previous_response_id = threadId;
       }
 
-      const response = await fetch(CHATKIT_API_URL, {
+      console.log('[OpenAI Relay] Calling Responses API with payload:', JSON.stringify(responsesPayload, null, 2));
+
+      const response = await fetch(RESPONSES_API_URL, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${apiKey}`,
         },
-        body: JSON.stringify(chatKitPayload),
+        body: JSON.stringify(responsesPayload),
       });
 
       if (!response.ok) {
         const errorText = await response.text();
-        console.error('[OpenAI Relay] ChatKit API Error:', response.status, errorText);
+        console.error('[OpenAI Relay] Responses API Error:', response.status, errorText);
 
         // Handle specific error codes
         if (response.status === 401) {
@@ -188,27 +185,45 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
           );
         }
 
-        return new NextResponse(
-          JSON.stringify({ error: 'Failed to process message with ChatKit' }),
-          { status: response.status, headers: { 'Content-Type': 'application/json', ...corsHeaders } }
-        );
+        // Try to parse error message from response
+        try {
+          const errorData = JSON.parse(errorText);
+          return new NextResponse(
+            JSON.stringify({ error: errorData.error?.message || 'Failed to process message' }),
+            { status: response.status, headers: { 'Content-Type': 'application/json', ...corsHeaders } }
+          );
+        } catch {
+          return new NextResponse(
+            JSON.stringify({ error: 'Failed to process message with OpenAI' }),
+            { status: response.status, headers: { 'Content-Type': 'application/json', ...corsHeaders } }
+          );
+        }
       }
 
       const data = await response.json();
-      console.log('[OpenAI Relay] ChatKit response received');
+      console.log('[OpenAI Relay] Responses API response received:', JSON.stringify(data, null, 2));
 
-      // Extract the assistant's response from ChatKit
-      const assistantMessage = data.output?.messages?.find(
-        (msg: { role: string }) => msg.role === 'assistant'
-      );
+      // Extract the response text from the Responses API format
+      // The response structure may vary, so we try multiple paths
+      let responseText = 'No response generated';
 
-      const responseText = assistantMessage?.content || data.output?.text || 'No response generated';
+      if (data.output_text) {
+        responseText = data.output_text;
+      } else if (data.output && typeof data.output === 'string') {
+        responseText = data.output;
+      } else if (data.output?.text) {
+        responseText = data.output.text;
+      } else if (data.choices?.[0]?.message?.content) {
+        responseText = data.choices[0].message.content;
+      } else if (data.content) {
+        responseText = data.content;
+      }
 
       return new NextResponse(
         JSON.stringify({
           message: responseText,
           output: responseText,
-          threadId: data.thread_id, // Return thread ID for conversation continuity
+          threadId: data.id, // Use response ID for conversation continuity
           metadata: {
             workflowId,
             ...metadata,
