@@ -122,8 +122,9 @@ export class MessageSender {
     this.stateManager.setState({ messages: [...currentMessages, userMessage] });
 
     try {
-      // Get session ID
+      // Get session ID and thread ID
       const sessionId = this.sessionManager.getSessionId();
+      const threadId = this.sessionManager.getThreadId();
 
       // Encode file attachments if present
       let fileAttachments: FileAttachment[] | undefined;
@@ -140,6 +141,7 @@ export class MessageSender {
       const payload = buildRelayPayload(this.runtimeConfig, {
         message: text,
         sessionId,
+        threadId: threadId || undefined,
         attachments: fileAttachments,
         context: shouldCaptureContext ? this.capturePageContext() : undefined,
       });
@@ -171,6 +173,11 @@ export class MessageSender {
 
         // Parse response
         const data = await response.json();
+
+        // Store threadId if returned (for AgentKit)
+        if (data.threadId) {
+          this.sessionManager.setThreadId(data.threadId);
+        }
 
         // Add assistant message to state
         if (data.message || data.output) {

@@ -41,6 +41,10 @@
     "tests/**/*",
     "**/*.test.ts",
     "**/*.test.tsx",
-    "widget"
+    "widget",
+    "chat-widget-playground",
+    "openai-chatkit-starter-app",
+    "scripts",
+    "vitest.config.ts"
   ]
 }

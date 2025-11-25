@@ -61,8 +61,11 @@ export interface WidgetConfig {
 
   // Connection
   connection: {
-    webhookUrl: string;
+    provider?: 'n8n' | 'agentkit';
+    webhookUrl?: string;
     routeParam?: string;
+    agentKitWorkflowId?: string;
+    agentKitApiKey?: string;
   };
 
   // Features (legacy)
@@ -123,13 +126,6 @@ export interface WidgetConfig {
   disclaimer?: string;
   enableAttachments?: boolean;
   enableModelPicker?: boolean;
-
-  // Connect (new style)
-  enableN8n?: boolean;
-  n8nWebhookUrl?: string;
-  enableAgentKit?: boolean;
-  agentKitWorkflowId?: string;
-  agentKitApiKey?: string;
 }
 
 /**
@@ -230,6 +226,7 @@ const defaultConfig: WidgetConfig = {
     cornerRadius: 12,
   },
   connection: {
+    provider: 'n8n',
     webhookUrl: '',
   },
 
@@ -272,13 +269,6 @@ const defaultConfig: WidgetConfig = {
   disclaimer: '',
   enableAttachments: false,
   enableModelPicker: false,
-
-  // Connect
-  enableN8n: true,
-  n8nWebhookUrl: '',
-  enableAgentKit: false,
-  agentKitWorkflowId: '',
-  agentKitApiKey: '',
 };
 
 /**

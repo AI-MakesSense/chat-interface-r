@@ -1,11 +1,11 @@
 /**
  * Session Manager
  *
- * Purpose: Manage chat session ID lifecycle for widget-N8n communication
+ * Purpose: Manage chat session ID and thread ID lifecycle for widget communication
  *
  * Responsibility:
  * - Generate UUID v4 session IDs for new sessions
- * - Persist session IDs in sessionStorage (scoped by licenseId)
+ * - Persist session IDs and thread IDs in sessionStorage (scoped by licenseId)
  * - Restore existing sessions from storage
  * - Enable session reset for testing/debugging
  * - Track session start time
@@ -24,6 +24,11 @@ import { generateSessionId } from '../../utils/session-id-generator';
 const SESSION_STORAGE_PREFIX = 'chat-widget-session-';
 
 /**
+ * Thread ID storage key prefix (for AgentKit)
+ */
+const THREAD_STORAGE_PREFIX = 'chat-widget-thread-';
+
+/**
  * Session start time storage key prefix
  */
 const SESSION_START_TIME_PREFIX = 'chat-widget-session-start-';
@@ -31,14 +36,16 @@ const SESSION_START_TIME_PREFIX = 'chat-widget-session-start-';
 /**
  * SessionManager class
  *
- * Manages session ID lifecycle for a specific license ID.
+ * Manages session ID and thread ID lifecycle for a specific license ID.
  * Each widget instance (identified by license ID) has an isolated session.
  */
 export class SessionManager {
   private licenseId: string;
   private storageKey: string;
+  private threadKey: string;
   private startTimeKey: string;
   private sessionId: string | null = null;
+  private threadId: string | null = null;
   private startTime: Date | null = null;
 
   /**
@@ -49,6 +56,7 @@ export class SessionManager {
   constructor(licenseId: string) {
     this.licenseId = licenseId;
     this.storageKey = `${SESSION_STORAGE_PREFIX}${licenseId}`;
+    this.threadKey = `${THREAD_STORAGE_PREFIX}${licenseId}`;
     this.startTimeKey = `${SESSION_START_TIME_PREFIX}${licenseId}`;
 
     // Load existing session from storage if available
@@ -62,10 +70,12 @@ export class SessionManager {
    */
   private loadSession(): void {
     const storedSessionId = sessionStorage.getItem(this.storageKey);
+    const storedThreadId = sessionStorage.getItem(this.threadKey);
     const storedStartTime = sessionStorage.getItem(this.startTimeKey);
 
     if (storedSessionId) {
       this.sessionId = storedSessionId;
+      this.threadId = storedThreadId;
       this.startTime = storedStartTime ? new Date(storedStartTime) : new Date();
     }
   }
@@ -82,6 +92,9 @@ export class SessionManager {
         this.startTimeKey,
         (this.startTime || new Date()).toISOString()
       );
+    }
+    if (this.threadId) {
+      sessionStorage.setItem(this.threadKey, this.threadId);
     }
   }
 
@@ -103,6 +116,25 @@ export class SessionManager {
   }
 
   /**
+   * Gets the current thread ID (for AgentKit)
+   *
+   * @returns The thread ID string if it exists, null otherwise
+   */
+  getThreadId(): string | null {
+    return this.threadId;
+  }
+
+  /**
+   * Sets the thread ID (for AgentKit)
+   *
+   * @param threadId - The thread ID to store
+   */
+  setThreadId(threadId: string): void {
+    this.threadId = threadId;
+    this.saveSession();
+  }
+
+  /**
    * Resets the current session
    *
    * Clears the existing session from storage and memory.
@@ -110,16 +142,19 @@ export class SessionManager {
    *
    * Side effects:
    * - Removes session ID from sessionStorage
+   * - Removes thread ID from sessionStorage
    * - Removes session start time from sessionStorage
    * - Clears in-memory session state
    */
   resetSession(): void {
     // Clear storage
     sessionStorage.removeItem(this.storageKey);
+    sessionStorage.removeItem(this.threadKey);
     sessionStorage.removeItem(this.startTimeKey);
 
     // Clear in-memory state
     this.sessionId = null;
+    this.threadId = null;
     this.startTime = null;
   }
 

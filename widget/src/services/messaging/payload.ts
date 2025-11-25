@@ -4,6 +4,7 @@ import type { FileAttachment } from './types';
 export interface RelayPayloadOptions {
   message: string;
   sessionId: string;
+  threadId?: string; // For AgentKit session persistence
   context?: Record<string, any>;
   customContext?: Record<string, any>;
   attachments?: FileAttachment[];
@@ -16,6 +17,7 @@ export interface RelayRequestPayload {
   message: string;
   chatInput: string;
   sessionId: string;
+  threadId?: string; // For AgentKit session persistence
   context?: Record<string, any>;
   customContext?: Record<string, any>;
   attachments?: FileAttachment[];
@@ -39,6 +41,7 @@ export function buildRelayPayload(
     message: options.message,
     chatInput: options.message, // Duplicate message as chatInput for n8n compatibility
     sessionId: options.sessionId,
+    threadId: options.threadId, // Include threadId for AgentKit
     context: options.context,
     customContext: options.customContext ?? uiConnection?.customContext,
     attachments: options.attachments,

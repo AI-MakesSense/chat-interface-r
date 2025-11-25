@@ -19,6 +19,48 @@ import { eq } from 'drizzle-orm';
 import { handleAPIError, successResponse, errorResponse } from '@/lib/utils/api-error';
 
 /**
+ * GET /api/licenses/[id]
+ * Get a single license by ID
+ *
+ * Returns: { license: {...} }
+ */
+export async function GET(
+  request: NextRequest,
+  context: { params: Promise<{ id: string }> }
+) {
+  try {
+    // Require authentication and get user ID
+    const userId = await getAuthenticatedUserId(request);
+
+    // Await params to get license ID (Next.js 15 requirement)
+    const { id } = await context.params;
+
+    // Query license by ID
+    const result = await db
+      .select()
+      .from(licenses)
+      .where(eq(licenses.id, id))
+      .limit(1);
+
+    // Check if license exists
+    if (!result || result.length === 0) {
+      return errorResponse('License not found', 404);
+    }
+
+    const license = result[0];
+
+    // Check ownership
+    if (license.userId !== userId) {
+      return errorResponse('Forbidden', 403);
+    }
+
+    return successResponse({ license }, 200);
+  } catch (error) {
+    return handleAPIError(error);
+  }
+}
+
+/**
  * PATCH /api/licenses/[id]
  * Update a license owned by authenticated user
  *
