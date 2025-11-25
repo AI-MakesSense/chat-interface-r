@@ -25,7 +25,9 @@ export const CodeModal: React.FC<CodeModalProps> = ({ config, isOpen, onClose, l
 
   // Generate the embed code
   const generateEmbedCode = () => {
-    const baseUrl = typeof window !== 'undefined' ? window.location.origin : '';
+    // Use production URL - environment variable or hardcoded production domain
+    // This ensures embed code works regardless of which Vercel deployment you're on
+    const baseUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://chat-interface-r.vercel.app';
     return `<!-- Chat Widget Embed Code -->
 <script>
   (function() {
@@ -162,7 +164,7 @@ export const CodeModal: React.FC<CodeModalProps> = ({ config, isOpen, onClose, l
                   <Keyword>{'<script>'}</Keyword>{'\n'}
                   {'  ('}function{'() {'}{'\n'}
                   {'    '}<Keyword>var</Keyword> w = document.<Keyword>createElement</Keyword>(<StringVal>'script'</StringVal>);{'\n'}
-                  {'    '}w.src = <StringVal>'{typeof window !== 'undefined' ? window.location.origin : ''}/api/widget/{licenseKey || 'YOUR_LICENSE_KEY'}/chat-widget.js'</StringVal>;{'\n'}
+                  {'    '}w.src = <StringVal>'{process.env.NEXT_PUBLIC_APP_URL || 'https://chat-interface-r.vercel.app'}/api/widget/{licenseKey || 'YOUR_LICENSE_KEY'}/chat-widget.js'</StringVal>;{'\n'}
                   {'    '}w.async = <Keyword>true</Keyword>;{'\n'}
                   {'    '}document.head.<Keyword>appendChild</Keyword>(w);{'\n'}
                   {'  }'}{')'}'();'{'\n'}
