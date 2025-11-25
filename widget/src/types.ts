@@ -60,7 +60,8 @@ export interface FeaturesConfig {
 }
 
 export interface ConnectionConfig {
-  webhookUrl: string;
+  provider?: 'n8n' | 'agentkit';
+  webhookUrl?: string;
   relayEndpoint?: string;
   [key: string]: any;
 }

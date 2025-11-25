@@ -1,11 +1,10 @@
 /**
  * Message Sender
  *
- * Purpose: Sends user messages to backend (N8n webhook or OpenAI AgentKit)
+ * Purpose: Sends user messages to N8n webhook with retry logic
  *
  * Responsibility:
- * - Send HTTP POST requests to relay endpoint
- * - Detect AgentKit mode vs N8n mode
+ * - Send HTTP POST requests to N8n webhook
  * - Include session ID for conversation continuity
  * - Encode file attachments as base64
  * - Update StateManager during request lifecycle
@@ -14,7 +13,6 @@
  *
  * Assumptions:
  * - N8n webhook expects JSON payload with specific structure
- * - AgentKit relay expects widgetId, licenseKey, message, conversationHistory
  * - Browser supports fetch API and FileReader
  * - StateManager handles UI updates
  */
@@ -124,8 +122,9 @@ export class MessageSender {
     this.stateManager.setState({ messages: [...currentMessages, userMessage] });
 
     try {
-      // Get session ID
+      // Get session ID and thread ID
       const sessionId = this.sessionManager.getSessionId();
+      const threadId = this.sessionManager.getThreadId();
 
       // Encode file attachments if present
       let fileAttachments: FileAttachment[] | undefined;
@@ -138,37 +137,14 @@ export class MessageSender {
       const shouldCaptureContext =
         this.runtimeConfig.uiConfig.connection?.captureContext !== false;
 
-      // Check if AgentKit mode is enabled
-      const agentKitConfig = this.runtimeConfig.uiConfig.agentKit;
-      const isAgentKitMode = agentKitConfig?.enabled && agentKitConfig?.hasApiKey;
-
-      // Determine endpoint URL and construct payload based on mode
-      let relayUrl: string;
-      let payload: Record<string, unknown>;
-
-      if (isAgentKitMode && agentKitConfig?.relayEndpoint) {
-        // AgentKit/OpenAI mode - send to OpenAI ChatKit relay
-        relayUrl = agentKitConfig.relayEndpoint;
-
-        payload = {
-          widgetId: this.runtimeConfig.relay.widgetId,
-          licenseKey: this.runtimeConfig.relay.licenseKey,
-          message: text,
-          sessionId,
-          // threadId is stored in sessionStorage for ChatKit conversation continuity
-          threadId: this.getChatKitThreadId(),
-          metadata: shouldCaptureContext ? { context: this.capturePageContext() } : undefined,
-        };
-      } else {
-        // N8n mode - use existing relay
-        relayUrl = this.runtimeConfig.relay.relayUrl;
-        payload = buildRelayPayload(this.runtimeConfig, {
-          message: text,
-          sessionId,
-          attachments: fileAttachments,
-          context: shouldCaptureContext ? this.capturePageContext() : undefined,
-        });
-      }
+      // Construct payload for relay
+      const payload = buildRelayPayload(this.runtimeConfig, {
+        message: text,
+        sessionId,
+        threadId: threadId || undefined,
+        attachments: fileAttachments,
+        context: shouldCaptureContext ? this.capturePageContext() : undefined,
+      });
 
       // Create abort controller for timeout
       this.abortController = new AbortController();
@@ -178,7 +154,7 @@ export class MessageSender {
 
       try {
         // Send POST request
-        const response = await fetch(relayUrl, {
+        const response = await fetch(this.runtimeConfig.relay.relayUrl, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
@@ -198,6 +174,11 @@ export class MessageSender {
         // Parse response
         const data = await response.json();
 
+        // Store threadId if returned (for AgentKit)
+        if (data.threadId) {
+          this.sessionManager.setThreadId(data.threadId);
+        }
+
         // Add assistant message to state
         if (data.message || data.output) {
           const assistantMessage: Message = {
@@ -208,11 +189,6 @@ export class MessageSender {
           };
           const updatedMessages = this.stateManager.getState().messages;
           this.stateManager.setState({ messages: [...updatedMessages, assistantMessage] });
-        }
-
-        // Store ChatKit thread ID for conversation continuity
-        if (data.threadId) {
-          this.setChatKitThreadId(data.threadId);
         }
 
         // Update state: loading finished
@@ -329,36 +305,5 @@ export class MessageSender {
 
       reader.readAsDataURL(file);
     });
-  }
-
-  /**
-   * Storage key for ChatKit thread ID
-   */
-  private get chatKitThreadKey(): string {
-    return `chatkit_thread_${this.runtimeConfig.relay.widgetId}`;
-  }
-
-  /**
-   * Get stored ChatKit thread ID for conversation continuity
-   * @returns The thread ID or undefined if not set
-   */
-  private getChatKitThreadId(): string | undefined {
-    try {
-      return sessionStorage.getItem(this.chatKitThreadKey) || undefined;
-    } catch {
-      return undefined;
-    }
-  }
-
-  /**
-   * Store ChatKit thread ID for conversation continuity
-   * @param threadId - The thread ID from ChatKit response
-   */
-  private setChatKitThreadId(threadId: string): void {
-    try {
-      sessionStorage.setItem(this.chatKitThreadKey, threadId);
-    } catch {
-      // sessionStorage not available, ignore
-    }
   }
 }
