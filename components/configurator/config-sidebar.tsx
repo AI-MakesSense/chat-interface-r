@@ -162,6 +162,42 @@ const SelectValue = ({ value, isDark }: { value: string | number; isDark: boolea
   </div>
 );
 
+// Input component - MUST be outside ConfigSidebar to prevent re-creation on each render
+const SidebarInput = ({ isDark, ...props }: React.InputHTMLAttributes<HTMLInputElement> & { isDark: boolean }) => (
+  <input
+    {...props}
+    className={`bg-transparent border rounded-md px-2 py-1 text-sm focus:outline-none focus:border-blue-500 transition-colors ${isDark ? 'text-[#e5e5e5] border-[#ffffff1a]' : 'text-neutral-900 border-neutral-200'} ${props.className || ''}`}
+  />
+);
+
+// Color Picker component - MUST be outside ConfigSidebar to prevent re-creation on each render
+const ColorPicker = ({ label, value, onColorChange, isDark }: { label: string; value: string; onColorChange: (v: string) => void; isDark: boolean }) => (
+  <Row>
+    <div className={isDark ? 'text-[#afafaf]' : 'text-neutral-500'}>{label}</div>
+    <div className="flex items-center gap-2">
+      <div className="relative flex items-center justify-center">
+        <div
+          className={`w-6 h-6 rounded-[4px] border shadow-sm ${isDark ? 'border-white/10' : 'border-black/10'}`}
+          style={{ backgroundColor: value }}
+        />
+        <input
+          type="color"
+          value={value}
+          onChange={(e) => onColorChange(e.target.value)}
+          className="absolute inset-0 opacity-0 cursor-pointer w-full h-full"
+        />
+      </div>
+      <SidebarInput
+        type="text"
+        value={value}
+        onChange={(e) => onColorChange(e.target.value)}
+        className="w-24 uppercase"
+        isDark={isDark}
+      />
+    </div>
+  </Row>
+);
+
 // Icon Picker
 const AVAILABLE_ICONS: { id: string; icon: LucideIcon }[] = [
   { id: 'help', icon: HelpCircle },
@@ -322,41 +358,6 @@ export const ConfigSidebar: React.FC<ConfigSidebarProps> = ({
     });
   };
 
-  // Input component
-  const Input = (props: React.InputHTMLAttributes<HTMLInputElement>) => (
-    <input
-      {...props}
-      className={`bg-transparent border rounded-md px-2 py-1 text-sm focus:outline-none focus:border-blue-500 transition-colors ${theme.text} ${theme.inputBorder} ${props.className || ''}`}
-    />
-  );
-
-  // Color Picker component
-  const ColorPicker = ({ label, value, onColorChange }: { label: string; value: string; onColorChange: (v: string) => void }) => (
-    <Row>
-      <div className={theme.textMuted}>{label}</div>
-      <div className="flex items-center gap-2">
-        <div className="relative flex items-center justify-center">
-          <div
-            className={`w-6 h-6 rounded-[4px] border shadow-sm ${isDark ? 'border-white/10' : 'border-black/10'}`}
-            style={{ backgroundColor: value }}
-          />
-          <input
-            type="color"
-            value={value}
-            onChange={(e) => onColorChange(e.target.value)}
-            className="absolute inset-0 opacity-0 cursor-pointer w-full h-full"
-          />
-        </div>
-        <Input
-          type="text"
-          value={value}
-          onChange={(e) => onColorChange(e.target.value)}
-          className="w-24 uppercase"
-        />
-      </div>
-    </Row>
-  );
-
   return (
     <aside className={`w-[380px] flex-shrink-0 flex flex-col h-full border-r text-sm select-none z-20 shadow-xl transition-colors duration-300 ${theme.bg} ${theme.border}`}>
       {/* Header */}
@@ -424,7 +425,7 @@ export const ConfigSidebar: React.FC<ConfigSidebarProps> = ({
           </Row>
           {config.useAccent && (
             <div className="mt-3 mb-4 pl-0 animate-in slide-in-from-top-2 fade-in duration-200">
-              <ColorPicker label="Color" value={config.accentColor || '#0ea5e9'} onColorChange={(v) => handleChange('accentColor', v)} />
+              <ColorPicker label="Color" value={config.accentColor || '#0ea5e9'} onColorChange={(v) => handleChange('accentColor', v)} isDark={isDark} />
             </div>
           )}
 
@@ -460,8 +461,8 @@ export const ConfigSidebar: React.FC<ConfigSidebarProps> = ({
           </Row>
           {config.useCustomSurfaceColors && (
             <div className="animate-in slide-in-from-top-2 fade-in duration-200 space-y-4 mt-4">
-              <ColorPicker label="Surface background" value={config.surfaceBackgroundColor || '#ffffff'} onColorChange={(v) => handleChange('surfaceBackgroundColor', v)} />
-              <ColorPicker label="Surface foreground" value={config.surfaceForegroundColor || '#f8fafc'} onColorChange={(v) => handleChange('surfaceForegroundColor', v)} />
+              <ColorPicker label="Surface background" value={config.surfaceBackgroundColor || '#ffffff'} onColorChange={(v) => handleChange('surfaceBackgroundColor', v)} isDark={isDark} />
+              <ColorPicker label="Surface foreground" value={config.surfaceForegroundColor || '#f8fafc'} onColorChange={(v) => handleChange('surfaceForegroundColor', v)} isDark={isDark} />
             </div>
           )}
 
@@ -472,7 +473,7 @@ export const ConfigSidebar: React.FC<ConfigSidebarProps> = ({
           </Row>
           {config.useCustomTextColor && (
             <div className="animate-in slide-in-from-top-2 fade-in duration-200 mt-4">
-              <ColorPicker label="Text color" value={config.customTextColor || '#1e293b'} onColorChange={(v) => handleChange('customTextColor', v)} />
+              <ColorPicker label="Text color" value={config.customTextColor || '#1e293b'} onColorChange={(v) => handleChange('customTextColor', v)} isDark={isDark} />
             </div>
           )}
 
@@ -483,7 +484,7 @@ export const ConfigSidebar: React.FC<ConfigSidebarProps> = ({
           </Row>
           {config.useCustomIconColor && (
             <div className="animate-in slide-in-from-top-2 fade-in duration-200 mt-4">
-              <ColorPicker label="Icon color" value={config.customIconColor || '#64748b'} onColorChange={(v) => handleChange('customIconColor', v)} />
+              <ColorPicker label="Icon color" value={config.customIconColor || '#64748b'} onColorChange={(v) => handleChange('customIconColor', v)} isDark={isDark} />
             </div>
           )}
 
@@ -494,8 +495,8 @@ export const ConfigSidebar: React.FC<ConfigSidebarProps> = ({
           </Row>
           {config.useCustomUserMessageColors && (
             <div className="animate-in slide-in-from-top-2 fade-in duration-200 mt-4 space-y-4">
-              <ColorPicker label="Message Text" value={config.customUserMessageTextColor || '#ffffff'} onColorChange={(v) => handleChange('customUserMessageTextColor', v)} />
-              <ColorPicker label="Message Background" value={config.customUserMessageBackgroundColor || '#0ea5e9'} onColorChange={(v) => handleChange('customUserMessageBackgroundColor', v)} />
+              <ColorPicker label="Message Text" value={config.customUserMessageTextColor || '#ffffff'} onColorChange={(v) => handleChange('customUserMessageTextColor', v)} isDark={isDark} />
+              <ColorPicker label="Message Background" value={config.customUserMessageBackgroundColor || '#0ea5e9'} onColorChange={(v) => handleChange('customUserMessageBackgroundColor', v)} isDark={isDark} />
             </div>
           )}
         </Section>
@@ -551,20 +552,22 @@ export const ConfigSidebar: React.FC<ConfigSidebarProps> = ({
               <div className={`mt-4 pt-2 border-t animate-in slide-in-from-top-2 fade-in duration-200 ${theme.border}`}>
                 <div className={`text-xs font-semibold mb-2 ${theme.text}`}>Import Custom Font</div>
                 <div className="space-y-2">
-                  <Input
+                  <SidebarInput
                     type="text"
                     value={customFontUrl}
                     onChange={(e) => setCustomFontUrl(e.target.value)}
                     className="w-full"
                     placeholder="@import url('...');"
+                    isDark={isDark}
                   />
                   <div className="flex gap-2">
-                    <Input
+                    <SidebarInput
                       type="text"
                       value={customFontName}
                       onChange={(e) => setCustomFontName(e.target.value)}
                       className="flex-1"
                       placeholder="Family Name (e.g. Satoshi)"
+                      isDark={isDark}
                     />
                     <button
                       onClick={handleSaveCustomFont}
@@ -628,11 +631,12 @@ export const ConfigSidebar: React.FC<ConfigSidebarProps> = ({
           <div className="space-y-4">
             <Row>
               <div className={`${theme.textMuted} font-medium`}>Greeting</div>
-              <Input
+              <SidebarInput
                 type="text"
                 value={config.greeting || ''}
                 onChange={(e) => handleChange('greeting', e.target.value)}
                 className="text-right w-40"
+                isDark={isDark}
               />
             </Row>
 
@@ -654,12 +658,13 @@ export const ConfigSidebar: React.FC<ConfigSidebarProps> = ({
                 {(config.starterPrompts || []).map((prompt: StarterPrompt, index: number) => (
                   <div key={index} className="flex gap-2 animate-in slide-in-from-top-1 fade-in duration-200">
                     <IconPicker value={prompt.icon} onChange={(val) => updatePrompt(index, 'icon', val)} isDark={isDark} />
-                    <Input
+                    <SidebarInput
                       type="text"
                       value={prompt.label}
                       onChange={(e) => updatePrompt(index, 'label', e.target.value)}
                       className="flex-1"
                       placeholder="Prompt text..."
+                      isDark={isDark}
                     />
                   </div>
                 ))}
@@ -676,20 +681,22 @@ export const ConfigSidebar: React.FC<ConfigSidebarProps> = ({
           <div className="space-y-3">
             <Row>
               <div className={`${theme.textMuted} font-medium`}>Placeholder</div>
-              <Input
+              <SidebarInput
                 type="text"
                 value={config.placeholder || ''}
                 onChange={(e) => handleChange('placeholder', e.target.value)}
                 className="text-right w-40"
+                isDark={isDark}
               />
             </Row>
             <Row>
               <div className={`${theme.textMuted} font-medium`}>Disclaimer</div>
-              <Input
+              <SidebarInput
                 type="text"
                 value={config.disclaimer || ''}
                 onChange={(e) => handleChange('disclaimer', e.target.value)}
                 className="text-right w-40"
+                isDark={isDark}
               />
             </Row>
             <Row>
@@ -721,12 +728,13 @@ export const ConfigSidebar: React.FC<ConfigSidebarProps> = ({
               </Row>
               {config.enableN8n && (
                 <div className="mt-2 animate-in slide-in-from-top-1 fade-in duration-200">
-                  <Input
+                  <SidebarInput
                     type="text"
                     value={config.n8nWebhookUrl || config.connection?.webhookUrl || ''}
                     onChange={(e) => handleChange('n8nWebhookUrl', e.target.value)}
                     className="w-full"
                     placeholder="Webhook URL"
+                    isDark={isDark}
                   />
                 </div>
               )}
@@ -740,19 +748,21 @@ export const ConfigSidebar: React.FC<ConfigSidebarProps> = ({
               </Row>
               {config.enableAgentKit && (
                 <div className="mt-2 space-y-2 animate-in slide-in-from-top-1 fade-in duration-200">
-                  <Input
+                  <SidebarInput
                     type="text"
                     value={config.agentKitWorkflowId || ''}
                     onChange={(e) => handleChange('agentKitWorkflowId', e.target.value)}
                     className="w-full"
                     placeholder="Workflow ID"
+                    isDark={isDark}
                   />
-                  <Input
+                  <SidebarInput
                     type="password"
                     value={config.agentKitApiKey || ''}
                     onChange={(e) => handleChange('agentKitApiKey', e.target.value)}
                     className="w-full"
                     placeholder="API Key"
+                    isDark={isDark}
                   />
                 </div>
               )}

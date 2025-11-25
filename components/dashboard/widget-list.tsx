@@ -87,9 +87,9 @@ export function WidgetList({ widgets, onDelete }: WidgetListProps) {
     };
 
     const handleCopyEmbed = (licenseKey: string) => {
-        // Use the current window location to determine the base URL
-        // This ensures it works on localhost, Vercel, or custom domains
-        const baseUrl = window.location.origin;
+        // Use production URL - must match what configurator generates
+        // This ensures embed codes work regardless of which Vercel deployment you're viewing
+        const baseUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://chat-interface-r.vercel.app';
 
         // Updated to use authenticated widget endpoint (matches configurator format)
         // This enables proper domain validation and license authentication
@@ -144,7 +144,7 @@ export function WidgetList({ widgets, onDelete }: WidgetListProps) {
                                 <Calendar className="h-4 w-4" />
                                 <span>Created {new Date(widget.createdAt).toLocaleDateString()}</span>
                             </div>
-                            {widget.config.connection.webhookUrl ? (
+                            {(widget.config as any).n8nWebhookUrl || widget.config.connection?.webhookUrl ? (
                                 <div className="flex items-center gap-2 text-green-600 dark:text-green-400">
                                     <div className="h-2 w-2 rounded-full bg-current" />
                                     <span>Connected to N8n</span>
