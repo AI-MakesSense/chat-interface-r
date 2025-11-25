@@ -13,6 +13,7 @@ export interface WidgetConfig {
   connection?: ConnectionConfig;
   license?: LicenseConfig; // Injected by server at serve time
   portal?: PortalConfig;
+  agentKit?: AgentKitConfig; // OpenAI Agent Builder / ChatKit integration
 
   // =========================================================================
   // Extended theming options (ChatKit-compatible)
@@ -62,6 +63,17 @@ export interface ConnectionConfig {
   webhookUrl: string;
   relayEndpoint?: string;
   [key: string]: any;
+}
+
+export interface AgentKitConfig {
+  /** Whether AgentKit/OpenAI mode is enabled */
+  enabled: boolean;
+  /** OpenAI Agent Builder workflow ID */
+  workflowId?: string;
+  /** Relay endpoint for OpenAI requests */
+  relayEndpoint?: string;
+  /** Whether an API key is configured (key itself is never sent to client) */
+  hasApiKey?: boolean;
 }
 
 export interface LicenseConfig {

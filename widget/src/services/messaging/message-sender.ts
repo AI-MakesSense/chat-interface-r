@@ -1,10 +1,11 @@
 /**
  * Message Sender
  *
- * Purpose: Sends user messages to N8n webhook with retry logic
+ * Purpose: Sends user messages to backend (N8n webhook or OpenAI AgentKit)
  *
  * Responsibility:
- * - Send HTTP POST requests to N8n webhook
+ * - Send HTTP POST requests to relay endpoint
+ * - Detect AgentKit mode vs N8n mode
  * - Include session ID for conversation continuity
  * - Encode file attachments as base64
  * - Update StateManager during request lifecycle
@@ -13,6 +14,7 @@
  *
  * Assumptions:
  * - N8n webhook expects JSON payload with specific structure
+ * - AgentKit relay expects widgetId, licenseKey, message, conversationHistory
  * - Browser supports fetch API and FileReader
  * - StateManager handles UI updates
  */
@@ -136,13 +138,42 @@ export class MessageSender {
       const shouldCaptureContext =
         this.runtimeConfig.uiConfig.connection?.captureContext !== false;
 
-      // Construct payload for relay
-      const payload = buildRelayPayload(this.runtimeConfig, {
-        message: text,
-        sessionId,
-        attachments: fileAttachments,
-        context: shouldCaptureContext ? this.capturePageContext() : undefined,
-      });
+      // Check if AgentKit mode is enabled
+      const agentKitConfig = this.runtimeConfig.uiConfig.agentKit;
+      const isAgentKitMode = agentKitConfig?.enabled && agentKitConfig?.hasApiKey;
+
+      // Determine endpoint URL and construct payload based on mode
+      let relayUrl: string;
+      let payload: Record<string, unknown>;
+
+      if (isAgentKitMode && agentKitConfig?.relayEndpoint) {
+        // AgentKit/OpenAI mode - send to OpenAI relay
+        relayUrl = agentKitConfig.relayEndpoint;
+
+        // Build conversation history from existing messages
+        const conversationHistory = currentMessages.map((msg) => ({
+          role: msg.role,
+          content: msg.content,
+        }));
+
+        payload = {
+          widgetId: this.runtimeConfig.relay.widgetId,
+          licenseKey: this.runtimeConfig.relay.licenseKey,
+          message: text,
+          sessionId,
+          conversationHistory,
+          metadata: shouldCaptureContext ? { context: this.capturePageContext() } : undefined,
+        };
+      } else {
+        // N8n mode - use existing relay
+        relayUrl = this.runtimeConfig.relay.relayUrl;
+        payload = buildRelayPayload(this.runtimeConfig, {
+          message: text,
+          sessionId,
+          attachments: fileAttachments,
+          context: shouldCaptureContext ? this.capturePageContext() : undefined,
+        });
+      }
 
       // Create abort controller for timeout
       this.abortController = new AbortController();
@@ -152,7 +183,7 @@ export class MessageSender {
 
       try {
         // Send POST request
-        const response = await fetch(this.runtimeConfig.relay.relayUrl, {
+        const response = await fetch(relayUrl, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',

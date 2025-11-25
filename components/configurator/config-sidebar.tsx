@@ -740,20 +740,26 @@ export const ConfigSidebar: React.FC<ConfigSidebarProps> = ({
               )}
             </div>
 
-            {/* AgentKit */}
+            {/* AgentKit / OpenAI */}
             <div>
               <Row>
-                <div className={`${theme.textMuted} font-medium`}>AgentKit</div>
+                <div className={`${theme.textMuted} font-medium`}>OpenAI AgentKit</div>
                 <Toggle checked={config.enableAgentKit || false} onChange={(v) => handleChange('enableAgentKit', v)} isDark={isDark} />
               </Row>
               {config.enableAgentKit && (
-                <div className="mt-2 space-y-2 animate-in slide-in-from-top-1 fade-in duration-200">
+                <div className="mt-2 space-y-3 animate-in slide-in-from-top-1 fade-in duration-200">
+                  <p className={`text-xs ${theme.textMuted} opacity-70`}>
+                    Connect to OpenAI Agent Builder workflows. Create workflows at{' '}
+                    <a href="https://platform.openai.com/agent-builder" target="_blank" rel="noopener noreferrer" className="underline">
+                      platform.openai.com
+                    </a>
+                  </p>
                   <SidebarInput
                     type="text"
                     value={config.agentKitWorkflowId || ''}
                     onChange={(e) => handleChange('agentKitWorkflowId', e.target.value)}
                     className="w-full"
-                    placeholder="Workflow ID"
+                    placeholder="OpenAI Workflow ID (optional)"
                     isDark={isDark}
                   />
                   <SidebarInput
@@ -761,7 +767,15 @@ export const ConfigSidebar: React.FC<ConfigSidebarProps> = ({
                     value={config.agentKitApiKey || ''}
                     onChange={(e) => handleChange('agentKitApiKey', e.target.value)}
                     className="w-full"
-                    placeholder="API Key"
+                    placeholder="OpenAI API Key"
+                    isDark={isDark}
+                  />
+                  <SidebarInput
+                    type="text"
+                    value={config.agentKitSystemPrompt || ''}
+                    onChange={(e) => handleChange('agentKitSystemPrompt', e.target.value)}
+                    className="w-full"
+                    placeholder="System prompt (optional)"
                     isDark={isDark}
                   />
                 </div>
