@@ -724,12 +724,12 @@ export const ConfigSidebar: React.FC<ConfigSidebarProps> = ({
                 return (
                   <div
                     className={`p-3 rounded-lg border cursor-pointer transition-all ${isN8nSelected
-                        ? isDark
-                          ? 'border-blue-500 bg-blue-500/10'
-                          : 'border-blue-500 bg-blue-50'
-                        : isDark
-                          ? 'border-neutral-700 hover:border-neutral-600'
-                          : 'border-neutral-200 hover:border-neutral-300'
+                      ? isDark
+                        ? 'border-blue-500 bg-blue-500/10'
+                        : 'border-blue-500 bg-blue-50'
+                      : isDark
+                        ? 'border-neutral-700 hover:border-neutral-600'
+                        : 'border-neutral-200 hover:border-neutral-300'
                       }`}
                     onClick={() => {
                       onChange({
@@ -761,8 +761,8 @@ export const ConfigSidebar: React.FC<ConfigSidebarProps> = ({
                         n8n Webhook
                       </div>
                       <div className={`w-4 h-4 rounded-full border-2 flex items-center justify-center ${isN8nSelected
-                          ? 'border-blue-500 bg-blue-500'
-                          : isDark ? 'border-neutral-600' : 'border-neutral-300'
+                        ? 'border-blue-500 bg-blue-500'
+                        : isDark ? 'border-neutral-600' : 'border-neutral-300'
                         }`}>
                         {isN8nSelected && (
                           <div className="w-2 h-2 rounded-full bg-white" />
@@ -793,110 +793,10 @@ export const ConfigSidebar: React.FC<ConfigSidebarProps> = ({
                 );
               })()}
 
-              {/* OpenAI AgentKit Option */}
-              {(() => {
-                const isAgentKitSelected = config.connection?.provider === 'agentkit';
-                return (
-                  <div
-                    className={`p-3 rounded-lg border cursor-pointer transition-all ${isAgentKitSelected
-                        ? isDark
-                          ? 'border-green-500 bg-green-500/10'
-                          : 'border-green-500 bg-green-50'
-                        : isDark
-                          ? 'border-neutral-700 hover:border-neutral-600'
-                          : 'border-neutral-200 hover:border-neutral-300'
-                      }`}
-                    onClick={() => {
-                      onChange({
-                        ...config,
-                        connection: {
-                          ...config.connection,
-                          provider: 'agentkit',
-                          agentKitWorkflowId: config.connection?.agentKitWorkflowId || '',
-                          agentKitApiKey: config.connection?.agentKitApiKey || '',
-                        }
-                      });
-                    }}
-                    role="button"
-                    tabIndex={0}
-                    onKeyDown={(e) => {
-                      if (e.key === 'Enter' || e.key === ' ') {
-                        onChange({
-                          ...config,
-                          connection: {
-                            ...config.connection,
-                            provider: 'agentkit',
-                            agentKitWorkflowId: config.connection?.agentKitWorkflowId || '',
-                            agentKitApiKey: config.connection?.agentKitApiKey || '',
-                          }
-                        });
-                      }
-                    }}
-                  >
-                    <Row>
-                      <div className={`font-medium ${isAgentKitSelected ? (isDark ? 'text-green-400' : 'text-green-600') : theme.textMuted}`}>
-                        OpenAI Agent Builder
-                      </div>
-                      <div className={`w-4 h-4 rounded-full border-2 flex items-center justify-center ${isAgentKitSelected
-                          ? 'border-green-500 bg-green-500'
-                          : isDark ? 'border-neutral-600' : 'border-neutral-300'
-                        }`}>
-                        {isAgentKitSelected && (
-                          <div className="w-2 h-2 rounded-full bg-white" />
-                        )}
-                      </div>
-                    </Row>
-                    {isAgentKitSelected && (
-                      <div className="mt-3 space-y-3 animate-in slide-in-from-top-1 fade-in duration-200" onClick={(e) => e.stopPropagation()}>
-                        <p className={`text-xs ${theme.textMuted} opacity-70`}>
-                          Connect to OpenAI Agent Builder workflows.{' '}
-                          <a href="https://platform.openai.com/assistants" target="_blank" rel="noopener noreferrer" className="underline" onClick={(e) => e.stopPropagation()}>
-                            Create an assistant
-                          </a>
-                        </p>
-                        <SidebarInput
-                          type="text"
-                          value={config.connection?.agentKitWorkflowId || ''}
-                          onChange={(e) => onChange({
-                            ...config,
-                            connection: {
-                              ...config.connection,
-                              provider: 'agentkit',
-                              agentKitWorkflowId: e.target.value,
-                              agentKitApiKey: config.connection?.agentKitApiKey || '',
-                            }
-                          })}
-                          className="w-full"
-                          placeholder="Assistant ID (asst_...)"
-                          isDark={isDark}
-                          onClick={(e) => e.stopPropagation()}
-                        />
-                        <SidebarInput
-                          type="password"
-                          value={config.connection?.agentKitApiKey || ''}
-                          onChange={(e) => onChange({
-                            ...config,
-                            connection: {
-                              ...config.connection,
-                              provider: 'agentkit',
-                              agentKitWorkflowId: config.connection?.agentKitWorkflowId || '',
-                              agentKitApiKey: e.target.value,
-                            }
-                          })}
-                          className="w-full"
-                          placeholder="OpenAI API Key (sk-...)"
-                          isDark={isDark}
-                          onClick={(e) => e.stopPropagation()}
-                        />
-                      </div>
-                    )}
-                  </div>
-                );
-              })()}
             </div>
           </div>
         </Section>
-      </div>
-    </aside>
+      </div >
+    </aside >
   );
 };

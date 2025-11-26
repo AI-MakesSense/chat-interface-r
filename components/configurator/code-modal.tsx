@@ -83,8 +83,8 @@ export const CodeModal: React.FC<CodeModalProps> = ({ config, isOpen, onClose, l
       },
       connection: {
         n8n: (config.connection?.provider === 'n8n' || !config.connection?.provider) ? { webhookUrl: config.connection?.webhookUrl } : undefined,
-        agentKit: config.connection?.provider === 'agentkit'
-          ? { workflowId: config.connection?.agentKitWorkflowId, apiKey: '***' }
+        chatKit: config.connection?.provider === 'chatkit'
+          ? { workflowId: config.connection?.workflowId, apiKey: '***' }
           : undefined
       }
     };
@@ -118,8 +118,8 @@ export const CodeModal: React.FC<CodeModalProps> = ({ config, isOpen, onClose, l
               <button
                 onClick={() => setActiveTab('embed')}
                 className={`px-3 py-1 text-sm font-medium rounded-md transition-colors ${activeTab === 'embed'
-                    ? 'bg-white text-neutral-900 shadow-sm'
-                    : 'text-neutral-500 hover:text-neutral-700'
+                  ? 'bg-white text-neutral-900 shadow-sm'
+                  : 'text-neutral-500 hover:text-neutral-700'
                   }`}
               >
                 Embed Code
@@ -127,8 +127,8 @@ export const CodeModal: React.FC<CodeModalProps> = ({ config, isOpen, onClose, l
               <button
                 onClick={() => setActiveTab('config')}
                 className={`px-3 py-1 text-sm font-medium rounded-md transition-colors ${activeTab === 'config'
-                    ? 'bg-white text-neutral-900 shadow-sm'
-                    : 'text-neutral-500 hover:text-neutral-700'
+                  ? 'bg-white text-neutral-900 shadow-sm'
+                  : 'text-neutral-500 hover:text-neutral-700'
                   }`}
               >
                 Config Preview
