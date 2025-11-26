@@ -153,6 +153,13 @@ async function handleN8nRelay(
 /**
  * Handle AgentKit (OpenAI Assistants API) relay
  */
+import { processMessage } from '@/lib/services/openai-service';
+
+// ... (existing imports)
+
+/**
+ * Handle AgentKit (OpenAI Assistants API) relay
+ */
 async function handleAgentKitRelay(
   config: any,
   body: RelayBody,
@@ -169,139 +176,14 @@ async function handleAgentKitRelay(
   }
 
   try {
-    let currentThreadId = threadId;
-
-    // Create thread if not provided
-    if (!currentThreadId) {
-      const threadResponse = await fetch('https://api.openai.com/v1/threads', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${apiKey}`,
-          'OpenAI-Beta': 'assistants=v2'
-        },
-        body: JSON.stringify({})
-      });
-
-      if (!threadResponse.ok) {
-        const error = await threadResponse.text();
-        console.error('[Chat Relay] Thread creation failed:', error);
-        return new NextResponse(
-          JSON.stringify({ error: 'Failed to create conversation thread' }),
-          { status: 500, headers: { 'Content-Type': 'application/json' } }
-        );
-      }
-
-      const threadData = await threadResponse.json();
-      currentThreadId = threadData.id;
-    }
-
-    // Add user message to thread
-    await fetch(`https://api.openai.com/v1/threads/${currentThreadId}/messages`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${apiKey}`,
-        'OpenAI-Beta': 'assistants=v2'
-      },
-      body: JSON.stringify({
-        role: 'user',
-        content: body.message
-      })
-    });
-
-    // Run the assistant
-    const runResponse = await fetch(`https://api.openai.com/v1/threads/${currentThreadId}/runs`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${apiKey}`,
-        'OpenAI-Beta': 'assistants=v2'
-      },
-      body: JSON.stringify({
-        assistant_id: workflowId
-      })
-    });
-
-    if (!runResponse.ok) {
-      const error = await runResponse.text();
-      console.error('[Chat Relay] Run creation failed:', error);
-      return new NextResponse(
-        JSON.stringify({ error: 'Failed to run assistant' }),
-        { status: 500, headers: { 'Content-Type': 'application/json' } }
-      );
-    }
-
-    const runData = await runResponse.json();
-    const runId = runData.id;
-
-    // Poll for completion (simple polling, max 30 seconds)
-    let attempts = 0;
-    const maxAttempts = 60; // 30 seconds with 500ms intervals
-    let runStatus = runData.status;
-
-    while (runStatus !== 'completed' && runStatus !== 'failed' && attempts < maxAttempts) {
-      await new Promise(resolve => setTimeout(resolve, 500));
-
-      const statusResponse = await fetch(
-        `https://api.openai.com/v1/threads/${currentThreadId}/runs/${runId}`,
-        {
-          headers: {
-            'Authorization': `Bearer ${apiKey}`,
-            'OpenAI-Beta': 'assistants=v2'
-          }
-        }
-      );
-
-      const statusData = await statusResponse.json();
-      runStatus = statusData.status;
-      attempts++;
-    }
-
-    if (runStatus === 'failed') {
-      return new NextResponse(
-        JSON.stringify({ error: 'Assistant run failed' }),
-        { status: 500, headers: { 'Content-Type': 'application/json' } }
-      );
-    }
-
-    if (runStatus !== 'completed') {
-      return new NextResponse(
-        JSON.stringify({ error: 'Assistant run timed out' }),
-        { status: 504, headers: { 'Content-Type': 'application/json' } }
-      );
-    }
-
-    // Retrieve messages
-    const messagesResponse = await fetch(
-      `https://api.openai.com/v1/threads/${currentThreadId}/messages?order=desc&limit=1`,
-      {
-        headers: {
-          'Authorization': `Bearer ${apiKey}`,
-          'OpenAI-Beta': 'assistants=v2'
-        }
-      }
-    );
-
-    const messagesData = await messagesResponse.json();
-    const lastMessage = messagesData.data[0];
-
-    if (!lastMessage || lastMessage.role !== 'assistant') {
-      return new NextResponse(
-        JSON.stringify({ error: 'No assistant response found' }),
-        { status: 500, headers: { 'Content-Type': 'application/json' } }
-      );
-    }
-
-    // Extract text content
-    const textContent = lastMessage.content.find((c: any) => c.type === 'text');
-    const responseText = textContent?.text?.value || 'No response';
+    const result = await processMessage(apiKey, workflowId, body.message, threadId);
 
     return new NextResponse(
       JSON.stringify({
-        output: responseText,
-        threadId: currentThreadId,
-        message: responseText
+        output: result.message,
+        threadId: result.threadId,
+        message: result.message,
+        runId: result.runId
       }),
       {
         status: 200,
@@ -312,7 +194,7 @@ async function handleAgentKitRelay(
   } catch (error) {
     console.error('[Chat Relay] AgentKit Error:', error);
     return new NextResponse(
-      JSON.stringify({ error: 'Failed to process AgentKit request' }),
+      JSON.stringify({ error: error instanceof Error ? error.message : 'Failed to process AgentKit request' }),
       { status: 500, headers: { 'Content-Type': 'application/json' } }
     );
   }
