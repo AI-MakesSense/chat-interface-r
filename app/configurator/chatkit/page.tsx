@@ -163,6 +163,48 @@ export default function ChatKitConfiguratorPage() {
                                     </div>
 
                                     <div className="space-y-2">
+                                        <Label>Font Family</Label>
+                                        <div className="grid grid-cols-2 gap-2">
+                                            {[
+                                                'System',
+                                                'OpenAI Sans',
+                                                'Space Grotesk',
+                                                'Inter',
+                                            ].map((font) => (
+                                                <Button
+                                                    key={font}
+                                                    variant={currentConfig.fontFamily === font ? 'default' : 'outline'}
+                                                    onClick={() => updateConfig({ fontFamily: font })}
+                                                    className="justify-start text-xs truncate"
+                                                    title={font}
+                                                >
+                                                    {font}
+                                                </Button>
+                                            ))}
+                                        </div>
+                                    </div>
+
+                                    <div className="space-y-2">
+                                        <Label>Density</Label>
+                                        <div className="grid grid-cols-3 gap-2">
+                                            {[
+                                                { value: 'compact', label: 'Compact' },
+                                                { value: 'default', label: 'Default' },
+                                                { value: 'spacious', label: 'Spacious' },
+                                            ].map((d) => (
+                                                <Button
+                                                    key={d.value}
+                                                    variant={currentConfig.density === d.value ? 'default' : 'outline'}
+                                                    onClick={() => updateConfig({ density: d.value as any })}
+                                                    className="capitalize text-xs"
+                                                >
+                                                    {d.label}
+                                                </Button>
+                                            ))}
+                                        </div>
+                                    </div>
+
+                                    <div className="space-y-2">
                                         <Label>Corner Radius</Label>
                                         <div className="grid grid-cols-4 gap-2">
                                             {[
@@ -343,6 +385,19 @@ export default function ChatKitConfiguratorPage() {
                                             checked={currentConfig.enableAttachments}
                                             onCheckedChange={(checked) => updateConfig({ enableAttachments: checked })}
                                         />
+                                    </div>
+
+                                    <div className="space-y-2">
+                                        <Label>Custom CSS</Label>
+                                        <textarea
+                                            className="flex min-h-[120px] w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50 font-mono"
+                                            placeholder=".chatkit-container { ... }"
+                                            value={currentConfig.customCss || ''}
+                                            onChange={(e) => updateConfig({ customCss: e.target.value })}
+                                        />
+                                        <p className="text-xs text-muted-foreground">
+                                            Inject custom CSS styles into the widget container.
+                                        </p>
                                     </div>
                                 </div>
                             </TabsContent>

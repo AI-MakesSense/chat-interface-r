@@ -120,6 +120,7 @@ export interface WidgetConfig {
   useCustomFont?: boolean;
   customFontName?: string;
   customFontCss?: string;
+  customCss?: string;
 
   // Style
   radius?: 'none' | 'small' | 'medium' | 'large' | 'pill';
@@ -273,6 +274,7 @@ const defaultConfig: WidgetConfig = {
   useCustomFont: false,
   customFontName: '',
   customFontCss: '',
+  customCss: '',
 
   // Style
   radius: 'medium',

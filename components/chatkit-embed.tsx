@@ -54,10 +54,37 @@ export const ChatKitEmbed: React.FC<ChatKitEmbedProps> = ({ widgetId, config }) 
         } : undefined,
     });
 
+    const getFontFamily = (f: string) => {
+        switch (f) {
+            case 'System':
+                return '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif';
+            case 'Space Grotesk':
+                return '"Space Grotesk", sans-serif';
+            case 'OpenAI Sans':
+                return '"Inter", sans-serif';
+            default:
+                return `"${f}", sans-serif`;
+        }
+    };
+
+    const getFontSize = (d?: string) => {
+        switch (d) {
+            case 'compact': return '14px';
+            case 'spacious': return '18px';
+            default: return '16px';
+        }
+    };
+
     return (
-        <div className="h-full w-full overflow-hidden bg-transparent pointer-events-auto">
+        <div
+            className="h-full w-full overflow-hidden bg-transparent pointer-events-auto"
+            style={{
+                fontFamily: getFontFamily(config.fontFamily || 'System'),
+                fontSize: getFontSize(config.density)
+            }}
+        >
+            {config.customCss && <style dangerouslySetInnerHTML={{ __html: config.customCss }} />}
             <ChatKit control={control} />
         </div>
     );
 };
-

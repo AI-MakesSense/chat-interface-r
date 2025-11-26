@@ -16,11 +16,22 @@ export const ChatKitPreview: React.FC<ChatKitPreviewProps> = ({ config }) => {
 
     if (!shouldInit) {
         return (
-            <div className="flex items-center justify-center h-full bg-neutral-50 text-neutral-500 p-8 text-center">
-                <div>
-                    <h3 className="text-lg font-medium mb-2">Configure Connection</h3>
-                    <p className="text-sm">Enter your OpenAI Workflow ID and API Key to preview the agent.</p>
+            <div className="flex flex-col items-center justify-center h-full bg-neutral-50/50 text-neutral-500 p-8 text-center animate-in fade-in duration-500">
+                <div className="w-16 h-16 bg-white rounded-2xl shadow-sm border border-neutral-100 flex items-center justify-center mb-4">
+                    <svg
+                        className="w-8 h-8 text-neutral-400"
+                        fill="none"
+                        viewBox="0 0 24 24"
+                        stroke="currentColor"
+                        strokeWidth={1.5}
+                    >
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M9.813 15.904L9 18.75l-.813-2.846a4.5 4.5 0 00-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 003.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 003.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 00-3.09 3.09zM18.259 8.715L18 9.75l-.259-1.035a3.375 3.375 0 00-2.455-2.456L14.25 6l1.036-.259a3.375 3.375 0 002.455-2.456L18 2.25l.259 1.035a3.375 3.375 0 002.456 2.456L21.75 6l-1.035.259a3.375 3.375 0 00-2.456 2.456zM16.894 20.567L16.5 21.75l-.394-1.183a2.25 2.25 0 00-1.423-1.423L13.5 18.75l1.183-.394a2.25 2.25 0 001.423-1.423l.394-1.183.394 1.183a2.25 2.25 0 001.423 1.423l1.183.394-1.183.394a2.25 2.25 0 00-1.423 1.423z" />
+                    </svg>
                 </div>
+                <h3 className="text-lg font-semibold text-neutral-900 mb-2">Configure Connection</h3>
+                <p className="text-sm text-neutral-500 max-w-[250px] leading-relaxed">
+                    Enter your OpenAI Workflow ID and API Key in the <span className="font-medium text-neutral-700">Connection</span> tab to preview the agent.
+                </p>
             </div>
         );
     }
@@ -71,8 +82,36 @@ export const ChatKitPreview: React.FC<ChatKitPreviewProps> = ({ config }) => {
         } : undefined,
     });
 
+    const getFontFamily = (f: string) => {
+        switch (f) {
+            case 'System':
+                return '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif';
+            case 'Space Grotesk':
+                return '"Space Grotesk", sans-serif';
+            case 'OpenAI Sans':
+                return '"Inter", sans-serif';
+            default:
+                return `"${f}", sans-serif`;
+        }
+    };
+
+    const getFontSize = (d?: string) => {
+        switch (d) {
+            case 'compact': return '14px';
+            case 'spacious': return '18px';
+            default: return '16px';
+        }
+    };
+
     return (
-        <div className="h-full w-full overflow-hidden border rounded-xl shadow-sm bg-white">
+        <div
+            className="h-full w-full overflow-hidden border rounded-xl shadow-sm bg-white"
+            style={{
+                fontFamily: getFontFamily(config.fontFamily || 'System'),
+                fontSize: getFontSize(config.density)
+            }}
+        >
+            {config.customCss && <style dangerouslySetInnerHTML={{ __html: config.customCss }} />}
             <ChatKit control={control} />
         </div>
     );
