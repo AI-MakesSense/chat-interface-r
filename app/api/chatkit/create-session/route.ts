@@ -77,9 +77,7 @@ export async function POST(req: NextRequest) {
             },
             body: JSON.stringify({
                 workflow: { id: targetWorkflowId },
-                user: {
-                    id: 'user_' + Math.random().toString(36).substring(7),
-                },
+                user: 'user_' + Math.random().toString(36).substring(7),
             }),
         });
 
