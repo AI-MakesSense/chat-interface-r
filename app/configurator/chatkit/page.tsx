@@ -8,8 +8,8 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { ArrowLeft, Save, Code, Bot, Palette, MessageSquare, Settings } from 'lucide-react';
+import { Slider } from '@/components/ui/slider';
+import { ArrowLeft, Save, Code, Bot, Palette, MessageSquare, Settings, Sliders } from 'lucide-react';
 import Link from 'next/link';
 import { toast } from 'sonner';
 import { CodeModal } from '@/components/configurator/code-modal';
@@ -26,9 +26,14 @@ export default function ChatKitConfiguratorPage() {
                     ...currentConfig.connection,
                     provider: 'chatkit',
                 },
-                // Set some ChatKit-friendly defaults
-                greeting: 'Hello! I am your AI assistant.',
+                greeting: 'How can I help you today?',
                 enableAttachments: true,
+                // Set ChatKit-specific defaults if not already set
+                chatkitGrayscaleHue: currentConfig.chatkitGrayscaleHue ?? 220,
+                chatkitGrayscaleTint: currentConfig.chatkitGrayscaleTint ?? 6,
+                chatkitGrayscaleShade: currentConfig.chatkitGrayscaleShade ?? (currentConfig.themeMode === 'dark' ? -1 : -4),
+                chatkitAccentPrimary: currentConfig.chatkitAccentPrimary ?? (currentConfig.themeMode === 'dark' ? '#f1f5f9' : '#0f172a'),
+                chatkitAccentLevel: currentConfig.chatkitAccentLevel ?? 1,
             });
         }
     }, []);
@@ -82,9 +87,10 @@ export default function ChatKitConfiguratorPage() {
                 <div className="flex-1 overflow-y-auto custom-scrollbar">
                     <Tabs defaultValue="connection" className="w-full">
                         <div className="px-4 pt-4 sticky top-0 bg-white z-10 pb-2 border-b mb-4">
-                            <TabsList className="w-full grid grid-cols-4 h-9">
+                            <TabsList className="w-full grid grid-cols-5 h-9">
                                 <TabsTrigger value="connection" title="Connection"><Bot size={16} /></TabsTrigger>
                                 <TabsTrigger value="theme" title="Theme"><Palette size={16} /></TabsTrigger>
+                                <TabsTrigger value="colors" title="Colors"><Sliders size={16} /></TabsTrigger>
                                 <TabsTrigger value="start" title="Start Screen"><MessageSquare size={16} /></TabsTrigger>
                                 <TabsTrigger value="settings" title="Settings"><Settings size={16} /></TabsTrigger>
                             </TabsList>
@@ -133,14 +139,22 @@ export default function ChatKitConfiguratorPage() {
                                         <div className="grid grid-cols-2 gap-2">
                                             <Button
                                                 variant={currentConfig.themeMode === 'light' ? 'default' : 'outline'}
-                                                onClick={() => updateConfig({ themeMode: 'light' })}
+                                                onClick={() => updateConfig({
+                                                    themeMode: 'light',
+                                                    chatkitGrayscaleShade: -4,
+                                                    chatkitAccentPrimary: '#0f172a',
+                                                })}
                                                 className="justify-start"
                                             >
                                                 Light
                                             </Button>
                                             <Button
                                                 variant={currentConfig.themeMode === 'dark' ? 'default' : 'outline'}
-                                                onClick={() => updateConfig({ themeMode: 'dark' })}
+                                                onClick={() => updateConfig({
+                                                    themeMode: 'dark',
+                                                    chatkitGrayscaleShade: -1,
+                                                    chatkitAccentPrimary: '#f1f5f9',
+                                                })}
                                                 className="justify-start"
                                             >
                                                 Dark
@@ -149,46 +163,141 @@ export default function ChatKitConfiguratorPage() {
                                     </div>
 
                                     <div className="space-y-2">
-                                        <Label>Accent Color</Label>
-                                        <div className="flex items-center gap-2">
-                                            <Switch
-                                                checked={currentConfig.useAccent}
-                                                onCheckedChange={(checked) => updateConfig({ useAccent: checked })}
-                                            />
-                                            <span className="text-sm text-muted-foreground">Use custom accent</span>
-                                        </div>
-                                        {currentConfig.useAccent && (
-                                            <div className="flex gap-2 items-center mt-2">
-                                                <Input
-                                                    type="color"
-                                                    value={currentConfig.accentColor || '#0ea5e9'}
-                                                    onChange={(e) => updateConfig({ accentColor: e.target.value })}
-                                                    className="w-10 h-10 p-1 rounded-md cursor-pointer"
-                                                />
-                                                <Input
-                                                    type="text"
-                                                    value={currentConfig.accentColor || '#0ea5e9'}
-                                                    onChange={(e) => updateConfig({ accentColor: e.target.value })}
-                                                    className="flex-1 font-mono"
-                                                />
-                                            </div>
-                                        )}
-                                    </div>
-
-                                    <div className="space-y-2">
                                         <Label>Corner Radius</Label>
-                                        <div className="grid grid-cols-3 gap-2">
-                                            {['none', 'medium', 'pill'].map((r) => (
+                                        <div className="grid grid-cols-4 gap-2">
+                                            {[
+                                                { value: 'sharp', label: 'Sharp' },
+                                                { value: 'soft', label: 'Soft' },
+                                                { value: 'round', label: 'Round' },
+                                                { value: 'pill', label: 'Pill' },
+                                            ].map((r) => (
                                                 <Button
-                                                    key={r}
-                                                    variant={currentConfig.radius === r ? 'default' : 'outline'}
-                                                    onClick={() => updateConfig({ radius: r as any })}
-                                                    className="capitalize"
+                                                    key={r.value}
+                                                    variant={currentConfig.radius === r.value ? 'default' : 'outline'}
+                                                    onClick={() => updateConfig({ radius: r.value as any })}
+                                                    className="capitalize text-xs"
                                                 >
-                                                    {r}
+                                                    {r.label}
                                                 </Button>
                                             ))}
                                         </div>
+                                    </div>
+                                </div>
+                            </TabsContent>
+
+                            {/* Colors Tab - Advanced Color System */}
+                            <TabsContent value="colors" className="space-y-6 mt-0">
+                                <div className="space-y-6">
+                                    {/* Grayscale Hue */}
+                                    <div className="space-y-3">
+                                        <div className="flex items-center justify-between">
+                                            <Label>Grayscale Hue</Label>
+                                            <span className="text-xs text-muted-foreground font-mono">
+                                                {currentConfig.chatkitGrayscaleHue ?? 220}°
+                                            </span>
+                                        </div>
+                                        <Slider
+                                            value={[currentConfig.chatkitGrayscaleHue ?? 220]}
+                                            onValueChange={([value]) => updateConfig({ chatkitGrayscaleHue: value })}
+                                            min={0}
+                                            max={360}
+                                            step={1}
+                                            className="w-full"
+                                        />
+                                        <p className="text-xs text-muted-foreground">
+                                            Adjusts the color tone of gray UI elements (0-360°)
+                                        </p>
+                                    </div>
+
+                                    {/* Grayscale Tint */}
+                                    <div className="space-y-3">
+                                        <div className="flex items-center justify-between">
+                                            <Label>Grayscale Tint</Label>
+                                            <span className="text-xs text-muted-foreground font-mono">
+                                                {currentConfig.chatkitGrayscaleTint ?? 6}
+                                            </span>
+                                        </div>
+                                        <Slider
+                                            value={[currentConfig.chatkitGrayscaleTint ?? 6]}
+                                            onValueChange={([value]) => updateConfig({ chatkitGrayscaleTint: value })}
+                                            min={0}
+                                            max={20}
+                                            step={1}
+                                            className="w-full"
+                                        />
+                                        <p className="text-xs text-muted-foreground">
+                                            Color saturation level for grayscale elements
+                                        </p>
+                                    </div>
+
+                                    {/* Grayscale Shade */}
+                                    <div className="space-y-3">
+                                        <div className="flex items-center justify-between">
+                                            <Label>Grayscale Shade</Label>
+                                            <span className="text-xs text-muted-foreground font-mono">
+                                                {currentConfig.chatkitGrayscaleShade ?? -1}
+                                            </span>
+                                        </div>
+                                        <Slider
+                                            value={[currentConfig.chatkitGrayscaleShade ?? -1]}
+                                            onValueChange={([value]) => updateConfig({ chatkitGrayscaleShade: value })}
+                                            min={-10}
+                                            max={10}
+                                            step={1}
+                                            className="w-full"
+                                        />
+                                        <p className="text-xs text-muted-foreground">
+                                            Brightness adjustment for grayscale elements
+                                        </p>
+                                    </div>
+
+                                    <div className="border-t pt-4" />
+
+                                    {/* Accent Color */}
+                                    <div className="space-y-3">
+                                        <Label>Accent Color</Label>
+                                        <div className="flex gap-2 items-center">
+                                            <Input
+                                                type="color"
+                                                value={currentConfig.chatkitAccentPrimary || '#0f172a'}
+                                                onChange={(e) => updateConfig({ chatkitAccentPrimary: e.target.value })}
+                                                className="w-14 h-10 p-1 rounded-md cursor-pointer"
+                                            />
+                                            <Input
+                                                type="text"
+                                                value={currentConfig.chatkitAccentPrimary || '#0f172a'}
+                                                onChange={(e) => updateConfig({ chatkitAccentPrimary: e.target.value })}
+                                                className="flex-1 font-mono text-sm"
+                                            />
+                                        </div>
+                                        <p className="text-xs text-muted-foreground">
+                                            Primary accent color for interactive elements
+                                        </p>
+                                    </div>
+
+                                    {/* Accent Level */}
+                                    <div className="space-y-3">
+                                        <div className="flex items-center justify-between">
+                                            <Label>Accent Intensity</Label>
+                                            <span className="text-xs text-muted-foreground font-mono">
+                                                Level {currentConfig.chatkitAccentLevel ?? 1}
+                                            </span>
+                                        </div>
+                                        <div className="grid grid-cols-3 gap-2">
+                                            {[1, 2, 3].map((level) => (
+                                                <Button
+                                                    key={level}
+                                                    variant={currentConfig.chatkitAccentLevel === level ? 'default' : 'outline'}
+                                                    onClick={() => updateConfig({ chatkitAccentLevel: level })}
+                                                    className="text-xs"
+                                                >
+                                                    Level {level}
+                                                </Button>
+                                            ))}
+                                        </div>
+                                        <p className="text-xs text-muted-foreground">
+                                            Intensity of the accent color application (1-3)
+                                        </p>
                                     </div>
                                 </div>
                             </TabsContent>
@@ -203,6 +312,21 @@ export default function ChatKitConfiguratorPage() {
                                             onChange={(e) => updateConfig({ greeting: e.target.value })}
                                             placeholder="How can I help you today?"
                                         />
+                                        <p className="text-xs text-muted-foreground">
+                                            First message users see when opening the chat
+                                        </p>
+                                    </div>
+
+                                    <div className="space-y-2">
+                                        <Label>Input Placeholder</Label>
+                                        <Input
+                                            value={currentConfig.placeholder || ''}
+                                            onChange={(e) => updateConfig({ placeholder: e.target.value })}
+                                            placeholder="Ask anything..."
+                                        />
+                                        <p className="text-xs text-muted-foreground">
+                                            Placeholder text in the message input field
+                                        </p>
                                     </div>
                                 </div>
                             </TabsContent>
