@@ -9,19 +9,18 @@ interface RelayBody {
   licenseKey: string;
   message: string;
   sessionId?: string;
-  threadId?: string; // For AgentKit threading
   metadata?: Record<string, any>;
   [key: string]: any;
 }
 
 /**
  * Relay endpoint that forwards chat messages to the configured backend.
- * Supports N8n webhooks and OpenAI AgentKit/Assistants.
+ * Supports N8n webhooks. ChatKit widgets connect directly to OpenAI via client-side sessions.
  */
 export async function POST(request: NextRequest): Promise<NextResponse> {
   try {
     const body: RelayBody = await request.json();
-    const { widgetId, licenseKey, message, sessionId, threadId, metadata } = body;
+    const { widgetId, licenseKey, message, sessionId, metadata } = body;
 
     // 1. Input Validation
     if (!widgetId || !licenseKey || !message) {
@@ -64,8 +63,12 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     // 5. Route to Appropriate Handler
     if (provider === 'n8n') {
       return handleN8nRelay(config, body, license);
-    } else if (provider === 'agentkit') {
-      return handleAgentKitRelay(config, body, threadId);
+    } else if (provider === 'chatkit') {
+      // ChatKit widgets don't use this relay - they connect directly to OpenAI
+      return new NextResponse(
+        JSON.stringify({ error: 'ChatKit widgets connect directly to OpenAI via client-side session' }),
+        { status: 400, headers: { 'Content-Type': 'application/json' } }
+      );
     } else {
       return new NextResponse(
         JSON.stringify({ error: `Unsupported provider: ${provider}` }),
@@ -146,56 +149,6 @@ async function handleN8nRelay(
     return new NextResponse(
       JSON.stringify({ error: 'Failed to connect to workflow backend' }),
       { status: 502, headers: { 'Content-Type': 'application/json' } }
-    );
-  }
-}
-
-/**
- * Handle AgentKit (OpenAI Assistants API) relay
- */
-import { processMessage } from '@/lib/services/openai-service';
-
-// ... (existing imports)
-
-/**
- * Handle AgentKit (OpenAI Assistants API) relay
- */
-async function handleAgentKitRelay(
-  config: any,
-  body: RelayBody,
-  threadId?: string
-): Promise<NextResponse> {
-  const workflowId = config?.connection?.agentKitWorkflowId;
-  const apiKey = config?.connection?.agentKitApiKey;
-
-  if (!workflowId || !apiKey) {
-    return new NextResponse(
-      JSON.stringify({ error: 'AgentKit Workflow ID or API Key not configured' }),
-      { status: 500, headers: { 'Content-Type': 'application/json' } }
-    );
-  }
-
-  try {
-    const result = await processMessage(apiKey, workflowId, body.message, threadId);
-
-    return new NextResponse(
-      JSON.stringify({
-        output: result.message,
-        threadId: result.threadId,
-        message: result.message,
-        runId: result.runId
-      }),
-      {
-        status: 200,
-        headers: { 'Content-Type': 'application/json' }
-      }
-    );
-
-  } catch (error) {
-    console.error('[Chat Relay] AgentKit Error:', error);
-    return new NextResponse(
-      JSON.stringify({ error: error instanceof Error ? error.message : 'Failed to process AgentKit request' }),
-      { status: 500, headers: { 'Content-Type': 'application/json' } }
     );
   }
 }
