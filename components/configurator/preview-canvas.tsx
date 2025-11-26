@@ -3,6 +3,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { WidgetConfig } from '@/stores/widget-store';
 import { ChatPreview } from './chat-preview';
+import { ChatKitPreview } from './chatkit-preview';
 import { ChevronDown, MessageCircle, X, AppWindow, LayoutTemplate } from 'lucide-react';
 
 interface PreviewCanvasProps {
@@ -132,6 +133,8 @@ export const PreviewCanvas: React.FC<PreviewCanvasProps> = ({ config }) => {
   const deviceRing = isDark ? 'ring-white/10' : 'ring-black/5';
   const deviceBg = isDark ? 'bg-[#212121]' : 'bg-white';
 
+  const isChatKit = config.connection?.provider === 'chatkit';
+
   return (
     <main
       className={`flex-1 relative overflow-hidden flex flex-col items-center justify-center p-8 transition-colors duration-300 isolate ${canvasBg}`}
@@ -160,27 +163,24 @@ export const PreviewCanvas: React.FC<PreviewCanvasProps> = ({ config }) => {
           >
             <button
               onClick={() => handleModeChange('inline')}
-              className={`flex items-center gap-2 px-3 py-2 text-sm text-left transition-colors ${
-                embedMode === 'inline' ? dropdownItemActive : dropdownItemBg
-              }`}
+              className={`flex items-center gap-2 px-3 py-2 text-sm text-left transition-colors ${embedMode === 'inline' ? dropdownItemActive : dropdownItemBg
+                }`}
             >
               <AppWindow size={14} />
               Inline Embed
             </button>
             <button
               onClick={() => handleModeChange('full')}
-              className={`flex items-center gap-2 px-3 py-2 text-sm text-left transition-colors ${
-                embedMode === 'full' ? dropdownItemActive : dropdownItemBg
-              }`}
+              className={`flex items-center gap-2 px-3 py-2 text-sm text-left transition-colors ${embedMode === 'full' ? dropdownItemActive : dropdownItemBg
+                }`}
             >
               <LayoutTemplate size={14} />
               Full Page
             </button>
             <button
               onClick={() => handleModeChange('popup')}
-              className={`flex items-center gap-2 px-3 py-2 text-sm text-left transition-colors ${
-                embedMode === 'popup' ? dropdownItemActive : dropdownItemBg
-              }`}
+              className={`flex items-center gap-2 px-3 py-2 text-sm text-left transition-colors ${embedMode === 'popup' ? dropdownItemActive : dropdownItemBg
+                }`}
             >
               <MessageCircle size={14} />
               Website Chat
@@ -205,7 +205,11 @@ export const PreviewCanvas: React.FC<PreviewCanvasProps> = ({ config }) => {
           <div
             className={`h-full w-full rounded-[24px] shadow-2xl relative z-10 overflow-hidden ring-1 ${deviceBg} ${deviceRing}`}
           >
-            <ChatPreview config={config} />
+            {isChatKit ? (
+              <ChatKitPreview config={config} />
+            ) : (
+              <ChatPreview config={config} />
+            )}
           </div>
 
           {/* Resize Handles */}
@@ -249,7 +253,11 @@ export const PreviewCanvas: React.FC<PreviewCanvasProps> = ({ config }) => {
             `}
             style={{ width: 380, height: 600 }}
           >
-            <ChatPreview config={config} />
+            {isChatKit ? (
+              <ChatKitPreview config={config} />
+            ) : (
+              <ChatPreview config={config} />
+            )}
           </div>
 
           {/* Launcher Button */}
@@ -260,15 +268,13 @@ export const PreviewCanvas: React.FC<PreviewCanvasProps> = ({ config }) => {
           >
             <div className="relative w-6 h-6">
               <MessageCircle
-                className={`absolute inset-0 w-full h-full transition-all duration-300 ${
-                  isPopupOpen ? 'opacity-0 rotate-90 scale-50' : 'opacity-100 rotate-0 scale-100'
-                }`}
+                className={`absolute inset-0 w-full h-full transition-all duration-300 ${isPopupOpen ? 'opacity-0 rotate-90 scale-50' : 'opacity-100 rotate-0 scale-100'
+                  }`}
                 strokeWidth={2.5}
               />
               <X
-                className={`absolute inset-0 w-full h-full transition-all duration-300 ${
-                  isPopupOpen ? 'opacity-100 rotate-0 scale-100' : 'opacity-0 -rotate-90 scale-50'
-                }`}
+                className={`absolute inset-0 w-full h-full transition-all duration-300 ${isPopupOpen ? 'opacity-100 rotate-0 scale-100' : 'opacity-0 -rotate-90 scale-50'
+                  }`}
                 strokeWidth={2.5}
               />
             </div>

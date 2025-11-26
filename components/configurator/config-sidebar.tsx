@@ -414,86 +414,155 @@ export const ConfigSidebar: React.FC<ConfigSidebarProps> = ({
 
         {/* Color Toggles */}
         <Section isDark={isDark}>
-          {/* Accent */}
-          <Row className={config.useAccent ? 'mb-0' : 'mb-4'}>
-            <Label isDark={isDark}>Accent</Label>
-            <Toggle checked={config.useAccent || false} onChange={(v) => handleChange('useAccent', v)} isDark={isDark} />
-          </Row>
-          {config.useAccent && (
-            <div className="mt-3 mb-4 pl-0 animate-in slide-in-from-top-2 fade-in duration-200">
-              <ColorPicker label="Color" value={config.accentColor || '#0ea5e9'} onColorChange={(v) => handleChange('accentColor', v)} isDark={isDark} />
-            </div>
-          )}
+          {config.connection?.provider === 'chatkit' ? (
+            // ChatKit Specific Controls
+            <div className="space-y-6">
+              {/* Grayscale Controls */}
+              <div className="space-y-4">
+                <div className={`font-medium ${theme.text}`}>Grayscale</div>
 
-          {/* Tinted Grayscale */}
-          <Row className={config.useTintedGrayscale ? 'mb-0' : 'mb-4'}>
-            <Label isDark={isDark}>Tinted grayscale</Label>
-            <Toggle checked={config.useTintedGrayscale || false} onChange={(v) => handleChange('useTintedGrayscale', v)} isDark={isDark} />
-          </Row>
-          {config.useTintedGrayscale && (
-            <div className="animate-in slide-in-from-top-2 fade-in duration-200 space-y-4 mt-4 mb-2">
-              <Row>
-                <div className={`w-12 ${theme.textMuted}`}>Hue</div>
-                <Slider value={config.tintHue || 220} max={360} onChange={(v) => handleChange('tintHue', v)} gradient isDark={isDark} />
-                <div className={`w-6 text-right ${theme.textMuted}`}>{config.tintHue || 220}°</div>
+                <Row>
+                  <div className={`w-12 ${theme.textMuted}`}>Hue</div>
+                  <Slider value={config.chatkitGrayscaleHue || 220} max={360} onChange={(v) => handleChange('chatkitGrayscaleHue', v)} gradient isDark={isDark} />
+                  <div className={`w-8 text-right ${theme.textMuted}`}>{config.chatkitGrayscaleHue || 220}°</div>
+                </Row>
+
+                <Row>
+                  <div className={`w-12 ${theme.textMuted}`}>Tint</div>
+                  <Slider value={config.chatkitGrayscaleTint || 6} max={20} onChange={(v) => handleChange('chatkitGrayscaleTint', v)} isDark={isDark} />
+                  <div className={`w-8 text-right ${theme.textMuted}`}>{config.chatkitGrayscaleTint || 6}%</div>
+                </Row>
+
+                <Row>
+                  <div className={`w-12 ${theme.textMuted}`}>Shade</div>
+                  <Slider value={config.chatkitGrayscaleShade || -4} max={10} onChange={(v) => handleChange('chatkitGrayscaleShade', v)} isDark={isDark} />
+                  <div className={`w-8 text-right ${theme.textMuted}`}>{config.chatkitGrayscaleShade || -4}%</div>
+                </Row>
+              </div>
+
+              {/* Accent Controls */}
+              <div className="space-y-4">
+                <div className={`font-medium ${theme.text}`}>Accent</div>
+
+                <Row>
+                  <div className={`w-12 ${theme.textMuted}`}>Color</div>
+                  <div className="flex-1 flex justify-end">
+                    <div className="flex items-center gap-2">
+                      <div className="relative flex items-center justify-center">
+                        <div
+                          className={`w-6 h-6 rounded-[4px] border shadow-sm ${isDark ? 'border-white/10' : 'border-black/10'}`}
+                          style={{ backgroundColor: config.chatkitAccentPrimary || '#0f172a' }}
+                        />
+                        <input
+                          type="color"
+                          value={config.chatkitAccentPrimary || '#0f172a'}
+                          onChange={(e) => handleChange('chatkitAccentPrimary', e.target.value)}
+                          className="absolute inset-0 opacity-0 cursor-pointer w-full h-full"
+                        />
+                      </div>
+                      <SidebarInput
+                        type="text"
+                        value={config.chatkitAccentPrimary || '#0f172a'}
+                        onChange={(e) => handleChange('chatkitAccentPrimary', e.target.value)}
+                        className="w-24 uppercase"
+                        isDark={isDark}
+                      />
+                    </div>
+                  </div>
+                </Row>
+
+                <Row>
+                  <div className={`w-12 ${theme.textMuted}`}>Level</div>
+                  <Slider value={config.chatkitAccentLevel || 1} max={10} onChange={(v) => handleChange('chatkitAccentLevel', v)} isDark={isDark} />
+                  <div className={`w-8 text-right ${theme.textMuted}`}>{config.chatkitAccentLevel || 1}</div>
+                </Row>
+              </div>
+            </div>
+          ) : (
+            // N8n Specific Controls (Existing)
+            <>
+              {/* Accent */}
+              <Row className={config.useAccent ? 'mb-0' : 'mb-4'}>
+                <Label isDark={isDark}>Accent</Label>
+                <Toggle checked={config.useAccent || false} onChange={(v) => handleChange('useAccent', v)} isDark={isDark} />
               </Row>
-              <Row>
-                <div className={`w-12 ${theme.textMuted}`}>Tint</div>
-                <Slider value={config.tintLevel || 10} max={20} onChange={(v) => handleChange('tintLevel', v)} isDark={isDark} />
-                <div className={`w-6 text-right ${theme.textMuted}`}>{config.tintLevel || 10}</div>
+              {config.useAccent && (
+                <div className="mt-3 mb-4 pl-0 animate-in slide-in-from-top-2 fade-in duration-200">
+                  <ColorPicker label="Color" value={config.accentColor || '#0ea5e9'} onColorChange={(v) => handleChange('accentColor', v)} isDark={isDark} />
+                </div>
+              )}
+
+              {/* Tinted Grayscale */}
+              <Row className={config.useTintedGrayscale ? 'mb-0' : 'mb-4'}>
+                <Label isDark={isDark}>Tinted grayscale</Label>
+                <Toggle checked={config.useTintedGrayscale || false} onChange={(v) => handleChange('useTintedGrayscale', v)} isDark={isDark} />
               </Row>
-              <Row>
-                <div className={`w-12 ${theme.textMuted}`}>Shade</div>
-                <Slider value={config.shadeLevel || 50} max={20} onChange={(v) => handleChange('shadeLevel', v)} isDark={isDark} />
-                <div className={`w-6 text-right ${theme.textMuted}`}>{config.shadeLevel || 50}</div>
+              {config.useTintedGrayscale && (
+                <div className="animate-in slide-in-from-top-2 fade-in duration-200 space-y-4 mt-4 mb-2">
+                  <Row>
+                    <div className={`w-12 ${theme.textMuted}`}>Hue</div>
+                    <Slider value={config.tintHue || 220} max={360} onChange={(v) => handleChange('tintHue', v)} gradient isDark={isDark} />
+                    <div className={`w-6 text-right ${theme.textMuted}`}>{config.tintHue || 220}°</div>
+                  </Row>
+                  <Row>
+                    <div className={`w-12 ${theme.textMuted}`}>Tint</div>
+                    <Slider value={config.tintLevel || 10} max={20} onChange={(v) => handleChange('tintLevel', v)} isDark={isDark} />
+                    <div className={`w-6 text-right ${theme.textMuted}`}>{config.tintLevel || 10}</div>
+                  </Row>
+                  <Row>
+                    <div className={`w-12 ${theme.textMuted}`}>Shade</div>
+                    <Slider value={config.shadeLevel || 50} max={20} onChange={(v) => handleChange('shadeLevel', v)} isDark={isDark} />
+                    <div className={`w-6 text-right ${theme.textMuted}`}>{config.shadeLevel || 50}</div>
+                  </Row>
+                </div>
+              )}
+
+              {/* Custom Surface Colors */}
+              <Row className={config.useCustomSurfaceColors ? 'mb-0' : 'mt-4'}>
+                <Label isDark={isDark}>Custom surface colors</Label>
+                <Toggle checked={config.useCustomSurfaceColors || false} onChange={(v) => handleChange('useCustomSurfaceColors', v)} isDark={isDark} />
               </Row>
-            </div>
-          )}
+              {config.useCustomSurfaceColors && (
+                <div className="animate-in slide-in-from-top-2 fade-in duration-200 space-y-4 mt-4">
+                  <ColorPicker label="Surface background" value={config.surfaceBackgroundColor || '#ffffff'} onColorChange={(v) => handleChange('surfaceBackgroundColor', v)} isDark={isDark} />
+                  <ColorPicker label="Surface foreground" value={config.surfaceForegroundColor || '#f8fafc'} onColorChange={(v) => handleChange('surfaceForegroundColor', v)} isDark={isDark} />
+                </div>
+              )}
 
-          {/* Custom Surface Colors */}
-          <Row className={config.useCustomSurfaceColors ? 'mb-0' : 'mt-4'}>
-            <Label isDark={isDark}>Custom surface colors</Label>
-            <Toggle checked={config.useCustomSurfaceColors || false} onChange={(v) => handleChange('useCustomSurfaceColors', v)} isDark={isDark} />
-          </Row>
-          {config.useCustomSurfaceColors && (
-            <div className="animate-in slide-in-from-top-2 fade-in duration-200 space-y-4 mt-4">
-              <ColorPicker label="Surface background" value={config.surfaceBackgroundColor || '#ffffff'} onColorChange={(v) => handleChange('surfaceBackgroundColor', v)} isDark={isDark} />
-              <ColorPicker label="Surface foreground" value={config.surfaceForegroundColor || '#f8fafc'} onColorChange={(v) => handleChange('surfaceForegroundColor', v)} isDark={isDark} />
-            </div>
-          )}
+              {/* Custom Text Color */}
+              <Row className={config.useCustomTextColor ? 'mb-0' : 'mt-4'}>
+                <Label isDark={isDark}>Custom text color</Label>
+                <Toggle checked={config.useCustomTextColor || false} onChange={(v) => handleChange('useCustomTextColor', v)} isDark={isDark} />
+              </Row>
+              {config.useCustomTextColor && (
+                <div className="animate-in slide-in-from-top-2 fade-in duration-200 mt-4">
+                  <ColorPicker label="Text color" value={config.customTextColor || '#1e293b'} onColorChange={(v) => handleChange('customTextColor', v)} isDark={isDark} />
+                </div>
+              )}
 
-          {/* Custom Text Color */}
-          <Row className={config.useCustomTextColor ? 'mb-0' : 'mt-4'}>
-            <Label isDark={isDark}>Custom text color</Label>
-            <Toggle checked={config.useCustomTextColor || false} onChange={(v) => handleChange('useCustomTextColor', v)} isDark={isDark} />
-          </Row>
-          {config.useCustomTextColor && (
-            <div className="animate-in slide-in-from-top-2 fade-in duration-200 mt-4">
-              <ColorPicker label="Text color" value={config.customTextColor || '#1e293b'} onColorChange={(v) => handleChange('customTextColor', v)} isDark={isDark} />
-            </div>
-          )}
+              {/* Custom Icon Color */}
+              <Row className={config.useCustomIconColor ? 'mb-0' : 'mt-4'}>
+                <Label isDark={isDark}>Custom icon color</Label>
+                <Toggle checked={config.useCustomIconColor || false} onChange={(v) => handleChange('useCustomIconColor', v)} isDark={isDark} />
+              </Row>
+              {config.useCustomIconColor && (
+                <div className="animate-in slide-in-from-top-2 fade-in duration-200 mt-4">
+                  <ColorPicker label="Icon color" value={config.customIconColor || '#64748b'} onColorChange={(v) => handleChange('customIconColor', v)} isDark={isDark} />
+                </div>
+              )}
 
-          {/* Custom Icon Color */}
-          <Row className={config.useCustomIconColor ? 'mb-0' : 'mt-4'}>
-            <Label isDark={isDark}>Custom icon color</Label>
-            <Toggle checked={config.useCustomIconColor || false} onChange={(v) => handleChange('useCustomIconColor', v)} isDark={isDark} />
-          </Row>
-          {config.useCustomIconColor && (
-            <div className="animate-in slide-in-from-top-2 fade-in duration-200 mt-4">
-              <ColorPicker label="Icon color" value={config.customIconColor || '#64748b'} onColorChange={(v) => handleChange('customIconColor', v)} isDark={isDark} />
-            </div>
-          )}
-
-          {/* User Message Colors */}
-          <Row className={config.useCustomUserMessageColors ? 'mb-0' : 'mt-4'}>
-            <Label isDark={isDark}>User message colors</Label>
-            <Toggle checked={config.useCustomUserMessageColors || false} onChange={(v) => handleChange('useCustomUserMessageColors', v)} isDark={isDark} />
-          </Row>
-          {config.useCustomUserMessageColors && (
-            <div className="animate-in slide-in-from-top-2 fade-in duration-200 mt-4 space-y-4">
-              <ColorPicker label="Message Text" value={config.customUserMessageTextColor || '#ffffff'} onColorChange={(v) => handleChange('customUserMessageTextColor', v)} isDark={isDark} />
-              <ColorPicker label="Message Background" value={config.customUserMessageBackgroundColor || '#0ea5e9'} onColorChange={(v) => handleChange('customUserMessageBackgroundColor', v)} isDark={isDark} />
-            </div>
+              {/* User Message Colors */}
+              <Row className={config.useCustomUserMessageColors ? 'mb-0' : 'mt-4'}>
+                <Label isDark={isDark}>User message colors</Label>
+                <Toggle checked={config.useCustomUserMessageColors || false} onChange={(v) => handleChange('useCustomUserMessageColors', v)} isDark={isDark} />
+              </Row>
+              {config.useCustomUserMessageColors && (
+                <div className="animate-in slide-in-from-top-2 fade-in duration-200 mt-4 space-y-4">
+                  <ColorPicker label="Message Text" value={config.customUserMessageTextColor || '#ffffff'} onColorChange={(v) => handleChange('customUserMessageTextColor', v)} isDark={isDark} />
+                  <ColorPicker label="Message Background" value={config.customUserMessageBackgroundColor || '#0ea5e9'} onColorChange={(v) => handleChange('customUserMessageBackgroundColor', v)} isDark={isDark} />
+                </div>
+              )}
+            </>
           )}
         </Section>
 
@@ -787,6 +856,96 @@ export const ConfigSidebar: React.FC<ConfigSidebarProps> = ({
                           isDark={isDark}
                           onClick={(e) => e.stopPropagation()}
                         />
+                      </div>
+                    )}
+                  </div>
+                );
+              })()}
+
+              {/* ChatKit Option */}
+              {(() => {
+                const isChatKitSelected = config.connection?.provider === 'chatkit';
+                return (
+                  <div
+                    className={`p-3 rounded-lg border cursor-pointer transition-all mt-2 ${isChatKitSelected
+                      ? isDark
+                        ? 'border-green-500 bg-green-500/10'
+                        : 'border-green-500 bg-green-50'
+                      : isDark
+                        ? 'border-neutral-700 hover:border-neutral-600'
+                        : 'border-neutral-200 hover:border-neutral-300'
+                      }`}
+                    onClick={() => {
+                      onChange({
+                        ...config,
+                        connection: {
+                          ...config.connection,
+                          provider: 'chatkit',
+                          workflowId: config.connection?.workflowId || '',
+                          apiKey: config.connection?.apiKey || '',
+                        },
+                        // Set defaults for ChatKit if switching
+                        chatkitGrayscaleHue: config.chatkitGrayscaleHue ?? 220,
+                        chatkitGrayscaleTint: config.chatkitGrayscaleTint ?? 6,
+                        chatkitGrayscaleShade: config.chatkitGrayscaleShade ?? (config.themeMode === 'dark' ? -1 : -4),
+                        chatkitAccentPrimary: config.chatkitAccentPrimary ?? (config.themeMode === 'dark' ? '#f1f5f9' : '#0f172a'),
+                        chatkitAccentLevel: config.chatkitAccentLevel ?? 1,
+                      });
+                    }}
+                  >
+                    <Row>
+                      <div className={`font-medium ${isChatKitSelected ? (isDark ? 'text-green-400' : 'text-green-600') : theme.textMuted}`}>
+                        OpenAI ChatKit
+                      </div>
+                      <div className={`w-4 h-4 rounded-full border-2 flex items-center justify-center ${isChatKitSelected
+                        ? 'border-green-500 bg-green-500'
+                        : isDark ? 'border-neutral-600' : 'border-neutral-300'
+                        }`}>
+                        {isChatKitSelected && (
+                          <div className="w-2 h-2 rounded-full bg-white" />
+                        )}
+                      </div>
+                    </Row>
+                    {isChatKitSelected && (
+                      <div className="mt-3 space-y-3 animate-in slide-in-from-top-1 fade-in duration-200">
+                        <div className="space-y-1">
+                          <label className={`text-xs font-medium ${theme.textMuted}`}>Workflow ID</label>
+                          <SidebarInput
+                            type="text"
+                            value={config.connection?.workflowId || ''}
+                            onChange={(e) => onChange({
+                              ...config,
+                              connection: {
+                                ...config.connection,
+                                provider: 'chatkit',
+                                workflowId: e.target.value,
+                              }
+                            })}
+                            className="w-full font-mono text-xs"
+                            placeholder="wf_..."
+                            isDark={isDark}
+                            onClick={(e) => e.stopPropagation()}
+                          />
+                        </div>
+                        <div className="space-y-1">
+                          <label className={`text-xs font-medium ${theme.textMuted}`}>API Key</label>
+                          <SidebarInput
+                            type="password"
+                            value={config.connection?.apiKey || ''}
+                            onChange={(e) => onChange({
+                              ...config,
+                              connection: {
+                                ...config.connection,
+                                provider: 'chatkit',
+                                apiKey: e.target.value,
+                              }
+                            })}
+                            className="w-full font-mono text-xs"
+                            placeholder="sk-..."
+                            isDark={isDark}
+                            onClick={(e) => e.stopPropagation()}
+                          />
+                        </div>
                       </div>
                     )}
                   </div>

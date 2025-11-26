@@ -88,6 +88,7 @@ export async function POST(request: NextRequest) {
       licenseId,
       name,
       config: finalConfig,
+      widgetType: finalConfig.connection?.provider === 'chatkit' ? 'chatkit' : 'n8n',
     });
 
     // 8. Return 201 Created with widget data

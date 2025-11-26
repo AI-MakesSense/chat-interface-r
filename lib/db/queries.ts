@@ -415,6 +415,7 @@ export async function createWidget(data: {
   name: string;
   config: any;
   status?: string;
+  widgetType?: string;
   version?: number;
   deployedAt?: Date | null;
 }): Promise<Widget> {
@@ -426,6 +427,7 @@ export async function createWidget(data: {
       name: data.name,
       config: data.config,
       status: data.status || 'active',
+      widgetType: data.widgetType || 'n8n',
       version: data.version || 1,
       deployedAt: data.deployedAt || null,
       createdAt: now,
@@ -447,6 +449,7 @@ export async function updateWidget(
     name?: string;
     config?: any;
     status?: string;
+    widgetType?: string;
     version?: number;
     deployedAt?: Date | null;
   }
@@ -455,6 +458,7 @@ export async function updateWidget(
   if (data.name !== undefined) updateData.name = data.name;
   if (data.config !== undefined) updateData.config = data.config;
   if (data.status !== undefined) updateData.status = data.status;
+  if (data.widgetType !== undefined) updateData.widgetType = data.widgetType;
   if (data.version !== undefined) updateData.version = data.version;
   if (data.deployedAt !== undefined) updateData.deployedAt = data.deployedAt;
 
