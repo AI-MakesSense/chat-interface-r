@@ -56,6 +56,14 @@ export async function POST(req: NextRequest) {
         }
 
         // 2. Initialize OpenAI Client
+        console.log('ChatKit session creation:', {
+            previewMode,
+            hasApiKey: !!openaiApiKey,
+            hasWorkflowId: !!targetWorkflowId,
+            workflowIdLength: targetWorkflowId?.length,
+            apiKeyPrefix: openaiApiKey?.substring(0, 7) + '...'
+        });
+
         const openai = new OpenAI({
             apiKey: openaiApiKey,
         });
@@ -75,7 +83,13 @@ export async function POST(req: NextRequest) {
         });
 
     } catch (error: any) {
-        console.error('Error creating ChatKit session:', error);
+        console.error('Error creating ChatKit session:', {
+            message: error.message,
+            stack: error.stack,
+            response: error.response?.data,
+            status: error.response?.status,
+            fullError: error
+        });
         return NextResponse.json(
             { error: error.message || 'Failed to create session' },
             { status: 500 }
