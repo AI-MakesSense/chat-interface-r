@@ -101,6 +101,7 @@ export const widgets = pgTable('widgets', {
   // Core Fields (indexed for performance)
   name: varchar('name', { length: 100 }).notNull(), // User-friendly name ("Homepage Chat", "Support Widget")
   status: varchar('status', { length: 20 }).default('active').notNull(), // 'active' | 'paused' | 'deleted'
+  widgetType: varchar('widget_type', { length: 20 }).default('n8n').notNull(), // 'n8n' | 'chatkit'
 
   // Configuration (JSONB for flexibility)
   config: jsonb('config').notNull(), // Full widget configuration object

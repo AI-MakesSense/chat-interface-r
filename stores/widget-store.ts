@@ -61,11 +61,12 @@ export interface WidgetConfig {
 
   // Connection
   connection: {
-    provider?: 'n8n' | 'agentkit';
+    provider?: 'n8n' | 'chatkit';
     webhookUrl?: string;
     routeParam?: string;
-    agentKitWorkflowId?: string;
-    agentKitApiKey?: string;
+    // ChatKit specific
+    workflowId?: string;
+    apiKey?: string;
   };
 
   // Features (legacy)
@@ -228,6 +229,8 @@ const defaultConfig: WidgetConfig = {
   connection: {
     provider: 'n8n',
     webhookUrl: '',
+    workflowId: '',
+    apiKey: '',
   },
 
   // New playground-style properties

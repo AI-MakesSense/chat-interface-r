@@ -197,7 +197,7 @@ export async function GET(
         const normalizedAllowed = normalizeDomain(allowedDomain);
         // Allow exact match OR subdomain match (e.g., project.user.replit.dev matches replit.dev)
         return normalizedAllowed === normalizedRequestDomain ||
-               normalizedRequestDomain.endsWith('.' + normalizedAllowed);
+          normalizedRequestDomain.endsWith('.' + normalizedAllowed);
       });
 
       if (!isAuthorized) {
@@ -215,6 +215,39 @@ export async function GET(
     const widgetId = widgets.length > 0 ? widgets[0].id : undefined;
 
     // Step 11: Serve widget bundle with injected flags and relay config
+    // Check if it's a ChatKit widget
+    if (widgets.length > 0 && widgets[0].widgetType === 'chatkit') {
+      const host = request.headers.get('host') || 'localhost:3000';
+      const protocol = host.includes('localhost') ? 'http' : 'https';
+      const widgetUrl = `${protocol}://${host}/widget/chatkit/${licenseKey}`;
+
+      const script = `
+(function() {
+  if (document.getElementById('chatkit-widget-container')) return;
+  
+  var container = document.createElement('div');
+  container.id = 'chatkit-widget-container';
+  container.style.cssText = "position: fixed; bottom: 0; right: 0; width: 100vw; height: 100vh; border: none; z-index: 999999; pointer-events: none;";
+  
+  var iframe = document.createElement('iframe');
+  iframe.src = "${widgetUrl}";
+  iframe.style.cssText = "width: 100%; height: 100%; border: none; background: transparent; color-scheme: normal;";
+  iframe.allowTransparency = "true";
+  
+  container.appendChild(iframe);
+  document.body.appendChild(container);
+})();
+      `;
+
+      return new NextResponse(script, {
+        status: 200,
+        headers: {
+          ...createResponseHeaders(),
+          'Content-Type': 'application/javascript',
+        }
+      });
+    }
+
     const widgetBundle = await serveWidgetBundle(license, widgetId);
 
     // Step 12: Return successful response
