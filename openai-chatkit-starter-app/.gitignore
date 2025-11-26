@@ -1,3 +1,5 @@
+# See https://help.github.com/articles/ignoring-files/ for more about ignoring files.
+
 # dependencies
 /node_modules
 /.pnp
@@ -10,16 +12,13 @@
 
 # testing
 /coverage
-*.log
 
 # next.js
 /.next/
 /out/
-next-env.d.ts
 
 # production
 /build
-/dist
 
 # misc
 .DS_Store
@@ -29,20 +28,15 @@ next-env.d.ts
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
+.pnpm-debug.log*
 
-# env files
-.env
-.env*.local
-.env.production
+# env files (can opt-in for committing if needed)
+.env*
+!.env.example
 
 # vercel
 .vercel
 
 # typescript
 *.tsbuildinfo
-
-# drizzle
-drizzle/
-
-# generated widget
-public/widget/chat-widget.iife.js
+next-env.d.ts
