@@ -1,5 +1,4 @@
 import { NextRequest, NextResponse } from 'next/server';
-import OpenAI from 'openai';
 import { getWidgetById } from '@/lib/db/queries';
 
 export async function POST(req: NextRequest) {
@@ -55,7 +54,7 @@ export async function POST(req: NextRequest) {
             }
         }
 
-        // 2. Initialize OpenAI Client
+        // 2. Validate credentials
         console.log('ChatKit session creation:', {
             previewMode,
             hasApiKey: !!openaiApiKey,
@@ -64,18 +63,40 @@ export async function POST(req: NextRequest) {
             apiKeyPrefix: openaiApiKey?.substring(0, 7) + '...'
         });
 
-        const openai = new OpenAI({
-            apiKey: openaiApiKey,
+        // 3. Create ChatKit Session via direct API call
+        // Note: The OpenAI SDK doesn't expose chatkit.sessions, so we use fetch
+        const apiBase = process.env.CHATKIT_API_BASE ?? 'https://api.openai.com';
+        const url = `${apiBase}/v1/chatkit/sessions`;
+
+        const response = await fetch(url, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${openaiApiKey}`,
+                'OpenAI-Beta': 'chatkit_beta=v1',
+            },
+            body: JSON.stringify({
+                workflow: { id: targetWorkflowId },
+                user: {
+                    id: 'user_' + Math.random().toString(36).substring(7),
+                },
+            }),
         });
 
-        // 3. Create ChatKit Session
-        // Note: Using 'any' cast because types might not be fully updated for ChatKit beta yet
-        const session = await (openai as any).chatkit.sessions.create({
-            workflow: { id: targetWorkflowId },
-            user: {
-                id: 'user_' + Math.random().toString(36).substring(7), // TODO: Use real user ID if available
-            },
-        });
+        if (!response.ok) {
+            const errorData = await response.json().catch(() => ({}));
+            console.error('ChatKit API error:', {
+                status: response.status,
+                statusText: response.statusText,
+                errorData
+            });
+            return NextResponse.json(
+                { error: `ChatKit API error: ${response.statusText}` },
+                { status: response.status }
+            );
+        }
+
+        const session = await response.json();
 
         // 4. Return Client Secret
         return NextResponse.json({
