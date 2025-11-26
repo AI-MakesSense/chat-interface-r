@@ -100,6 +100,13 @@ export interface WidgetConfig {
   useCustomTextColor?: boolean;
   customTextColor?: string;
 
+  // ChatKit-specific color system
+  chatkitGrayscaleHue?: number;        // 0-360
+  chatkitGrayscaleTint?: number;       // saturation level
+  chatkitGrayscaleShade?: number;      // brightness adjustment
+  chatkitAccentPrimary?: string;       // hex color
+  chatkitAccentLevel?: number;         // 1-3 intensity
+
   // Component Colors
   useCustomIconColor?: boolean;
   customIconColor?: string;
@@ -246,6 +253,14 @@ const defaultConfig: WidgetConfig = {
   surfaceForegroundColor: '#f8fafc',
   useCustomTextColor: false,
   customTextColor: '#1e293b',
+
+  // ChatKit-specific defaults
+  chatkitGrayscaleHue: 220,
+  chatkitGrayscaleTint: 6,
+  chatkitGrayscaleShade: -1,
+  chatkitAccentPrimary: '#0f172a',
+  chatkitAccentLevel: 1,
+
   useCustomIconColor: false,
   customIconColor: '#64748b',
   useCustomUserMessageColors: false,

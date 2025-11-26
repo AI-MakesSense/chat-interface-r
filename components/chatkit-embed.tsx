@@ -32,15 +32,26 @@ export const ChatKitEmbed: React.FC<ChatKitEmbedProps> = ({ widgetId, config }) 
         },
         theme: {
             colorScheme: config.themeMode || 'light',
-            // accentColor: config.useAccent ? config.accentColor : undefined,
-            radius: config.radius === 'pill' ? 'pill' : config.radius === 'none' ? 'sharp' : 'soft',
-            // fontFamily: config.fontFamily === 'system-ui' ? undefined : config.fontFamily,
+            color: {
+                grayscale: {
+                    hue: Math.min(Math.max(config.chatkitGrayscaleHue ?? 220, 0), 9) as 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9,
+                    tint: Math.min(Math.max(config.chatkitGrayscaleTint ?? 6, 0), 4) as 0 | 1 | 2 | 3 | 4,
+                    shade: Math.min(Math.max(config.chatkitGrayscaleShade ?? (config.themeMode === 'dark' ? -1 : -4), -4), 4) as -4 | -3 | -2 | -1 | 0 | 1 | 2 | 3 | 4,
+                },
+                accent: {
+                    primary: config.chatkitAccentPrimary ?? (config.themeMode === 'dark' ? '#f1f5f9' : '#0f172a'),
+                    level: Math.min(Math.max(config.chatkitAccentLevel ?? 1, 0), 3) as 0 | 1 | 2 | 3,
+                },
+            },
+            radius: config.radius === 'pill' ? 'pill' : config.radius === 'none' ? 'sharp' : config.radius === 'medium' ? 'soft' : 'round',
         },
         startScreen: {
             greeting: config.greeting,
             prompts: config.starterPrompts?.map(p => ({ label: p.label, prompt: p.label })) || [],
         },
-
+        composer: config.placeholder ? {
+            placeholder: config.placeholder,
+        } : undefined,
     });
 
     return (
@@ -49,3 +60,4 @@ export const ChatKitEmbed: React.FC<ChatKitEmbedProps> = ({ widgetId, config }) 
         </div>
     );
 };
+
