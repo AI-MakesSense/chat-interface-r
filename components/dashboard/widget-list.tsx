@@ -21,7 +21,7 @@ interface WidgetListProps {
     onDelete: (id: string) => Promise<void>;
 }
 
-function DownloadButton({ widgetId, widgetName }: { widgetId: string, widgetName: string }) {
+function DownloadButton({ widgetId }: { widgetId: string }) {
     const [isOpen, setIsOpen] = useState(false);
 
     const downloadOptions = [
@@ -180,7 +180,7 @@ export function WidgetList({ widgets, onDelete }: WidgetListProps) {
                         </div>
                         <div className="flex w-full gap-2">
                             <div className="flex-1">
-                                <DownloadButton widgetId={widget.id} widgetName={widget.name} />
+                                <DownloadButton widgetId={widget.id} />
                             </div>
                             {widget.license && (
                                 <div className="flex-1">
@@ -220,7 +220,11 @@ export function WidgetList({ widgets, onDelete }: WidgetListProps) {
                                         variant="outline"
                                         size="sm"
                                         className="flex-1 gap-2"
-                                        onClick={() => router.push(`/configurator?widgetId=${widget.id}`)}
+                                        onClick={() => {
+                                            const provider = widget.config?.connection?.provider;
+                                            const path = provider === 'chatkit' ? '/configurator/chatkit' : '/configurator/n8n';
+                                            router.push(`${path}?widgetId=${widget.id}`);
+                                        }}
                                     >
                                         <Edit className="h-4 w-4" />
                                         Edit
