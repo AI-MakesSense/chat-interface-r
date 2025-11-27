@@ -141,13 +141,16 @@ export async function PATCH(
       const configSchema = createWidgetConfigSchema(widget.license.tier as any, true);
       configSchema.parse(mergedConfig);
 
-      updateData.config = mergedConfig;
+      // Strip legacy properties that might conflict with new structure
+      const cleanedConfig = stripLegacyConfigProperties(mergedConfig);
+
+      updateData.config = cleanedConfig;
       // Increment version only when config changes
       updateData.version = widget.version + 1;
 
       // Also update widgetType based on provider
-      if (mergedConfig.connection?.provider) {
-        updateData.widgetType = mergedConfig.connection.provider === 'chatkit' ? 'chatkit' : 'n8n';
+      if (cleanedConfig.connection?.provider) {
+        updateData.widgetType = cleanedConfig.connection.provider === 'chatkit' ? 'chatkit' : 'n8n';
       }
     }
 
@@ -267,4 +270,28 @@ function deepMerge(target: any, source: any): any {
   }
 
   return output;
+}
+
+/**
+ * Strip legacy config properties that conflict with new structure
+ * 
+ * Removes old nested objects like:
+ * - theme.mode (old) vs themeMode (new)
+ * - theme.colors (old) vs color system (new)
+ * - behavior, advancedStyling, etc.
+ */
+function stripLegacyConfigProperties(config: any): any {
+  const cleaned = { ...config };
+
+  // Remove legacy nested theme object if it exists
+  // The new structure uses flat properties like themeMode, not nested theme.mode
+  if (cleaned.theme && typeof cleaned.theme === 'object') {
+    delete cleaned.theme;
+  }
+
+  // Remove other legacy nested structures
+  delete cleaned.behavior;
+  delete cleaned.advancedStyling;
+
+  return cleaned;
 }
