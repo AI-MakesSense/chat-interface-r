@@ -111,6 +111,7 @@ export const ChatKitPreview: React.FC<ChatKitPreviewProps> = ({ config }) => {
                 fontSize: getFontSize(config.density)
             }}
         >
+            {/* Intentional: Allow admins to inject custom CSS for advanced styling */}
             {config.customCss && <style dangerouslySetInnerHTML={{ __html: config.customCss }} />}
             <ChatKit control={control} />
         </div>

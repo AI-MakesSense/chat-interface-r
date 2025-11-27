@@ -60,7 +60,6 @@ export async function POST(req: NextRequest) {
             hasApiKey: !!openaiApiKey,
             hasWorkflowId: !!targetWorkflowId,
             workflowIdLength: targetWorkflowId?.length,
-            apiKeyPrefix: openaiApiKey?.substring(0, 7) + '...'
         });
 
         // 3. Create ChatKit Session via direct API call

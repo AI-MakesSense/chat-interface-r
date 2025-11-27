@@ -172,7 +172,9 @@ export const usePreviewStore = create<PreviewState>((set, get) => ({
     };
 
     // Send message to iframe
-    iframeRef.contentWindow.postMessage(message, '*');
+    // Use window.location.origin for security since iframe is same-origin
+    const targetOrigin = typeof window !== 'undefined' ? window.location.origin : '*';
+    iframeRef.contentWindow.postMessage(message, targetOrigin);
 
     // Track update time for latency monitoring
     set({ lastUpdateTime: Date.now() });
@@ -192,7 +194,9 @@ export const usePreviewStore = create<PreviewState>((set, get) => ({
       type: PreviewMessageType.OPEN_WIDGET,
     };
 
-    iframeRef.contentWindow.postMessage(message, '*');
+    // Use window.location.origin for security since iframe is same-origin
+    const targetOrigin = typeof window !== 'undefined' ? window.location.origin : '*';
+    iframeRef.contentWindow.postMessage(message, targetOrigin);
     set({ isWidgetOpen: true });
   },
 
@@ -210,7 +214,9 @@ export const usePreviewStore = create<PreviewState>((set, get) => ({
       type: PreviewMessageType.CLOSE_WIDGET,
     };
 
-    iframeRef.contentWindow.postMessage(message, '*');
+    // Use window.location.origin for security since iframe is same-origin
+    const targetOrigin = typeof window !== 'undefined' ? window.location.origin : '*';
+    iframeRef.contentWindow.postMessage(message, targetOrigin);
     set({ isWidgetOpen: false });
   },
 

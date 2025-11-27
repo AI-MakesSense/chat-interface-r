@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { WidgetConfig } from '@/stores/widget-store';
 import { X, Copy, Check } from 'lucide-react';
 
@@ -97,8 +97,14 @@ export const CodeModal: React.FC<CodeModalProps> = ({ config, isOpen, onClose, l
   const handleCopy = () => {
     navigator.clipboard.writeText(codeString);
     setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
   };
+
+  useEffect(() => {
+    if (copied) {
+      const timer = setTimeout(() => setCopied(false), 2000);
+      return () => clearTimeout(timer);
+    }
+  }, [copied]);
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center isolate">

@@ -421,6 +421,7 @@ export const ChatPreview: React.FC<ChatPreviewProps> = ({ config }) => {
       }}
     >
       {/* Inject Custom Font CSS */}
+      {/* Intentional: Allow admins to inject custom CSS for advanced styling */}
       {config.useCustomFont && config.customFontCss && (
         <style dangerouslySetInnerHTML={{ __html: config.customFontCss }} />
       )}
