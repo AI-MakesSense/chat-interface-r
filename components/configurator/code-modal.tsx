@@ -20,6 +20,13 @@ const StringVal = ({ children }: { children?: React.ReactNode }) => <span classN
 export const CodeModal: React.FC<CodeModalProps> = ({ config, isOpen, onClose, licenseKey }) => {
   const [copied, setCopied] = useState(false);
 
+  useEffect(() => {
+    if (copied) {
+      const timer = setTimeout(() => setCopied(false), 2000);
+      return () => clearTimeout(timer);
+    }
+  }, [copied]);
+
   if (!isOpen) return null;
 
   // Determine widget type from config
@@ -40,13 +47,6 @@ export const CodeModal: React.FC<CodeModalProps> = ({ config, isOpen, onClose, l
     navigator.clipboard.writeText(codeString);
     setCopied(true);
   };
-
-  useEffect(() => {
-    if (copied) {
-      const timer = setTimeout(() => setCopied(false), 2000);
-      return () => clearTimeout(timer);
-    }
-  }, [copied]);
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center isolate">
