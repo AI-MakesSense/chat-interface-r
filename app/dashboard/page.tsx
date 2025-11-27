@@ -3,8 +3,8 @@
 /**
  * Dashboard Page
  *
- * Protected main dashboard page showing user's licenses.
- * Module 2: Dashboard & License Management - Full implementation
+ * Protected main dashboard page showing user's widgets and licenses.
+ * Visual overhaul to match landing page design language.
  */
 
 import { useEffect } from 'react';
@@ -17,12 +17,12 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { LicenseCard } from '@/components/dashboard/license-card';
 import { WidgetList } from '@/components/dashboard/widget-list';
-import { Plus } from 'lucide-react';
+import { CreateWidgetModal } from '@/components/dashboard/create-widget-modal';
+import { Plus, LayoutGrid, CreditCard, LogOut, User } from 'lucide-react';
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 
 /**
  * Dashboard page component
- *
- * Displays user licenses and widgets with management capabilities
  */
 export default function DashboardPage() {
   const router = useRouter();
@@ -85,20 +85,20 @@ export default function DashboardPage() {
   // Loading state
   if (authLoading) {
     return (
-      <div className="min-h-screen flex items-center justify-center">
-        <p className="text-muted-foreground">Loading...</p>
+      <div className="min-h-screen flex items-center justify-center bg-black text-white">
+        <p className="text-zinc-400">Loading...</p>
       </div>
     );
   }
 
-  // Not authenticated (shouldn't happen with middleware, but fallback)
+  // Not authenticated
   if (!isAuthenticated || !user) {
     return (
-      <div className="min-h-screen flex items-center justify-center">
-        <Card>
+      <div className="min-h-screen flex items-center justify-center bg-black">
+        <Card className="bg-zinc-900 border-zinc-800 text-white">
           <CardContent className="pt-6">
-            <p className="text-muted-foreground mb-4">You must be logged in to view this page.</p>
-            <Button onClick={() => router.push('/auth/login')}>
+            <p className="text-zinc-400 mb-4">You must be logged in to view this page.</p>
+            <Button onClick={() => router.push('/auth/login')} className="bg-indigo-600 hover:bg-indigo-700">
               Go to Login
             </Button>
           </CardContent>
@@ -115,46 +115,65 @@ export default function DashboardPage() {
 
   // Dashboard content
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100 dark:from-slate-900 dark:to-slate-800">
+    <div className="min-h-screen bg-black text-white selection:bg-indigo-500/30">
       {/* Header */}
-      <header className="border-b bg-white dark:bg-slate-900 sticky top-0 z-10">
-        <div className="container mx-auto px-4 py-4 flex items-center justify-between">
-          <div>
-            <h1 className="text-2xl font-bold">N8n Widget Designer</h1>
-            <p className="text-sm text-muted-foreground">Dashboard</p>
-          </div>
-          <div className="flex items-center gap-4">
-            <div className="text-right hidden sm:block">
-              <p className="text-sm font-medium">{user.name || user.email}</p>
-              <p className="text-xs text-muted-foreground">{user.email}</p>
+      <header className="border-b border-white/10 bg-black/50 backdrop-blur-xl sticky top-0 z-50">
+        <div className="container mx-auto px-4 h-16 flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <div className="h-8 w-8 rounded-lg bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center">
+              <LayoutGrid className="h-5 w-5 text-white" />
             </div>
-            <Button variant="outline" onClick={handleLogout}>
-              Sign Out
-            </Button>
+            <span className="font-bold text-lg tracking-tight">Chat Interfacer</span>
+          </div>
+
+          <div className="flex items-center gap-4">
+            <div className="flex items-center gap-3 pl-4 border-l border-white/10">
+              <div className="text-right hidden sm:block">
+                <p className="text-sm font-medium text-white">{user.name || 'User'}</p>
+                <p className="text-xs text-zinc-500">{user.email}</p>
+              </div>
+              <Avatar className="h-8 w-8 border border-white/10">
+                <AvatarFallback className="bg-zinc-800 text-zinc-400">
+                  <User className="h-4 w-4" />
+                </AvatarFallback>
+              </Avatar>
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={handleLogout}
+                className="text-zinc-400 hover:text-white hover:bg-white/5"
+              >
+                <LogOut className="h-4 w-4" />
+              </Button>
+            </div>
           </div>
         </div>
       </header>
 
       {/* Main Content */}
-      <main className="container mx-auto px-4 py-8 space-y-8">
+      <main className="container mx-auto px-4 py-8 space-y-10">
         {/* Welcome Section */}
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-white/5 pb-8">
           <div>
-            <h2 className="text-2xl font-bold mb-2">Welcome back{user.name ? `, ${user.name}` : ''}!</h2>
-            <p className="text-muted-foreground">Manage your chat widgets and licenses</p>
+            <h1 className="text-3xl font-bold mb-2 bg-gradient-to-r from-white to-zinc-400 bg-clip-text text-transparent">
+              Dashboard
+            </h1>
+            <p className="text-zinc-400">Manage your chat interfaces and deployments</p>
           </div>
-          <Button onClick={() => router.push('/configurator')} className="gap-2">
-            <Plus className="h-4 w-4" />
-            Create Widget
-          </Button>
+          <CreateWidgetModal>
+            <Button className="bg-indigo-600 hover:bg-indigo-700 text-white gap-2 shadow-lg shadow-indigo-500/20">
+              <Plus className="h-4 w-4" />
+              Create Interface
+            </Button>
+          </CreateWidgetModal>
         </div>
 
         {/* Error Alert */}
         {error && (
-          <Alert variant="destructive">
+          <Alert variant="destructive" className="bg-red-900/20 border-red-900/50 text-red-200">
             <AlertDescription className="flex items-center justify-between">
               <span>{error}</span>
-              <Button variant="ghost" size="sm" onClick={clearError}>
+              <Button variant="ghost" size="sm" onClick={clearError} className="hover:bg-red-900/30">
                 Dismiss
               </Button>
             </AlertDescription>
@@ -162,15 +181,37 @@ export default function DashboardPage() {
         )}
 
         {/* Widgets Section */}
-        <section>
-          <div className="flex items-center justify-between mb-4">
-            <h3 className="text-xl font-semibold">Your Widgets</h3>
+        <section className="space-y-6">
+          <div className="flex items-center justify-between">
+            <h2 className="text-xl font-semibold flex items-center gap-2">
+              <LayoutGrid className="h-5 w-5 text-indigo-400" />
+              Your Interfaces
+            </h2>
           </div>
 
           {widgetsLoading ? (
-            <Card>
-              <CardContent className="py-8 text-center">
-                <p className="text-muted-foreground">Loading widgets...</p>
+            <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+              {[1, 2, 3].map((i) => (
+                <div key={i} className="h-48 rounded-xl bg-white/5 animate-pulse" />
+              ))}
+            </div>
+          ) : widgets.length === 0 ? (
+            <Card className="bg-white/5 border-white/10 border-dashed">
+              <CardContent className="flex flex-col items-center justify-center py-16 text-center">
+                <div className="h-16 w-16 rounded-full bg-white/5 flex items-center justify-center mb-6">
+                  <LayoutGrid className="h-8 w-8 text-zinc-500" />
+                </div>
+                <h3 className="text-xl font-semibold mb-2 text-white">No interfaces yet</h3>
+                <p className="text-zinc-400 max-w-sm mb-8">
+                  Create your first chat interface to start engaging with your users.
+                  Choose between OpenAI Agents or N8n Workflows.
+                </p>
+                <CreateWidgetModal>
+                  <Button className="bg-indigo-600 hover:bg-indigo-700 text-white gap-2">
+                    <Plus className="h-4 w-4" />
+                    Create Your First Interface
+                  </Button>
+                </CreateWidgetModal>
               </CardContent>
             </Card>
           ) : (
@@ -178,45 +219,29 @@ export default function DashboardPage() {
           )}
         </section>
 
-        {/* Licenses Section */}
-        <section>
-          <div className="flex items-center justify-between mb-4">
-            <div>
-              <h3 className="text-xl font-semibold">Your Licenses</h3>
-              <p className="text-sm text-muted-foreground">
-                {licenses.length === 0 ? 'No licenses yet' : `${licenses.length} license${licenses.length === 1 ? '' : 's'}`}
-              </p>
-            </div>
-            <Button variant="outline" onClick={() => router.push('/pricing')}>
-              Purchase License
+        {/* Licenses Section - Simplified */}
+        <section className="space-y-6 pt-8 border-t border-white/5">
+          <div className="flex items-center justify-between">
+            <h2 className="text-xl font-semibold flex items-center gap-2">
+              <CreditCard className="h-5 w-5 text-purple-400" />
+              Active Licenses
+            </h2>
+            <Button variant="outline" onClick={() => router.push('/pricing')} className="border-white/10 text-zinc-400 hover:text-white hover:bg-white/5">
+              Manage Plan
             </Button>
           </div>
 
           {licensesLoading ? (
-            <Card>
-              <CardContent className="py-8 text-center">
-                <p className="text-muted-foreground">Loading licenses...</p>
-              </CardContent>
-            </Card>
+            <div className="h-32 rounded-xl bg-white/5 animate-pulse" />
           ) : licenses.length === 0 ? (
-            <Card>
-              <CardHeader>
-                <CardTitle>No Licenses Found</CardTitle>
-                <CardDescription>
-                  Purchase a license to start creating widgets
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
-                <p className="text-sm text-muted-foreground mb-4">
-                  Choose from Basic, Pro, or Agency tiers based on your needs:
-                </p>
-                <ul className="text-sm space-y-2 mb-4">
-                  <li>• <strong>Basic</strong>: 1 domain, with branding ($29/year)</li>
-                  <li>• <strong>Pro</strong>: 1 domain, white-label ($49/year)</li>
-                  <li>• <strong>Agency</strong>: Unlimited domains, white-label ($149/year)</li>
-                </ul>
-                <Button onClick={() => router.push('/pricing')}>
-                  View Pricing
+            <Card className="bg-gradient-to-br from-indigo-900/20 to-purple-900/20 border-indigo-500/20">
+              <CardContent className="flex items-center justify-between p-6">
+                <div>
+                  <h3 className="font-semibold text-indigo-300 mb-1">Upgrade to Pro</h3>
+                  <p className="text-sm text-zinc-400">Unlock white-labeling and custom domains for your interfaces.</p>
+                </div>
+                <Button onClick={() => router.push('/pricing')} variant="secondary" className="bg-white/10 hover:bg-white/20 text-white border-0">
+                  View Plans
                 </Button>
               </CardContent>
             </Card>

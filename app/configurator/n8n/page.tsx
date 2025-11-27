@@ -79,16 +79,29 @@ function ConfiguratorPage() {
     resetConfig
   } = useWidgetStore();
 
-  const [widgetName, setWidgetName] = useState('');
-  const [showCreateForm, setShowCreateForm] = useState(false);
+  const [widgetName, setWidgetName] = useState('Untitled Widget');
   const [isCodeModalOpen, setIsCodeModalOpen] = useState(false);
 
   // Load widget if widgetId is provided
+  // Load widget if widgetId is provided, otherwise reset for new widget
   useEffect(() => {
-    if (widgetId && !currentWidget) {
-      getWidget(widgetId).catch(console.error);
+    if (widgetId) {
+      if (!currentWidget || currentWidget.id !== widgetId) {
+        getWidget(widgetId).catch(console.error);
+      }
+    } else {
+      // Reset for new widget
+      useWidgetStore.getState().setCurrentWidget(null);
+      setWidgetName(searchParams?.get('name') || 'Untitled Widget');
     }
-  }, [widgetId, currentWidget, getWidget]);
+  }, [widgetId, currentWidget, getWidget, searchParams]);
+
+  // Update local name when widget loads
+  useEffect(() => {
+    if (currentWidget) {
+      setWidgetName(currentWidget.name);
+    }
+  }, [currentWidget]);
 
   // Handle creating a new widget
   const handleCreateWidget = async () => {
@@ -110,8 +123,7 @@ function ConfiguratorPage() {
         config: currentConfig
       });
 
-      setShowCreateForm(false);
-      setWidgetName('');
+      toast.success('Widget created successfully');
       router.push(`/configurator/n8n?widgetId=${widget.id}`);
     } catch (error) {
       console.error('Failed to create widget:', error);
@@ -122,8 +134,16 @@ function ConfiguratorPage() {
   // Handle saving configuration
   const handleSave = async () => {
     try {
-      await saveConfig();
-      toast.success('Configuration saved successfully');
+      if (!currentWidget) {
+        await handleCreateWidget();
+      } else {
+        // Update name if changed
+        if (currentWidget.name !== widgetName) {
+          await useWidgetStore.getState().updateWidget(currentWidget.id, { name: widgetName });
+        }
+        await saveConfig();
+        toast.success('Configuration saved successfully');
+      }
     } catch (error) {
       console.error('Failed to save configuration:', error);
       toast.error('Failed to save configuration');
@@ -162,65 +182,7 @@ function ConfiguratorPage() {
     return null;
   }
 
-  // No widget selected - show create form
-  if (!currentWidget && !showCreateForm) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-slate-50 to-slate-100 dark:from-slate-900 dark:to-slate-800">
-        <Card className="max-w-md w-full mx-4">
-          <CardHeader>
-            <CardTitle>Create New Widget</CardTitle>
-            <CardDescription>Configure your chat widget</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <Button onClick={() => setShowCreateForm(true)} className="w-full">
-              Create Widget
-            </Button>
-            <Button variant="outline" onClick={() => router.push('/dashboard')} className="w-full mt-2">
-              Back to Dashboard
-            </Button>
-          </CardContent>
-        </Card>
-      </div>
-    );
-  }
 
-  // Create widget form
-  if (showCreateForm) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-slate-50 to-slate-100 dark:from-slate-900 dark:to-slate-800">
-        <Card className="max-w-md w-full mx-4">
-          <CardHeader>
-            <CardTitle>Create New Widget</CardTitle>
-            <CardDescription>Enter a name for your widget</CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div>
-              <Label htmlFor="widget-name">Widget Name</Label>
-              <Input
-                id="widget-name"
-                placeholder="My Chat Widget"
-                value={widgetName}
-                onChange={(e) => setWidgetName(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter') {
-                    handleCreateWidget();
-                  }
-                }}
-              />
-            </div>
-            <div className="flex gap-2">
-              <Button onClick={handleCreateWidget} disabled={!widgetName.trim() || isSaving}>
-                {isSaving ? 'Creating...' : 'Create'}
-              </Button>
-              <Button variant="outline" onClick={() => setShowCreateForm(false)}>
-                Cancel
-              </Button>
-            </div>
-          </CardContent>
-        </Card>
-      </div>
-    );
-  }
 
   // Main configurator interface
   return (
@@ -234,16 +196,21 @@ function ConfiguratorPage() {
           </Button>
           <div className="h-6 w-px bg-border" />
           <div>
-            <h1 className="font-semibold text-sm">{currentWidget?.name || 'Widget'}</h1>
+            <Input
+              value={widgetName}
+              onChange={(e) => setWidgetName(e.target.value)}
+              className="h-8 w-[200px] font-semibold text-sm border-transparent hover:border-border focus:border-primary transition-colors bg-transparent"
+              placeholder="Widget Name"
+            />
             {hasUnsavedChanges && (
-              <p className="text-xs text-muted-foreground">Unsaved changes</p>
+              <p className="text-xs text-muted-foreground px-3">Unsaved changes</p>
             )}
           </div>
         </div>
         <div className="flex items-center gap-2">
           <Button
             onClick={handleSave}
-            disabled={!hasUnsavedChanges || isSaving}
+            disabled={isSaving}
             size="sm"
           >
             {isSaving ? (
