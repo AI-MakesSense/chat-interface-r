@@ -86,14 +86,18 @@ export function WidgetList({ widgets, onDelete }: WidgetListProps) {
         }
     };
 
-    const handleCopyEmbed = (licenseKey: string) => {
+    const handleCopyEmbed = (licenseKey: string, widget: Widget) => {
         // Use production URL - must match what configurator generates
         // This ensures embed codes work regardless of which Vercel deployment you're viewing
         const baseUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://chat-interface-r.vercel.app';
 
+        // Determine widget type
+        const widgetType = widget.config?.connection?.provider === 'chatkit' ? 'ChatKit Agent' : 'N8n Workflow';
+
         // Updated to use authenticated widget endpoint (matches configurator format)
         // This enables proper domain validation and license authentication
-        const embedCode = `<script src="${baseUrl}/api/widget/${licenseKey}/chat-widget.js" async></script>`;
+        const embedCode = `<!-- ${widgetType} Widget -->
+<script src="${baseUrl}/api/widget/${licenseKey}/chat-widget.js" async></script>`;
 
         navigator.clipboard.writeText(embedCode);
         setCopiedId(licenseKey);
@@ -163,7 +167,7 @@ export function WidgetList({ widgets, onDelete }: WidgetListProps) {
                                 variant="secondary"
                                 size="sm"
                                 className="flex-1 gap-2"
-                                onClick={() => handleCopyEmbed(widget.licenseKey)}
+                                onClick={() => handleCopyEmbed(widget.licenseKey, widget)}
                             >
                                 {copiedId === widget.licenseKey ? (
                                     <>
