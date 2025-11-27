@@ -144,6 +144,11 @@ export async function PATCH(
       updateData.config = mergedConfig;
       // Increment version only when config changes
       updateData.version = widget.version + 1;
+
+      // Also update widgetType based on provider
+      if (mergedConfig.connection?.provider) {
+        updateData.widgetType = mergedConfig.connection.provider === 'chatkit' ? 'chatkit' : 'n8n';
+      }
     }
 
     // 7. Update widget in database
