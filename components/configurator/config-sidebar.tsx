@@ -376,7 +376,9 @@ export const ConfigSidebar: React.FC<ConfigSidebarProps> = ({
           <button
             onClick={onOpenCode}
             className={`w-8 h-8 flex items-center justify-center rounded-lg transition-colors ${theme.buttonBg} ${theme.buttonIcon}`}
-            title="View Code"
+            title={widgetName === 'Widget' ? 'Save widget first to get embed code' : 'View Code'}
+            disabled={widgetName === 'Widget'}
+            style={widgetName === 'Widget' ? { opacity: 0.5, cursor: 'not-allowed' } : undefined}
           >
             <Code size={18} />
           </button>
