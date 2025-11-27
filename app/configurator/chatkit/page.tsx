@@ -20,6 +20,7 @@ import { ConfigSidebar } from '@/components/configurator/config-sidebar';
 import { PreviewCanvas } from '@/components/configurator/preview-canvas';
 import { CodeModal } from '@/components/configurator/code-modal';
 import { ArrowLeft, Save, Loader2 } from 'lucide-react';
+import { toast } from 'sonner';
 
 /**
  * Suspense wrapper for the configurator page
@@ -86,12 +87,12 @@ function ConfiguratorPage() {
             return;
         }
 
-        const firstLicense = licenses[0];
-        if (!firstLicense) {
+        if (!licenses || licenses.length === 0) {
             alert('You need a license to create a widget');
             router.push('/dashboard');
             return;
         }
+        const firstLicense = licenses[0];
 
         try {
             // Create widget with ChatKit provider default
@@ -112,6 +113,7 @@ function ConfiguratorPage() {
             router.push(`/configurator/chatkit?widgetId=${widget.id}`);
         } catch (error) {
             console.error('Failed to create widget:', error);
+            toast.error('Failed to create widget. Please try again.');
         }
     };
 
@@ -119,8 +121,10 @@ function ConfiguratorPage() {
     const handleSave = async () => {
         try {
             await saveConfig();
+            toast.success('Configuration saved successfully');
         } catch (error) {
             console.error('Failed to save configuration:', error);
+            toast.error('Failed to save configuration');
         }
     };
 

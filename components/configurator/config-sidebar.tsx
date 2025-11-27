@@ -423,8 +423,8 @@ export const ConfigSidebar: React.FC<ConfigSidebarProps> = ({
 
                 <Row>
                   <div className={`w-12 ${theme.textMuted}`}>Hue</div>
-                  <Slider value={config.chatkitGrayscaleHue || 220} max={360} onChange={(v) => handleChange('chatkitGrayscaleHue', v)} gradient isDark={isDark} />
-                  <div className={`w-8 text-right ${theme.textMuted}`}>{config.chatkitGrayscaleHue || 220}°</div>
+                  <Slider value={config.chatkitGrayscaleHue || 0} max={9} onChange={(v) => handleChange('chatkitGrayscaleHue', v)} gradient isDark={isDark} />
+                  <div className={`w-8 text-right ${theme.textMuted}`}>{config.chatkitGrayscaleHue || 0}</div>
                 </Row>
 
                 <Row>

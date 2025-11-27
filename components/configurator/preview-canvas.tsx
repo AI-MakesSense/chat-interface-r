@@ -102,6 +102,14 @@ export const PreviewCanvas: React.FC<PreviewCanvasProps> = ({ config }) => {
     document.removeEventListener('mouseup', handleMouseUp);
   };
 
+  // Cleanup event listeners on unmount
+  useEffect(() => {
+    return () => {
+      document.removeEventListener('mousemove', handleMouseMove);
+      document.removeEventListener('mouseup', handleMouseUp);
+    };
+  }, []);
+
   // Determine styles for the launcher button based on config
   const getLauncherStyle = () => {
     if (config.useAccent) {
