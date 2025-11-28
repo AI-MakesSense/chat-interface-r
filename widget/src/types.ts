@@ -8,7 +8,7 @@
 export interface WidgetConfig {
   widgetId?: string; // Widget ID for relay API
   branding: BrandingConfig;
-  style: StyleConfig;
+  style?: Partial<StyleConfig>; // Made partial for backward compatibility
   features: FeaturesConfig;
   connection?: ConnectionConfig;
   license?: LicenseConfig; // Injected by server at serve time
