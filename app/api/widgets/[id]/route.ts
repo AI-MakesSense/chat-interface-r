@@ -137,6 +137,26 @@ export async function PATCH(
       // Deep merge new config with existing config
       const mergedConfig = deepMerge(widget.config, updates.config);
 
+      // SANITIZATION: Enforce tier restrictions before validation to prevent save errors
+      // This handles cases where legacy data or frontend defaults might send restricted features
+      if (widget.license.tier === 'basic') {
+        // Disable advanced styling
+        if (mergedConfig.advancedStyling) {
+          mergedConfig.advancedStyling.enabled = false;
+        }
+
+        // Disable restricted features
+        if (mergedConfig.features) {
+          mergedConfig.features.emailTranscript = false;
+          mergedConfig.features.ratingPrompt = false;
+        }
+
+        // Ensure branding is enabled
+        if (mergedConfig.branding) {
+          mergedConfig.branding.brandingEnabled = true;
+        }
+      }
+
       // Validate merged config against tier restrictions
       const configSchema = createWidgetConfigSchema(widget.license.tier as any, true);
       configSchema.parse(mergedConfig);
