@@ -21,6 +21,8 @@ export interface WidgetConfig {
   theme?: ThemeConfig;
   startScreen?: StartScreenConfig;
   composer?: ComposerConfig;
+  advancedStyling?: any; // Legacy/Pro styling
+  behavior?: any; // Legacy behavior settings
 }
 
 export interface PortalConfig {
