@@ -56,9 +56,8 @@ export function extractDomainFromReferer(referer: string): string | null {
 export function createResponseHeaders(): Record<string, string> {
   return {
     'Content-Type': 'application/javascript',
-    // Reduced cache for faster updates: 1 min cache + 5 min stale-while-revalidate
-    // Production deployments can increase this if needed
-    'Cache-Control': 'public, max-age=60, stale-while-revalidate=300',
+    // Very short cache for debugging - increase after testing
+    'Cache-Control': 'public, max-age=10, must-revalidate, no-transform',
     'Access-Control-Allow-Origin': '*'
   };
 }

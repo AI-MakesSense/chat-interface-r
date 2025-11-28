@@ -324,7 +324,7 @@ export async function GET(
         return NextResponse.json(config, {
             headers: {
                 'Access-Control-Allow-Origin': '*', // Allow all origins for the config fetch
-                'Cache-Control': 'public, max-age=60, stale-while-revalidate=300', // Cache for 1 minute
+                'Cache-Control': 'public, max-age=10, must-revalidate', // Reduced for debugging
             },
         });
 
