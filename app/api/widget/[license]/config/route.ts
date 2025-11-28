@@ -175,16 +175,10 @@ function translateConfig(dbConfig: any, requestUrl: string): WidgetConfig {
             welcomeText: dbConfig.greeting || dbConfig.branding?.welcomeText || 'How can I help you today?',
             firstMessage: dbConfig.branding?.firstMessage || '',
         },
+        // Legacy style object removed - use theme object instead
+        // Keeping minimal fields for backward compatibility
         style: {
-            theme: themeMode as 'light' | 'dark' | 'auto',
-            primaryColor,
-            backgroundColor,
-            textColor,
             position: dbConfig.style?.position || 'bottom-right',
-            cornerRadius,
-            fontFamily: dbConfig.fontFamily || dbConfig.typography?.fontFamily || 'system-ui',
-            fontSize: dbConfig.fontSize || dbConfig.typography?.fontSize || 16,
-            customFontUrl: dbConfig.customFontCss,
         },
         features: {
             fileAttachmentsEnabled: dbConfig.enableAttachments || dbConfig.features?.fileAttachments || false,
