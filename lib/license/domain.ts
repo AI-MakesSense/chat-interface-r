@@ -55,7 +55,12 @@ export function isValidDomain(domain: string): boolean {
     return false;
   }
 
-  const trimmed = domain.trim();
+  const trimmed = domain.trim().toLowerCase();
+
+  // Allow localhost for development/testing (must check BEFORE dot requirement)
+  if (trimmed === 'localhost') {
+    return true;
+  }
 
   // Must contain at least one dot (TLD required)
   if (!trimmed.includes('.')) {
@@ -70,11 +75,6 @@ export function isValidDomain(domain: string): boolean {
   // Cannot have consecutive dots
   if (trimmed.includes('..')) {
     return false;
-  }
-
-  // Allow localhost for development/testing
-  if (trimmed === 'localhost') {
-    return true;
   }
 
   // Special case: reject IP addresses (simple check for 4 numeric segments)
