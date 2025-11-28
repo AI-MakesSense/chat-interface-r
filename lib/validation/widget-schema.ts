@@ -295,17 +295,117 @@ export const playgroundConfigSchema = z.object({
 });
 
 // =============================================================================
+// Legacy Store Schema (for backward compatibility with widget-store.ts)
+// =============================================================================
+
+/**
+ * Legacy style object from widget-store.ts
+ * Maps to the newer theme structure
+ */
+const legacyStyleSchema = z.object({
+  theme: z.enum(['light', 'dark', 'auto']).optional(),
+  primaryColor: z.string().optional(),
+  backgroundColor: z.string().optional(),
+  textColor: z.string().optional(),
+  position: z.enum(['bottom-right', 'bottom-left', 'top-right', 'top-left']).optional(),
+  cornerRadius: z.number().optional(),
+}).optional();
+
+/**
+ * Legacy branding schema (less strict than full brandingSchema)
+ */
+const legacyBrandingSchema = z.object({
+  companyName: z.string().optional(),
+  logoUrl: z.string().nullable().optional(),
+  welcomeText: z.string().optional(),
+  firstMessage: z.string().optional(),
+  responseTimeText: z.string().optional(),
+  inputPlaceholder: z.string().optional(),
+  launcherIcon: z.enum(['chat', 'support', 'bot', 'custom']).optional(),
+  customLauncherIconUrl: z.string().nullable().optional(),
+  brandingEnabled: z.boolean().optional(),
+}).optional();
+
+/**
+ * Legacy connection schema (allows both n8n and chatkit providers)
+ */
+const legacyConnectionSchema = z.object({
+  provider: z.enum(['n8n', 'chatkit']).optional(),
+  webhookUrl: z.string().optional(),
+  routeParam: z.string().optional(),
+  workflowId: z.string().optional(),
+  apiKey: z.string().optional(),
+  route: z.string().nullable().optional(),
+  timeoutSeconds: z.number().optional(),
+}).optional();
+
+/**
+ * Legacy typography schema
+ */
+const legacyTypographySchema = z.object({
+  fontFamily: z.string().optional(),
+  fontSize: z.number().optional(),
+}).optional();
+
+/**
+ * Legacy features schema
+ */
+const legacyFeaturesSchema = z.object({
+  fileAttachments: z.boolean().optional(),
+  allowedExtensions: z.array(z.string()).optional(),
+  maxFileSize: z.number().optional(),
+  attachments: z.object({
+    enabled: z.boolean().optional(),
+    allowedExtensions: z.array(z.string()).optional(),
+    maxFileSizeMB: z.number().optional(),
+  }).optional(),
+  emailTranscript: z.boolean().optional(),
+  printTranscript: z.boolean().optional(),
+  ratingPrompt: z.boolean().optional(),
+}).optional();
+
+/**
+ * Legacy advanced schema
+ */
+const legacyAdvancedSchema = z.object({
+  customCss: z.string().optional(),
+  customJs: z.string().optional(),
+}).optional();
+
+// =============================================================================
 // Complete Widget Config Schema (Base - No Tier Restrictions)
 // =============================================================================
 
+/**
+ * Flexible widget config schema that accepts both:
+ * 1. Legacy structure from widget-store.ts (branding, style, connection, typography, features, advanced)
+ * 2. New playground-style flat properties (themeMode, accentColor, etc.)
+ * 3. Full structured format (branding, theme, advancedStyling, behavior, connection, features)
+ *
+ * This permissive approach allows gradual migration and backward compatibility.
+ */
 export const widgetConfigBaseSchema = z.object({
-  branding: brandingSchema,
-  theme: themeSchema,
-  advancedStyling: advancedStylingSchema,
-  behavior: behaviorSchema,
-  connection: connectionSchema,
-  features: featuresSchema,
-}).merge(playgroundConfigSchema);
+  // Legacy structure fields (optional for backward compatibility)
+  branding: legacyBrandingSchema,
+  style: legacyStyleSchema,
+  typography: legacyTypographySchema,
+  features: legacyFeaturesSchema,
+  advanced: legacyAdvancedSchema,
+  connection: legacyConnectionSchema,
+
+  // New structured format fields (all optional for flexibility)
+  theme: themeSchema.optional(),
+  advancedStyling: advancedStylingSchema.optional(),
+  behavior: behaviorSchema.optional(),
+
+  // Widget metadata
+  widgetId: z.string().optional(),
+  license: z.object({
+    key: z.string().optional(),
+    active: z.boolean().optional(),
+    plan: z.string().optional(),
+  }).optional(),
+}).merge(playgroundConfigSchema).passthrough();
 
 // =============================================================================
 // Tier-Aware Validation
@@ -325,9 +425,14 @@ export type LicenseTier = 'basic' | 'pro' | 'agency';
  */
 export const createWidgetConfigSchema = (tier: LicenseTier, brandingRequired: boolean) => {
   return widgetConfigBaseSchema.superRefine((config, ctx) => {
+    // Safe access helpers for optional nested properties
+    const branding = config.branding;
+    const advancedStyling = config.advancedStyling;
+    const features = config.features;
 
     // RESTRICTION 1: Branding must be enabled for Basic tier
-    if (tier === 'basic' && brandingRequired && !config.branding.brandingEnabled) {
+    // Only check if branding object exists and brandingEnabled is explicitly false
+    if (tier === 'basic' && brandingRequired && branding?.brandingEnabled === false) {
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
         message: 'Branding must be enabled for Basic tier',
@@ -336,7 +441,8 @@ export const createWidgetConfigSchema = (tier: LicenseTier, brandingRequired: bo
     }
 
     // RESTRICTION 2: Advanced styling only for Pro/Agency
-    if (tier === 'basic' && config.advancedStyling.enabled) {
+    // Only check if advancedStyling exists and is enabled
+    if (tier === 'basic' && advancedStyling?.enabled === true) {
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
         message: 'Advanced styling is only available for Pro and Agency tiers',
@@ -345,7 +451,7 @@ export const createWidgetConfigSchema = (tier: LicenseTier, brandingRequired: bo
     }
 
     // RESTRICTION 3: Email transcript only for Pro/Agency
-    if (tier === 'basic' && config.features.emailTranscript) {
+    if (tier === 'basic' && features?.emailTranscript === true) {
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
         message: 'Email transcript is only available for Pro and Agency tiers',
@@ -354,7 +460,7 @@ export const createWidgetConfigSchema = (tier: LicenseTier, brandingRequired: bo
     }
 
     // RESTRICTION 4: Rating prompt only for Pro/Agency
-    if (tier === 'basic' && config.features.ratingPrompt) {
+    if (tier === 'basic' && features?.ratingPrompt === true) {
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
         message: 'Rating prompt is only available for Pro and Agency tiers',
@@ -363,7 +469,7 @@ export const createWidgetConfigSchema = (tier: LicenseTier, brandingRequired: bo
     }
 
     // RESTRICTION 5: Custom launcher icon requires URL
-    if (config.branding.launcherIcon === 'custom' && !config.branding.customLauncherIconUrl) {
+    if (branding?.launcherIcon === 'custom' && !branding?.customLauncherIconUrl) {
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
         message: 'Custom launcher icon URL required when launcher icon type is "custom"',
@@ -372,9 +478,9 @@ export const createWidgetConfigSchema = (tier: LicenseTier, brandingRequired: bo
     }
 
     // RESTRICTION 6: Avatar URL required if showAvatar is true
-    if (config.advancedStyling.enabled &&
-        config.advancedStyling.messages.showAvatar &&
-        !config.advancedStyling.messages.avatarUrl) {
+    if (advancedStyling?.enabled === true &&
+        advancedStyling?.messages?.showAvatar === true &&
+        !advancedStyling?.messages?.avatarUrl) {
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
         message: 'Avatar URL required when show avatar is enabled',

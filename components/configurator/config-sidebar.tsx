@@ -272,7 +272,7 @@ const IconPicker = ({ value, onChange, isDark }: { value: string; onChange: (val
       </button>
 
       {isOpen && (
-        <div className={`absolute top-full left-0 mt-1 w-[260px] border rounded-lg shadow-xl z-50 p-2 grid grid-cols-6 gap-1 max-h-[200px] overflow-y-auto custom-scrollbar ${dropdownClass}`}>
+        <div className={`absolute top-full right-0 mt-1 w-[260px] border rounded-lg shadow-xl z-50 p-2 grid grid-cols-6 gap-1 max-h-[200px] overflow-y-auto custom-scrollbar ${dropdownClass}`}>
           {AVAILABLE_ICONS.map((item) => (
             <button
               key={item.id}

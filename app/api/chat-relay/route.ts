@@ -17,7 +17,26 @@ interface RelayBody {
  * Relay endpoint that forwards chat messages to the configured backend.
  * Supports N8n webhooks. ChatKit widgets connect directly to OpenAI via client-side sessions.
  */
+
+// Handle OPTIONS for CORS preflight
+export async function OPTIONS(request: NextRequest) {
+  return new NextResponse(null, {
+    status: 200,
+    headers: {
+      'Access-Control-Allow-Origin': '*',
+      'Access-Control-Allow-Methods': 'POST, OPTIONS',
+      'Access-Control-Allow-Headers': 'Content-Type, Authorization',
+    },
+  });
+}
+
 export async function POST(request: NextRequest): Promise<NextResponse> {
+  const corsHeaders = {
+    'Access-Control-Allow-Origin': '*',
+    'Access-Control-Allow-Methods': 'POST, OPTIONS',
+    'Access-Control-Allow-Headers': 'Content-Type, Authorization',
+  };
+
   try {
     const body: RelayBody = await request.json();
     const { widgetId, licenseKey, message, sessionId, metadata } = body;
@@ -26,7 +45,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     if (!widgetId || !licenseKey || !message) {
       return new NextResponse(
         JSON.stringify({ error: 'Missing required fields: widgetId, licenseKey, or message' }),
-        { status: 400, headers: { 'Content-Type': 'application/json' } }
+        { status: 400, headers: { 'Content-Type': 'application/json', ...corsHeaders } }
       );
     }
 
@@ -35,7 +54,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     if (!widget) {
       return new NextResponse(
         JSON.stringify({ error: 'Widget not found' }),
-        { status: 404, headers: { 'Content-Type': 'application/json' } }
+        { status: 404, headers: { 'Content-Type': 'application/json', ...corsHeaders } }
       );
     }
 
@@ -43,7 +62,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     if (!license) {
       return new NextResponse(
         JSON.stringify({ error: 'License not found' }),
-        { status: 404, headers: { 'Content-Type': 'application/json' } }
+        { status: 404, headers: { 'Content-Type': 'application/json', ...corsHeaders } }
       );
     }
 
@@ -52,7 +71,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
       console.warn(`[Chat Relay] Unauthorized access: License ${licenseKey} tried to use Widget ${widgetId}`);
       return new NextResponse(
         JSON.stringify({ error: 'Unauthorized: Widget does not belong to the provided license' }),
-        { status: 403, headers: { 'Content-Type': 'application/json' } }
+        { status: 403, headers: { 'Content-Type': 'application/json', ...corsHeaders } }
       );
     }
 
@@ -62,17 +81,17 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
 
     // 5. Route to Appropriate Handler
     if (provider === 'n8n') {
-      return handleN8nRelay(config, body, license);
+      return handleN8nRelay(config, body, license, corsHeaders);
     } else if (provider === 'chatkit') {
       // ChatKit widgets don't use this relay - they connect directly to OpenAI
       return new NextResponse(
         JSON.stringify({ error: 'ChatKit widgets connect directly to OpenAI via client-side session' }),
-        { status: 400, headers: { 'Content-Type': 'application/json' } }
+        { status: 400, headers: { 'Content-Type': 'application/json', ...corsHeaders } }
       );
     } else {
       return new NextResponse(
         JSON.stringify({ error: `Unsupported provider: ${provider}` }),
-        { status: 400, headers: { 'Content-Type': 'application/json' } }
+        { status: 400, headers: { 'Content-Type': 'application/json', ...corsHeaders } }
       );
     }
 
@@ -80,7 +99,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     console.error('[Chat Relay] Internal Server Error:', err);
     return new NextResponse(
       JSON.stringify({ error: 'Internal server error' }),
-      { status: 500, headers: { 'Content-Type': 'application/json' } }
+      { status: 500, headers: { 'Content-Type': 'application/json', ...corsHeaders } }
     );
   }
 }
@@ -91,14 +110,15 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
 async function handleN8nRelay(
   config: any,
   body: RelayBody,
-  license: any
+  license: any,
+  corsHeaders: Record<string, string>
 ): Promise<NextResponse> {
   const webhookUrl = config?.connection?.webhookUrl;
 
   if (!webhookUrl) {
     return new NextResponse(
       JSON.stringify({ error: 'Webhook URL not configured for this widget' }),
-      { status: 500, headers: { 'Content-Type': 'application/json' } }
+      { status: 500, headers: { 'Content-Type': 'application/json', ...corsHeaders } }
     );
   }
 
@@ -135,20 +155,20 @@ async function handleN8nRelay(
       console.error(`[Chat Relay] N8n Error (${response.status}):`, responseText);
       return new NextResponse(
         JSON.stringify({ error: 'Workflow execution failed', details: responseJson }),
-        { status: response.status, headers: { 'Content-Type': 'application/json' } }
+        { status: response.status, headers: { 'Content-Type': 'application/json', ...corsHeaders } }
       );
     }
 
     return new NextResponse(JSON.stringify(responseJson), {
       status: 200,
-      headers: { 'Content-Type': 'application/json' }
+      headers: { 'Content-Type': 'application/json', ...corsHeaders }
     });
 
   } catch (networkError) {
     console.error('[Chat Relay] N8n Network Error:', networkError);
     return new NextResponse(
       JSON.stringify({ error: 'Failed to connect to workflow backend' }),
-      { status: 502, headers: { 'Content-Type': 'application/json' } }
+      { status: 502, headers: { 'Content-Type': 'application/json', ...corsHeaders } }
     );
   }
 }

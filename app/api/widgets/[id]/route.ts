@@ -137,32 +137,15 @@ export async function PATCH(
       // Deep merge new config with existing config
       const mergedConfig = deepMerge(widget.config, updates.config);
 
-      // SANITIZATION: Enforce tier restrictions before validation to prevent save errors
-      // This handles cases where legacy data or frontend defaults might send restricted features
-      if (widget.license.tier === 'basic') {
-        // Disable advanced styling
-        if (mergedConfig.advancedStyling) {
-          mergedConfig.advancedStyling.enabled = false;
-        }
-
-        // Disable restricted features
-        if (mergedConfig.features) {
-          mergedConfig.features.emailTranscript = false;
-          mergedConfig.features.ratingPrompt = false;
-        }
-
-        // Ensure branding is enabled
-        if (mergedConfig.branding) {
-          mergedConfig.branding.brandingEnabled = true;
-        }
-      }
+      // SANITIZATION: Enforce tier restrictions and fix data integrity
+      const sanitizedConfig = sanitizeConfig(mergedConfig, widget.license.tier);
 
       // Validate merged config against tier restrictions
       const configSchema = createWidgetConfigSchema(widget.license.tier as any, true);
-      configSchema.parse(mergedConfig);
+      configSchema.parse(sanitizedConfig);
 
       // Strip legacy properties that might conflict with new structure
-      const cleanedConfig = stripLegacyConfigProperties(mergedConfig);
+      const cleanedConfig = stripLegacyConfigProperties(sanitizedConfig);
 
       updateData.config = cleanedConfig;
       // Increment version only when config changes
@@ -314,4 +297,86 @@ function stripLegacyConfigProperties(config: any): any {
   delete cleaned.advancedStyling;
 
   return cleaned;
+}
+
+/**
+ * Sanitize configuration to ensure it passes validation
+ * Handles legacy data, invalid formats, and tier restrictions
+ */
+function sanitizeConfig(config: any, tier: string): any {
+  const sanitized = JSON.parse(JSON.stringify(config)); // Deep clone
+
+  // Helper to fix hex colors
+  const fixColor = (color: any, defaultColor: string = '#000000') => {
+    if (!color || typeof color !== 'string') return defaultColor;
+    // Fix 3-digit hex
+    if (/^#[0-9A-Fa-f]{3}$/.test(color)) {
+      return '#' + color[1] + color[1] + color[2] + color[2] + color[3] + color[3];
+    }
+    // Return if valid 6-digit hex
+    if (/^#[0-9A-Fa-f]{6}$/.test(color)) return color;
+    return defaultColor;
+  };
+
+  // Helper to fix URLs
+  const fixUrl = (url: any) => {
+    if (!url || typeof url !== 'string') return null;
+    if (url.startsWith('http://')) return url.replace('http://', 'https://');
+    if (url.startsWith('https://') || url.includes('localhost')) return url;
+    return null;
+  };
+
+  // 1. Tier Restrictions (Basic)
+  if (tier === 'basic') {
+    if (sanitized.advancedStyling) sanitized.advancedStyling.enabled = false;
+    if (sanitized.features) {
+      sanitized.features.emailTranscript = false;
+      sanitized.features.ratingPrompt = false;
+    }
+    if (sanitized.branding) sanitized.branding.brandingEnabled = true;
+  }
+
+  // 2. Data Integrity - Branding
+  if (sanitized.branding) {
+    if (!sanitized.branding.companyName) sanitized.branding.companyName = 'My Company';
+    if (!sanitized.branding.welcomeText) sanitized.branding.welcomeText = 'How can we help?';
+    if (!sanitized.branding.firstMessage) sanitized.branding.firstMessage = 'Hello! How can I assist you today?';
+
+    // Fix launcher icon
+    if (sanitized.branding.launcherIcon === 'custom') {
+      const validUrl = fixUrl(sanitized.branding.customLauncherIconUrl);
+      if (!validUrl) {
+        sanitized.branding.launcherIcon = 'chat'; // Revert to default if URL invalid
+        sanitized.branding.customLauncherIconUrl = null;
+      } else {
+        sanitized.branding.customLauncherIconUrl = validUrl;
+      }
+    } else {
+      // Ensure it's null if not custom, to avoid validation errors
+      sanitized.branding.customLauncherIconUrl = null;
+    }
+
+    sanitized.branding.logoUrl = fixUrl(sanitized.branding.logoUrl);
+  }
+
+  // 3. Data Integrity - Colors (Recursive fix for all color fields)
+  const fixColorsInObject = (obj: any) => {
+    for (const key in obj) {
+      if (typeof obj[key] === 'string' && obj[key].startsWith('#')) {
+        obj[key] = fixColor(obj[key]);
+      } else if (typeof obj[key] === 'object' && obj[key] !== null) {
+        fixColorsInObject(obj[key]);
+      }
+    }
+  };
+
+  if (sanitized.theme) fixColorsInObject(sanitized.theme);
+  if (sanitized.advancedStyling) fixColorsInObject(sanitized.advancedStyling);
+
+  // 4. Theme Mode
+  if (sanitized.themeMode && !['light', 'dark'].includes(sanitized.themeMode)) {
+    delete sanitized.themeMode; // Let it fall back to default
+  }
+
+  return sanitized;
 }

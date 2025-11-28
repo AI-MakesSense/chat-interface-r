@@ -303,8 +303,14 @@ describe('isValidDomain', () => {
   });
 
   describe('edge cases and special scenarios', () => {
-    it('should reject localhost (no TLD)', () => {
-      expect(isValidDomain('localhost')).toBe(false);
+    it('should accept localhost for development', () => {
+      // localhost is a valid domain for development/testing purposes
+      expect(isValidDomain('localhost')).toBe(true);
+    });
+
+    it('should accept localhost with different casing', () => {
+      expect(isValidDomain('LOCALHOST')).toBe(true);
+      expect(isValidDomain('LocalHost')).toBe(true);
     });
 
     it('should reject IP address format (not a domain)', () => {

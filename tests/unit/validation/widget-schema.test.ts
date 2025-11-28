@@ -1268,3 +1268,323 @@ describe('Complete Widget Config Validation', () => {
     });
   });
 });
+
+// =============================================================================
+// 8. LEGACY SCHEMA COMPATIBILITY TESTS
+// =============================================================================
+
+describe('Legacy Schema Compatibility (widget-store.ts format)', () => {
+  /**
+   * Helper: Create legacy widget-store.ts style config
+   * This is the format used by the configurator frontend
+   */
+  function createLegacyWidgetConfig() {
+    return {
+      // Legacy structure fields
+      branding: {
+        companyName: 'My Company',
+        welcomeText: 'How can we help you today?',
+        firstMessage: 'Hello! I\'m your AI assistant.',
+      },
+      style: {
+        theme: 'light' as const,
+        primaryColor: '#00bfff',
+        position: 'bottom-right' as const,
+        cornerRadius: 12,
+      },
+      connection: {
+        provider: 'n8n' as const,
+        webhookUrl: '',
+        workflowId: '',
+        apiKey: '',
+      },
+      // Playground-style properties
+      themeMode: 'light' as const,
+      useAccent: true,
+      accentColor: '#0ea5e9',
+      radius: 'medium' as const,
+      density: 'normal' as const,
+      greeting: 'How can I help you today?',
+      placeholder: 'Type a message...',
+    };
+  }
+
+  describe('Legacy config structure validation', () => {
+    it('should accept legacy widget-store.ts style config', () => {
+      const legacyConfig = createLegacyWidgetConfig();
+      const result = widgetConfigBaseSchema.safeParse(legacyConfig);
+      expect(result.success).toBe(true);
+    });
+
+    it('should accept config with only branding and style (minimal legacy)', () => {
+      const minimalConfig = {
+        branding: {
+          companyName: 'Test Co',
+        },
+        style: {
+          theme: 'dark' as const,
+          primaryColor: '#ff0000',
+        },
+      };
+      const result = widgetConfigBaseSchema.safeParse(minimalConfig);
+      expect(result.success).toBe(true);
+    });
+
+    it('should accept config with legacy connection provider', () => {
+      const config = {
+        connection: {
+          provider: 'n8n' as const,
+          webhookUrl: 'https://example.com/webhook',
+        },
+      };
+      const result = widgetConfigBaseSchema.safeParse(config);
+      expect(result.success).toBe(true);
+    });
+
+    it('should accept config with chatkit provider', () => {
+      const config = {
+        connection: {
+          provider: 'chatkit' as const,
+          workflowId: 'workflow-123',
+          apiKey: 'api-key-456',
+        },
+      };
+      const result = widgetConfigBaseSchema.safeParse(config);
+      expect(result.success).toBe(true);
+    });
+
+    it('should accept config with legacy typography', () => {
+      const config = {
+        typography: {
+          fontFamily: 'Inter',
+          fontSize: 14,
+        },
+      };
+      const result = widgetConfigBaseSchema.safeParse(config);
+      expect(result.success).toBe(true);
+    });
+
+    it('should accept config with legacy features', () => {
+      const config = {
+        features: {
+          fileAttachments: true,
+          allowedExtensions: ['.pdf', '.png'],
+          maxFileSize: 10,
+        },
+      };
+      const result = widgetConfigBaseSchema.safeParse(config);
+      expect(result.success).toBe(true);
+    });
+
+    it('should accept config with legacy advanced field', () => {
+      const config = {
+        advanced: {
+          customCss: '.widget { color: red; }',
+          customJs: 'console.log("init");',
+        },
+      };
+      const result = widgetConfigBaseSchema.safeParse(config);
+      expect(result.success).toBe(true);
+    });
+  });
+
+  describe('Playground-style properties validation', () => {
+    it('should accept all playground-style color properties', () => {
+      const config = {
+        themeMode: 'dark' as const,
+        useAccent: true,
+        accentColor: '#0ea5e9',
+        useTintedGrayscale: true,
+        tintHue: 220,
+        tintLevel: 10,
+        shadeLevel: 50,
+        useCustomSurfaceColors: true,
+        surfaceBackgroundColor: '#ffffff',
+        surfaceForegroundColor: '#f8fafc',
+        useCustomTextColor: true,
+        customTextColor: '#1e293b',
+      };
+      const result = widgetConfigBaseSchema.safeParse(config);
+      expect(result.success).toBe(true);
+    });
+
+    it('should accept all playground-style component colors', () => {
+      const config = {
+        useCustomIconColor: true,
+        customIconColor: '#64748b',
+        useCustomUserMessageColors: true,
+        customUserMessageTextColor: '#ffffff',
+        customUserMessageBackgroundColor: '#0ea5e9',
+      };
+      const result = widgetConfigBaseSchema.safeParse(config);
+      expect(result.success).toBe(true);
+    });
+
+    it('should accept playground-style typography', () => {
+      const config = {
+        fontFamily: 'system-ui',
+        fontSize: 16,
+        useCustomFont: true,
+        customFontName: 'My Font',
+        customFontCss: '@font-face { ... }',
+      };
+      const result = widgetConfigBaseSchema.safeParse(config);
+      expect(result.success).toBe(true);
+    });
+
+    it('should accept playground-style layout properties', () => {
+      const config = {
+        radius: 'large' as const,
+        density: 'spacious' as const,
+      };
+      const result = widgetConfigBaseSchema.safeParse(config);
+      expect(result.success).toBe(true);
+    });
+
+    it('should accept playground-style start screen properties', () => {
+      const config = {
+        greeting: 'Welcome!',
+        starterPrompts: [
+          { label: 'Help me write', icon: 'pencil' },
+          { label: 'Explain code', icon: 'code' },
+        ],
+      };
+      const result = widgetConfigBaseSchema.safeParse(config);
+      expect(result.success).toBe(true);
+    });
+
+    it('should accept playground-style composer properties', () => {
+      const config = {
+        placeholder: 'Ask me anything...',
+        disclaimer: 'Responses are AI-generated',
+        enableAttachments: true,
+        enableModelPicker: false,
+      };
+      const result = widgetConfigBaseSchema.safeParse(config);
+      expect(result.success).toBe(true);
+    });
+  });
+
+  describe('Mixed legacy and playground config', () => {
+    it('should accept config mixing legacy and playground styles', () => {
+      const mixedConfig = {
+        // Legacy structure
+        branding: {
+          companyName: 'Acme Inc',
+          welcomeText: 'Hi there!',
+        },
+        style: {
+          theme: 'light' as const,
+          primaryColor: '#3b82f6',
+        },
+        connection: {
+          provider: 'n8n' as const,
+          webhookUrl: 'https://n8n.example.com/webhook',
+        },
+        // Playground-style additions
+        themeMode: 'light' as const,
+        accentColor: '#0ea5e9',
+        radius: 'medium' as const,
+        greeting: 'How can I help?',
+        starterPrompts: [
+          { label: 'Get started', icon: 'rocket' },
+        ],
+      };
+      const result = widgetConfigBaseSchema.safeParse(mixedConfig);
+      expect(result.success).toBe(true);
+    });
+
+    it('should allow extra/unknown properties (passthrough)', () => {
+      const config = {
+        branding: { companyName: 'Test' },
+        unknownField: 'should be allowed',
+        anotherUnknown: { nested: true },
+      };
+      const result = widgetConfigBaseSchema.safeParse(config);
+      expect(result.success).toBe(true);
+      if (result.success) {
+        expect(result.data.unknownField).toBe('should be allowed');
+      }
+    });
+  });
+
+  describe('Tier validation with legacy config', () => {
+    it('should validate Basic tier with legacy config structure', () => {
+      const legacyConfig = {
+        branding: {
+          companyName: 'Test',
+          brandingEnabled: true,
+        },
+        style: {
+          theme: 'light' as const,
+        },
+        features: {
+          emailTranscript: false,
+          ratingPrompt: false,
+        },
+      };
+      const schema = createWidgetConfigSchema('basic', true);
+      const result = schema.safeParse(legacyConfig);
+      expect(result.success).toBe(true);
+    });
+
+    it('should reject Basic tier with branding disabled in legacy config', () => {
+      const legacyConfig = {
+        branding: {
+          companyName: 'Test',
+          brandingEnabled: false, // Not allowed for Basic
+        },
+      };
+      const schema = createWidgetConfigSchema('basic', true);
+      const result = schema.safeParse(legacyConfig);
+      expect(result.success).toBe(false);
+    });
+
+    it('should allow Pro tier with all features in legacy config', () => {
+      const legacyConfig = {
+        branding: {
+          companyName: 'Test',
+          brandingEnabled: false, // Allowed for Pro
+        },
+        features: {
+          emailTranscript: true,
+          ratingPrompt: true,
+        },
+      };
+      const schema = createWidgetConfigSchema('pro', false);
+      const result = schema.safeParse(legacyConfig);
+      expect(result.success).toBe(true);
+    });
+  });
+
+  describe('Empty and undefined handling', () => {
+    it('should accept completely empty config', () => {
+      const result = widgetConfigBaseSchema.safeParse({});
+      expect(result.success).toBe(true);
+    });
+
+    it('should accept config with undefined optional fields', () => {
+      const config = {
+        branding: undefined,
+        style: undefined,
+        connection: undefined,
+      };
+      const result = widgetConfigBaseSchema.safeParse(config);
+      expect(result.success).toBe(true);
+    });
+
+    it('should accept config with null values in nullable fields', () => {
+      const config = {
+        branding: {
+          logoUrl: null,
+          customLauncherIconUrl: null,
+        },
+        connection: {
+          route: null,
+        },
+      };
+      const result = widgetConfigBaseSchema.safeParse(config);
+      expect(result.success).toBe(true);
+    });
+  });
+});
