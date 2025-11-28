@@ -137,8 +137,8 @@ export async function PATCH(
       // Deep merge new config with existing config
       const mergedConfig = deepMerge(widget.config, updates.config);
 
-      console.log('[Widget Update] Original config keys:', Object.keys(widget.config));
-      console.log('[Widget Update] Update config keys:', Object.keys(updates.config));
+      console.log('[Widget Update] Original config keys:', Object.keys(widget.config as object));
+      console.log('[Widget Update] Update config keys:', Object.keys(updates.config as object));
       console.log('[Widget Update] Merged config keys:', Object.keys(mergedConfig));
 
       // SANITIZATION: Enforce tier restrictions and fix data integrity
@@ -161,7 +161,7 @@ export async function PATCH(
         console.error('[Widget Update] Tier:', widget.license.tier);
         console.error('[Widget Update] Sanitized config:', JSON.stringify(sanitizedConfig, null, 2));
         if (validationError instanceof z.ZodError) {
-          console.error('[Widget Update] Validation errors:', validationError.errors);
+          console.error('[Widget Update] Validation errors:', validationError.issues);
         }
         throw validationError;
       }
