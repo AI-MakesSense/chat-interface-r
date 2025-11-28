@@ -20,7 +20,13 @@ import type { WidgetConfig } from '@/widget/src/types';
  */
 function translateConfig(dbConfig: any, requestUrl: string): WidgetConfig {
     // Map theme mode
-    const themeMode = dbConfig.themeMode === 'dark' ? 'dark' : 'light';
+    let themeMode = 'light';
+    if (dbConfig.themeMode) {
+        themeMode = dbConfig.themeMode === 'dark' ? 'dark' : 'light';
+    } else if (dbConfig.style?.theme) {
+        // Legacy support
+        themeMode = dbConfig.style.theme === 'dark' ? 'dark' : 'light';
+    }
 
     // Calculate primary color based on config
     let primaryColor = '#0066FF'; // default
@@ -58,13 +64,13 @@ function translateConfig(dbConfig: any, requestUrl: string): WidgetConfig {
         'pill': 24
     };
     const cornerRadius = radiusMap[radius] ||
-                        dbConfig.style?.cornerRadius ||
-                        12;
+        dbConfig.style?.cornerRadius ||
+        12;
 
     // Get webhook URL - check multiple locations
     const webhookUrl = dbConfig.n8nWebhookUrl ||
-                       dbConfig.connection?.webhookUrl ||
-                       '';
+        dbConfig.connection?.webhookUrl ||
+        '';
 
     // Build extended theme configuration
     const theme: WidgetConfig['theme'] = {
@@ -204,6 +210,9 @@ function translateConfig(dbConfig: any, requestUrl: string): WidgetConfig {
         theme,
         startScreen,
         composer,
+        // Pass through advanced styling and behavior for legacy/full config support
+        advancedStyling: dbConfig.advancedStyling,
+        behavior: dbConfig.behavior,
     };
 }
 
