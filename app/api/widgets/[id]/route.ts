@@ -137,12 +137,34 @@ export async function PATCH(
       // Deep merge new config with existing config
       const mergedConfig = deepMerge(widget.config, updates.config);
 
+      console.log('[Widget Update] Original config keys:', Object.keys(widget.config));
+      console.log('[Widget Update] Update config keys:', Object.keys(updates.config));
+      console.log('[Widget Update] Merged config keys:', Object.keys(mergedConfig));
+
       // SANITIZATION: Enforce tier restrictions and fix data integrity
       const sanitizedConfig = sanitizeConfig(mergedConfig, widget.license.tier);
 
+      console.log('[Widget Update] Post-sanitization config keys:', Object.keys(sanitizedConfig));
+      console.log('[Widget Update] Sanitized config sample:', {
+        branding: sanitizedConfig.branding,
+        features: sanitizedConfig.features,
+        connection: sanitizedConfig.connection
+      });
+
       // Validate merged config against tier restrictions
       const configSchema = createWidgetConfigSchema(widget.license.tier as any, true);
-      configSchema.parse(sanitizedConfig);
+
+      try {
+        configSchema.parse(sanitizedConfig);
+      } catch (validationError) {
+        console.error('[Widget Update] VALIDATION FAILED');
+        console.error('[Widget Update] Tier:', widget.license.tier);
+        console.error('[Widget Update] Sanitized config:', JSON.stringify(sanitizedConfig, null, 2));
+        if (validationError instanceof z.ZodError) {
+          console.error('[Widget Update] Validation errors:', validationError.errors);
+        }
+        throw validationError;
+      }
 
       // Strip legacy properties that might conflict with new structure
       const cleanedConfig = stripLegacyConfigProperties(sanitizedConfig);
@@ -168,7 +190,19 @@ export async function PATCH(
       // Extract the first error message for user-friendly response
       const firstError = (error as any).errors?.[0];
       const errorMessage = firstError?.message || 'Validation failed';
-      return NextResponse.json({ error: errorMessage, details: (error as any).errors }, { status: 400 });
+
+      // Log full error details
+      console.error('[Widget Update] Zod Validation Error:', {
+        error: errorMessage,
+        allErrors: (error as any).errors,
+        errorCount: (error as any).errors?.length
+      });
+
+      return NextResponse.json({
+        error: errorMessage,
+        details: (error as any).errors,
+        fieldPath: firstError?.path?.join('.') || 'unknown'
+      }, { status: 400 });
     }
 
     // Handle auth errors
