@@ -11,7 +11,8 @@ export default function SentryTestPage() {
       <button
         className="px-6 py-3 bg-red-500 text-white rounded-lg hover:bg-red-600 transition-colors font-medium"
         onClick={() => {
-          throw new Error('This is a test error from Sentry!');
+          // @ts-expect-error - intentional undefined function call for Sentry test
+          myUndefinedFunction();
         }}
       >
         Break the world
