@@ -28,9 +28,9 @@ function generateLicenseKey(): string {
 }
 
 /**
- * Sample widget configuration
+ * Sample widget configuration - Basic tier
  */
-const sampleConfig = {
+const basicConfig = {
   branding: {
     companyName: 'Acme Corp',
     welcomeText: 'How can we help you today?',
@@ -38,31 +38,183 @@ const sampleConfig = {
     firstMessage: 'Hello! I\'m here to help. What can I do for you?',
     inputPlaceholder: 'Type your message...',
     logoUrl: 'https://via.placeholder.com/150',
+    brandingEnabled: true,
   },
+  themeMode: 'light',
+  useAccent: true,
+  accentColor: '#00bfff',
+  radius: 'medium',
+  density: 'normal',
   style: {
-    theme: 'auto',
-    primaryColor: '#00bfff',
-    secondaryColor: '#0080ff',
-    backgroundColor: '#ffffff',
-    fontColor: '#333333',
     position: 'bottom-right',
-    cornerRadius: 12,
-    fullscreen: false,
   },
-  typography: {
-    fontFamily: 'Inter, system-ui, sans-serif',
-    fontSize: 14,
-    fontUrl: null,
-    disableDefaultFont: false,
+  features: {
+    attachmentsEnabled: false,
+    allowedExtensions: ['.jpg', '.png', '.pdf', '.txt'],
+    maxFileSize: 5242880,
+  },
+  connection: {
+    provider: 'n8n',
+    webhookUrl: 'https://infinitesystems.app.n8n.cloud/webhook/d3421cff-f72f-423f-a4d3-d0571a0c93ab/chat',
+  },
+};
+
+/**
+ * Sample widget configuration - Pro tier with advancedStyling
+ */
+const proConfig = {
+  branding: {
+    companyName: 'Demo Company',
+    welcomeText: 'Welcome to our Pro support!',
+    responseTimeText: 'We typically respond instantly',
+    firstMessage: 'Hi there! How can I assist you today?',
+    inputPlaceholder: 'Ask me anything...',
+    logoUrl: 'https://via.placeholder.com/150',
+    brandingEnabled: false,
+    launcherIcon: 'chat',
+  },
+  themeMode: 'light',
+  useAccent: true,
+  accentColor: '#9333ea',
+  accentLevel: 2,
+  useTintedGrayscale: true,
+  tintHue: 280,
+  tintLevel: 10,
+  shadeLevel: 50,
+  radius: 'large',
+  density: 'normal',
+  fontFamily: 'Inter',
+  fontSize: 15,
+  greeting: 'How can I help you today?',
+  starterPrompts: [
+    { label: 'Get Started', icon: '🚀' },
+    { label: 'Ask a Question', icon: '❓' },
+  ],
+  placeholder: 'Type your message...',
+  style: {
+    position: 'bottom-right',
   },
   features: {
     attachmentsEnabled: true,
-    allowedExtensions: ['.jpg', '.png', '.pdf', '.txt'],
-    maxFileSize: 5242880, // 5MB
+    allowedExtensions: ['.jpg', '.png', '.pdf', '.txt', '.doc', '.docx'],
+    maxFileSize: 10485760,
   },
   connection: {
+    provider: 'n8n',
     webhookUrl: 'https://infinitesystems.app.n8n.cloud/webhook/d3421cff-f72f-423f-a4d3-d0571a0c93ab/chat',
-    route: null,
+  },
+  advancedStyling: {
+    enabled: true,
+    messages: {
+      userMessageBackground: '#9333ea',
+      userMessageText: '#FFFFFF',
+      botMessageBackground: '#F3F4F6',
+      botMessageText: '#111827',
+      messageSpacing: 12,
+      bubblePadding: 12,
+      showAvatar: false,
+    },
+    markdown: {
+      codeBlockBackground: '#1F2937',
+      codeBlockText: '#F9FAFB',
+      linkColor: '#9333ea',
+      linkHoverColor: '#7C3AED',
+    },
+  },
+  behavior: {
+    autoOpen: false,
+    autoOpenDelay: 0,
+    showCloseButton: true,
+    persistMessages: true,
+    enableTypingIndicator: true,
+  },
+};
+
+/**
+ * Sample widget configuration - Agency tier with full styling
+ */
+const agencyConfig = {
+  branding: {
+    companyName: 'Agency Client',
+    welcomeText: 'Premium Support Experience',
+    responseTimeText: 'Instant AI-powered responses',
+    firstMessage: 'Welcome! I\'m your dedicated assistant. How may I help?',
+    inputPlaceholder: 'Tell me what you need...',
+    logoUrl: 'https://via.placeholder.com/150',
+    brandingEnabled: false,
+    launcherIcon: 'support',
+  },
+  themeMode: 'dark',
+  useAccent: true,
+  accentColor: '#f59e0b',
+  accentLevel: 2,
+  useTintedGrayscale: true,
+  tintHue: 40,
+  tintLevel: 15,
+  shadeLevel: 60,
+  useCustomSurfaceColors: true,
+  surfaceBackgroundColor: '#18181B',
+  surfaceForegroundColor: '#27272A',
+  useCustomUserMessageColors: true,
+  userMessageTextColor: '#FFFFFF',
+  userMessageBgColor: '#f59e0b',
+  radius: 'large',
+  density: 'spacious',
+  fontFamily: 'Poppins',
+  fontSize: 16,
+  greeting: 'How can we assist you today?',
+  starterPrompts: [
+    { label: 'View Services', icon: '📋' },
+    { label: 'Get Support', icon: '🛠️' },
+    { label: 'Contact Sales', icon: '💼' },
+  ],
+  placeholder: 'Describe your needs...',
+  disclaimer: 'Powered by AI • Responses may vary',
+  style: {
+    position: 'bottom-right',
+  },
+  features: {
+    attachmentsEnabled: true,
+    allowedExtensions: ['.jpg', '.png', '.pdf', '.txt', '.doc', '.docx', '.xls', '.xlsx'],
+    maxFileSize: 20971520,
+    emailTranscript: true,
+    ratingPrompt: true,
+  },
+  connection: {
+    provider: 'n8n',
+    webhookUrl: 'https://infinitesystems.app.n8n.cloud/webhook/d3421cff-f72f-423f-a4d3-d0571a0c93ab/chat',
+  },
+  advancedStyling: {
+    enabled: true,
+    messages: {
+      userMessageBackground: '#f59e0b',
+      userMessageText: '#000000',
+      botMessageBackground: '#27272A',
+      botMessageText: '#E4E4E7',
+      messageSpacing: 14,
+      bubblePadding: 14,
+      showAvatar: true,
+      avatarUrl: 'https://via.placeholder.com/40',
+    },
+    markdown: {
+      codeBlockBackground: '#0F0F10',
+      codeBlockText: '#FCD34D',
+      codeBlockBorder: '#374151',
+      inlineCodeBackground: '#27272A',
+      inlineCodeText: '#FBBF24',
+      linkColor: '#F59E0B',
+      linkHoverColor: '#D97706',
+      tableHeaderBackground: '#27272A',
+      tableBorderColor: '#3F3F46',
+    },
+  },
+  behavior: {
+    autoOpen: false,
+    autoOpenDelay: 0,
+    showCloseButton: true,
+    persistMessages: true,
+    enableSoundNotifications: false,
+    enableTypingIndicator: true,
   },
 };
 
@@ -153,39 +305,19 @@ async function seed() {
     await db.insert(widgets).values({
       licenseId: basicLicense[0].id,
       name: 'Basic Widget',
-      config: sampleConfig,
+      config: basicConfig,
     });
 
     await db.insert(widgets).values({
       licenseId: proLicense[0].id,
       name: 'Pro Widget',
-      config: {
-        ...sampleConfig,
-        branding: {
-          ...sampleConfig.branding,
-          companyName: 'Demo Company',
-        },
-        style: {
-          ...sampleConfig.style,
-          primaryColor: '#9333ea', // Purple
-        },
-      },
+      config: proConfig,
     });
 
     await db.insert(widgets).values({
       licenseId: agencyLicense[0].id,
       name: 'Agency Widget',
-      config: {
-        ...sampleConfig,
-        branding: {
-          ...sampleConfig.branding,
-          companyName: 'Agency Client',
-        },
-        style: {
-          ...sampleConfig.style,
-          primaryColor: '#f59e0b', // Amber
-        },
-      },
+      config: agencyConfig,
     });
 
     console.log('✓ Created 3 widgets');
