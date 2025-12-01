@@ -59,21 +59,25 @@ if (typeof window !== 'undefined') {
     }
 
     // Strategy B: Check script tag (supports both legacy and v2.0 URL patterns)
+    // IMPORTANT: Always check script URL to detect v2 pattern, even if we have a widgetKey
     const scriptTag = document.querySelector('script[src*="/chat-widget.js"], script[src*="/bundle.js"], script[src*="/w/"]') as HTMLScriptElement;
     if (scriptTag && scriptTag.src) {
       const url = new URL(scriptTag.src);
       apiBaseUrl = url.origin;
 
-      if (!widgetKey) {
-        // Try v2.0 pattern first: /w/[widgetKey].js
-        const v2Match = url.pathname.match(/\/w\/([A-Za-z0-9]{16})(?:\.js)?$/);
-        if (v2Match && v2Match[1]) {
+      // Always check for v2.0 URL pattern to set isV2 flag
+      const v2Match = url.pathname.match(/\/w\/([A-Za-z0-9]{16})(?:\.js)?$/);
+      if (v2Match && v2Match[1]) {
+        // v2.0 pattern detected: /w/[widgetKey].js
+        if (!widgetKey) {
           widgetKey = v2Match[1];
-          isV2 = true;
-        } else {
-          // Fallback to legacy pattern: /api/widget/[licenseKey]/chat-widget.js
-          const legacyMatch = url.pathname.match(/\/api\/widget\/([^\/]+)\/chat-widget/);
-          if (legacyMatch && legacyMatch[1]) widgetKey = legacyMatch[1];
+        }
+        isV2 = true;
+      } else if (!widgetKey) {
+        // Fallback to legacy pattern: /api/widget/[licenseKey]/chat-widget.js
+        const legacyMatch = url.pathname.match(/\/api\/widget\/([^\/]+)\/chat-widget/);
+        if (legacyMatch && legacyMatch[1]) {
+          widgetKey = legacyMatch[1];
         }
       }
     }
