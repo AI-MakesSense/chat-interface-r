@@ -3,23 +3,23 @@
 /**
  * Dashboard Page
  *
- * Protected main dashboard page showing user's widgets and licenses.
- * Visual overhaul to match landing page design language.
+ * Protected main dashboard page showing user's widgets and subscription.
+ * Schema v2.0: Uses account-level subscription instead of per-license model.
  */
 
 import { useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuthStore } from '@/stores/auth-store';
-import { useLicenseStore } from '@/stores/license-store';
+import { useAccountStore } from '@/stores/account-store';
 import { useWidgetStore } from '@/stores/widget-store';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent } from '@/components/ui/card';
 import { Alert, AlertDescription } from '@/components/ui/alert';
-import { LicenseCard } from '@/components/dashboard/license-card';
+import { SubscriptionCard } from '@/components/dashboard/subscription-card';
 import { WidgetList } from '@/components/dashboard/widget-list';
 import { CreateWidgetModal } from '@/components/dashboard/create-widget-modal';
 import { Plus, LayoutGrid, CreditCard, LogOut, User } from 'lucide-react';
-import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 
 /**
  * Dashboard page component
@@ -27,7 +27,7 @@ import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 export default function DashboardPage() {
   const router = useRouter();
   const { user, isAuthenticated, isLoading: authLoading, logout, checkAuth } = useAuthStore();
-  const { licenses, isLoading: licensesLoading, error: licenseError, fetchLicenses, updateLicense, deleteLicense, clearError: clearLicenseError } = useLicenseStore();
+  const { subscription, isLoading: subscriptionLoading, error: subscriptionError, fetchSubscription, upgrade, clearError: clearSubscriptionError } = useAccountStore();
   const { widgets, isLoading: widgetsLoading, error: widgetError, fetchWidgets, deleteWidget, clearError: clearWidgetError } = useWidgetStore();
 
   // Check authentication on mount
@@ -40,10 +40,10 @@ export default function DashboardPage() {
   // Fetch data when authenticated
   useEffect(() => {
     if (isAuthenticated) {
-      fetchLicenses().catch(console.error);
+      fetchSubscription().catch(console.error);
       fetchWidgets().catch(console.error);
     }
-  }, [isAuthenticated, fetchLicenses, fetchWidgets]);
+  }, [isAuthenticated, fetchSubscription, fetchWidgets]);
 
   // Handle logout
   const handleLogout = async () => {
@@ -55,22 +55,25 @@ export default function DashboardPage() {
     }
   };
 
-  // Handle license update (domain changes)
-  const handleLicenseUpdate = async (updatedLicense: any) => {
+  // Handle subscription upgrade
+  const handleUpgrade = async (tier: 'free' | 'basic' | 'pro' | 'agency') => {
+    if (tier === 'free') return; // Can't upgrade to free
     try {
-      await updateLicense(updatedLicense.id, { domains: updatedLicense.domains });
+      const checkoutUrl = await upgrade(tier);
+      if (checkoutUrl) {
+        // In production, redirect to Stripe checkout
+        // For development, just refresh subscription
+        await fetchSubscription();
+      }
     } catch (error) {
-      console.error('Failed to update license:', error);
+      console.error('Failed to upgrade:', error);
     }
   };
 
-  // Handle license deletion
-  const handleLicenseDelete = async (licenseId: string) => {
-    try {
-      await deleteLicense(licenseId);
-    } catch (error) {
-      console.error('Failed to delete license:', error);
-    }
+  // Handle manage subscription
+  const handleManageSubscription = () => {
+    // In production, redirect to Stripe customer portal
+    router.push('/pricing');
   };
 
   // Handle widget deletion
@@ -107,9 +110,9 @@ export default function DashboardPage() {
     );
   }
 
-  const error = licenseError || widgetError;
+  const error = subscriptionError || widgetError;
   const clearError = () => {
-    if (licenseError) clearLicenseError();
+    if (subscriptionError) clearSubscriptionError();
     if (widgetError) clearWidgetError();
   };
 
@@ -219,21 +222,27 @@ export default function DashboardPage() {
           )}
         </section>
 
-        {/* Licenses Section - Simplified */}
+        {/* Subscription Section - Schema v2.0 */}
         <section className="space-y-6 pt-8 border-t border-white/5">
           <div className="flex items-center justify-between">
             <h2 className="text-xl font-semibold flex items-center gap-2">
               <CreditCard className="h-5 w-5 text-purple-400" />
-              Active Licenses
+              Subscription
             </h2>
-            <Button variant="outline" onClick={() => router.push('/pricing')} className="border-white/10 text-zinc-400 hover:text-white hover:bg-white/5">
-              Manage Plan
-            </Button>
           </div>
 
-          {licensesLoading ? (
+          {subscriptionLoading ? (
             <div className="h-32 rounded-xl bg-white/5 animate-pulse" />
-          ) : licenses.length === 0 ? (
+          ) : subscription ? (
+            <div className="max-w-md">
+              <SubscriptionCard
+                subscription={subscription}
+                usage={{ widgetsUsed: widgets.length, widgetsLimit: subscription.tier === 'free' ? 3 : subscription.tier === 'basic' ? 5 : -1 }}
+                onUpgrade={handleUpgrade}
+                onManage={handleManageSubscription}
+              />
+            </div>
+          ) : (
             <Card className="bg-gradient-to-br from-indigo-900/20 to-purple-900/20 border-indigo-500/20">
               <CardContent className="flex items-center justify-between p-6">
                 <div>
@@ -245,17 +254,6 @@ export default function DashboardPage() {
                 </Button>
               </CardContent>
             </Card>
-          ) : (
-            <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
-              {licenses.map((license) => (
-                <LicenseCard
-                  key={license.id}
-                  license={license}
-                  onUpdate={handleLicenseUpdate}
-                  onDelete={handleLicenseDelete}
-                />
-              ))}
-            </div>
           )}
         </section>
       </main>

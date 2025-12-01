@@ -602,6 +602,55 @@ export async function getLicenseWithWidgetCount(
 }
 
 // ============================================================
+// WIDGET KEY QUERIES (Schema v2.0)
+// ============================================================
+
+/**
+ * Get widget by widgetKey (new 16-char alphanumeric key)
+ * Returns widget with user info for authorization
+ * Returns null if widget not found or inactive
+ */
+export async function getWidgetByKey(widgetKey: string): Promise<Widget | null> {
+  const [widget] = await db
+    .select()
+    .from(widgets)
+    .where(
+      and(
+        eq(widgets.widgetKey, widgetKey),
+        ne(widgets.status, 'deleted')
+      )
+    )
+    .limit(1);
+
+  return widget || null;
+}
+
+/**
+ * Get widget by widgetKey with user data (joined query)
+ * Returns widget with nested user object for tier checking
+ */
+export async function getWidgetByKeyWithUser(widgetKey: string): Promise<(Widget & { user: User }) | null> {
+  const result = await db
+    .select()
+    .from(widgets)
+    .innerJoin(users, eq(widgets.userId, users.id))
+    .where(
+      and(
+        eq(widgets.widgetKey, widgetKey),
+        ne(widgets.status, 'deleted')
+      )
+    )
+    .limit(1);
+
+  if (!result[0]) return null;
+
+  return {
+    ...result[0].widgets,
+    user: result[0].users,
+  };
+}
+
+// ============================================================
 // DEPLOYMENT & PAGINATION QUERIES
 // ============================================================
 
@@ -708,4 +757,141 @@ export async function getUserLicensesWithWidgetCounts(
   );
 
   return licensesWithCounts;
+}
+
+// ============================================================
+// SCHEMA v2.0 QUERIES - User-Direct Widget Operations
+// ============================================================
+
+/**
+ * Get count of active widgets directly for a user (Schema v2.0)
+ * Excludes soft-deleted widgets (status='deleted')
+ * Returns integer count
+ */
+export async function getActiveWidgetCountForUser(userId: string): Promise<number> {
+  const result = await db
+    .select({ count: sql<number>`count(*)::int` })
+    .from(widgets)
+    .where(
+      and(
+        eq(widgets.userId, userId),
+        ne(widgets.status, 'deleted')
+      )
+    );
+
+  return result[0]?.count || 0;
+}
+
+/**
+ * Create a new widget with direct user relationship (Schema v2.0)
+ * Generates widgetKey if not provided
+ * Sets default status='active' and version=1 if not provided
+ */
+export async function createWidgetV2(data: {
+  userId: string;
+  name: string;
+  config: any;
+  widgetKey?: string;
+  embedType?: string;
+  allowedDomains?: string[];
+  status?: string;
+  widgetType?: string;
+  version?: number;
+  deployedAt?: Date | null;
+  // Legacy: optional licenseId for backward compatibility
+  licenseId?: string;
+}): Promise<Widget> {
+  const now = new Date();
+
+  // Generate widgetKey if not provided (16-char alphanumeric)
+  const widgetKey = data.widgetKey || generateWidgetKey();
+
+  const [widget] = await db
+    .insert(widgets)
+    .values({
+      userId: data.userId,
+      licenseId: data.licenseId || null, // Legacy support
+      name: data.name,
+      config: data.config,
+      widgetKey,
+      embedType: data.embedType || 'popup',
+      allowedDomains: data.allowedDomains || null,
+      status: data.status || 'active',
+      widgetType: data.widgetType || 'n8n',
+      version: data.version || 1,
+      deployedAt: data.deployedAt || null,
+      createdAt: now,
+      updatedAt: now,
+    })
+    .returning();
+
+  return widget;
+}
+
+/**
+ * Get paginated widgets for a user directly (Schema v2.0)
+ * Does not require license join
+ * Returns widgets with total count
+ */
+export async function getWidgetsPaginatedV2(
+  userId: string,
+  options: {
+    page?: number;
+    limit?: number;
+    includeDeleted?: boolean;
+    embedType?: string;
+  } = {}
+): Promise<{
+  widgets: Widget[];
+  total: number;
+}> {
+  // Parse and validate pagination params
+  const page = options.page || 1;
+  const limit = Math.min(options.limit || 20, 100); // Max 100
+  const offset = (page - 1) * limit;
+
+  // Build filter conditions
+  const conditions = [eq(widgets.userId, userId)];
+
+  if (!options.includeDeleted) {
+    conditions.push(ne(widgets.status, 'deleted'));
+  }
+
+  if (options.embedType) {
+    conditions.push(eq(widgets.embedType, options.embedType));
+  }
+
+  // Get total count (first query)
+  const [countResult] = await db
+    .select({ count: sql<number>`count(*)::int` })
+    .from(widgets)
+    .where(and(...conditions));
+
+  const total = countResult?.count || 0;
+
+  // Get paginated results (second query)
+  const results = await db
+    .select()
+    .from(widgets)
+    .where(and(...conditions))
+    .orderBy(desc(widgets.createdAt))
+    .limit(limit)
+    .offset(offset);
+
+  return { widgets: results, total };
+}
+
+/**
+ * Generate a 16-character alphanumeric widget key
+ * Uses crypto-safe random generation
+ */
+function generateWidgetKey(): string {
+  const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
+  let result = '';
+  const randomValues = new Uint8Array(16);
+  crypto.getRandomValues(randomValues);
+  for (let i = 0; i < 16; i++) {
+    result += chars[randomValues[i] % chars.length];
+  }
+  return result;
 }

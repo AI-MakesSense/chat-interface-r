@@ -1,27 +1,45 @@
 'use client';
 
+/**
+ * Create Widget Modal
+ *
+ * Simplified widget creation flow.
+ * Schema v2.0: No license required, widgets belong directly to users.
+ */
+
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Bot, Webhook, Plus } from 'lucide-react';
+import { Bot, Webhook, Plus, MessageCircle, Layout, Maximize, Link } from 'lucide-react';
+import type { EmbedType } from '@/stores/widget-store';
 
 interface CreateWidgetModalProps {
     children?: React.ReactNode;
 }
+
+const EMBED_OPTIONS: { value: EmbedType; label: string; icon: React.ElementType; description: string }[] = [
+    { value: 'popup', label: 'Popup', icon: MessageCircle, description: 'Floating chat bubble' },
+    { value: 'inline', label: 'Inline', icon: Layout, description: 'Embedded in a section' },
+    { value: 'fullpage', label: 'Fullpage', icon: Maximize, description: 'Standalone page' },
+    { value: 'portal', label: 'Portal', icon: Link, description: 'Shareable link' },
+];
 
 export function CreateWidgetModal({ children }: CreateWidgetModalProps) {
     const router = useRouter();
     const [isOpen, setIsOpen] = useState(false);
     const [name, setName] = useState('');
     const [type, setType] = useState<'chatkit' | 'n8n'>('chatkit');
+    const [embedType, setEmbedType] = useState<EmbedType>('popup');
 
     const handleCreate = () => {
         const path = type === 'chatkit' ? '/configurator/chatkit' : '/configurator/n8n';
-        const query = name.trim() ? `?name=${encodeURIComponent(name.trim())}` : '';
+        const params = new URLSearchParams();
+        if (name.trim()) params.set('name', name.trim());
+        if (embedType !== 'popup') params.set('embedType', embedType);
+        const query = params.toString() ? `?${params.toString()}` : '';
         setIsOpen(false);
         router.push(`${path}${query}`);
     };
@@ -82,6 +100,36 @@ export function CreateWidgetModal({ children }: CreateWidgetModalProps) {
                             className="bg-zinc-900 border-zinc-800 text-white placeholder:text-zinc-600 focus-visible:ring-indigo-500"
                             onKeyDown={(e) => e.key === 'Enter' && handleCreate()}
                         />
+                    </div>
+
+                    <div className="grid gap-2">
+                        <Label className="text-zinc-300">Embed Type</Label>
+                        <div className="grid grid-cols-4 gap-2">
+                            {EMBED_OPTIONS.map((option) => {
+                                const Icon = option.icon;
+                                const isSelected = embedType === option.value;
+                                return (
+                                    <button
+                                        key={option.value}
+                                        type="button"
+                                        onClick={() => setEmbedType(option.value)}
+                                        className={`flex flex-col items-center gap-1.5 p-3 rounded-lg border transition-colors ${
+                                            isSelected
+                                                ? 'border-indigo-500 bg-zinc-900 ring-1 ring-indigo-500'
+                                                : 'border-zinc-800 bg-black hover:bg-zinc-900'
+                                        }`}
+                                    >
+                                        <Icon className={`h-4 w-4 ${isSelected ? 'text-indigo-400' : 'text-zinc-500'}`} />
+                                        <span className={`text-xs font-medium ${isSelected ? 'text-white' : 'text-zinc-400'}`}>
+                                            {option.label}
+                                        </span>
+                                    </button>
+                                );
+                            })}
+                        </div>
+                        <p className="text-xs text-zinc-500">
+                            {EMBED_OPTIONS.find(o => o.value === embedType)?.description}
+                        </p>
                     </div>
                 </div>
 

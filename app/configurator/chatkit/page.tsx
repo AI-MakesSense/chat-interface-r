@@ -10,7 +10,6 @@
 import { useEffect, useState, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useAuthStore } from '@/stores/auth-store';
-import { useLicenseStore } from '@/stores/license-store';
 import { useWidgetStore, WidgetConfig } from '@/stores/widget-store';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -56,7 +55,6 @@ function ConfiguratorPage() {
     const widgetId = searchParams?.get('widgetId');
 
     const { user, isAuthenticated, isLoading: authLoading } = useAuthStore();
-    const { licenses } = useLicenseStore();
     const {
         currentWidget,
         currentConfig,
@@ -93,23 +91,16 @@ function ConfiguratorPage() {
         }
     }, [currentWidget]);
 
-    // Handle creating a new widget
+    // Handle creating a new widget (Schema v2.0 - no license required)
     const handleCreateWidget = async () => {
         if (!widgetName.trim()) {
             return;
         }
 
-        if (!licenses || licenses.length === 0) {
-            alert('You need a license to create a widget');
-            router.push('/dashboard');
-            return;
-        }
-        const firstLicense = licenses[0];
-
         try {
             const widget = await createWidget({
-                licenseId: firstLicense.id,
                 name: widgetName,
+                widgetType: 'chatkit',
                 config: {
                     ...currentConfig,
                     connection: {

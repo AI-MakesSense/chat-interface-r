@@ -3,8 +3,8 @@
 /**
  * Widget List Component
  *
- * Displays a list of user's widgets with management actions.
- * Allows users to edit, delete, and view deployment status of widgets.
+ * Displays a flat list of user's widgets with management actions.
+ * Schema v2.0: Uses widgetKey for embed codes, shows embed type badge.
  */
 
 import { useState } from 'react';
@@ -13,8 +13,9 @@ import { Widget } from '@/stores/widget-store';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Edit, Trash2, Globe, Calendar, X, Check, Download, ChevronDown } from 'lucide-react';
-import { DomainManager } from './domain-manager';
+import { Edit, Trash2, Globe, Calendar, X, Check, Download, ChevronDown, Code } from 'lucide-react';
+import { EmbedTypeBadge } from '@/components/configurator/embed-type-selector';
+import type { EmbedType } from '@/stores/widget-store';
 
 interface WidgetListProps {
     widgets: Widget[];
@@ -86,21 +87,32 @@ export function WidgetList({ widgets, onDelete }: WidgetListProps) {
         }
     };
 
-    const handleCopyEmbed = (licenseKey: string, widget: Widget) => {
-        // Use production URL - must match what configurator generates
-        // This ensures embed codes work regardless of which Vercel deployment you're viewing
+    /**
+     * Generate and copy embed code
+     * Schema v2.0: Prefers widgetKey, falls back to licenseKey for backward compatibility
+     */
+    const handleCopyEmbed = (widget: Widget) => {
         const baseUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://chat-interface-r.vercel.app';
-
-        // Determine widget type
         const widgetType = widget.config?.connection?.provider === 'chatkit' ? 'ChatKit Agent' : 'N8n Workflow';
 
-        // Updated to use authenticated widget endpoint (matches configurator format)
-        // This enables proper domain validation and license authentication
-        const embedCode = `<!-- ${widgetType} Widget -->
-<script src="${baseUrl}/api/widget/${licenseKey}/chat-widget.js" async></script>`;
+        let embedCode: string;
+
+        // Schema v2.0: Use widgetKey if available, otherwise fall back to licenseKey
+        if (widget.widgetKey) {
+            // New v2.0 embed code using widgetKey
+            embedCode = `<!-- ${widgetType} Widget -->
+<script src="${baseUrl}/w/${widget.widgetKey}.js" async></script>`;
+        } else if (widget.licenseKey) {
+            // Legacy embed code using licenseKey
+            embedCode = `<!-- ${widgetType} Widget -->
+<script src="${baseUrl}/api/widget/${widget.licenseKey}/chat-widget.js" async></script>`;
+        } else {
+            // Fallback - should not happen
+            embedCode = `<!-- Widget embed code not available - please save widget first -->`;
+        }
 
         navigator.clipboard.writeText(embedCode);
-        setCopiedId(licenseKey);
+        setCopiedId(widget.id);
         setTimeout(() => setCopiedId(null), 2000);
     };
 
@@ -133,8 +145,15 @@ export function WidgetList({ widgets, onDelete }: WidgetListProps) {
                                 <CardTitle className="text-lg truncate pr-2" title={widget.name}>
                                     {widget.name}
                                 </CardTitle>
-                                <CardDescription className="text-xs mt-1">
-                                    ID: {widget.id.slice(0, 8)}...
+                                <CardDescription className="text-xs mt-1 flex items-center gap-2">
+                                    {widget.widgetKey ? (
+                                        <span className="font-mono">{widget.widgetKey.slice(0, 8)}...</span>
+                                    ) : (
+                                        <span>ID: {widget.id.slice(0, 8)}...</span>
+                                    )}
+                                    {widget.embedType && (
+                                        <EmbedTypeBadge type={widget.embedType} />
+                                    )}
                                 </CardDescription>
                             </div>
                             <Badge variant={widget.isDeployed ? 'default' : 'secondary'}>
@@ -167,16 +186,16 @@ export function WidgetList({ widgets, onDelete }: WidgetListProps) {
                                 variant="secondary"
                                 size="sm"
                                 className="flex-1 gap-2"
-                                onClick={() => handleCopyEmbed(widget.licenseKey, widget)}
+                                onClick={() => handleCopyEmbed(widget)}
                             >
-                                {copiedId === widget.licenseKey ? (
+                                {copiedId === widget.id ? (
                                     <>
                                         <Check className="h-4 w-4" />
                                         Copied
                                     </>
                                 ) : (
                                     <>
-                                        <Globe className="h-4 w-4" />
+                                        <Code className="h-4 w-4" />
                                         Copy Embed
                                     </>
                                 )}
@@ -186,14 +205,6 @@ export function WidgetList({ widgets, onDelete }: WidgetListProps) {
                             <div className="flex-1">
                                 <DownloadButton widgetId={widget.id} />
                             </div>
-                            {widget.license && (
-                                <div className="flex-1">
-                                    <DomainManager
-                                        licenseId={widget.license.id}
-                                        initialDomains={widget.license.domains || []}
-                                    />
-                                </div>
-                            )}
                         </div>
                         <div className="flex w-full gap-2">
                             {deleteId === widget.id ? (

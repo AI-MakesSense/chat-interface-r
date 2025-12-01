@@ -1,22 +1,22 @@
 'use client';
 
 /**
- * Portal Widget Component
+ * Fullpage Widget Component (Schema v2.0)
  *
- * Purpose: Client-side component that initializes the widget in portal mode
- * Renders full-screen chat interface with server-provided configuration
+ * Purpose: Client-side component that initializes the widget in fullpage mode
+ * Uses widgetKey instead of license for configuration
  */
 
 import { useEffect, useRef } from 'react';
 import Script from 'next/script';
 
-interface PortalWidgetProps {
-  widgetId: string;
+interface FullpageWidgetProps {
+  widgetKey: string;
   config: any;
-  license: string;
+  embedType: string;
 }
 
-export default function PortalWidget({ widgetId, config, license }: PortalWidgetProps) {
+export default function FullpageWidget({ widgetKey, config, embedType }: FullpageWidgetProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const widgetInitialized = useRef(false);
 
@@ -32,24 +32,25 @@ export default function PortalWidget({ widgetId, config, license }: PortalWidget
       try {
         const { Widget } = (window as any);
 
-        // Merge config with portal mode settings
-        const portalConfig = {
+        // Merge config with fullpage mode settings
+        const fullpageConfig = {
           ...config,
-          mode: 'portal',
-          license: license,
-          portal: {
-            showHeader: config?.portal?.showHeader ?? true,
-            headerTitle: config?.portal?.headerTitle || config?.branding?.companyName || 'Chat',
+          mode: 'fullpage',
+          widgetKey: widgetKey,
+          embedType: embedType,
+          fullpage: {
+            showHeader: config?.fullpage?.showHeader ?? true,
+            headerTitle: config?.fullpage?.headerTitle || config?.branding?.companyName || 'Chat',
           },
         };
 
-        // Initialize widget in portal mode
-        const widget = new Widget(portalConfig);
+        // Initialize widget in fullpage mode
+        const widget = new Widget(fullpageConfig);
         widget.render();
 
-        console.log('[Portal] Widget initialized:', widgetId);
+        console.log('[Fullpage] Widget initialized:', widgetKey);
       } catch (error) {
-        console.error('[Portal] Widget initialization failed:', error);
+        console.error('[Fullpage] Widget initialization failed:', error);
       }
     };
 
@@ -64,11 +65,11 @@ export default function PortalWidget({ widgetId, config, license }: PortalWidget
     return () => {
       window.removeEventListener('widget-script-loaded', initializeWidget);
     };
-  }, [widgetId, config, license]);
+  }, [widgetKey, config, embedType]);
 
   // Apply global styles via useEffect
   useEffect(() => {
-    // Set html/body styles for portal
+    // Set html/body styles for fullpage
     document.body.style.margin = '0';
     document.body.style.padding = '0';
     document.body.style.overflow = 'hidden';
@@ -99,9 +100,9 @@ export default function PortalWidget({ widgetId, config, license }: PortalWidget
         }}
       />
 
-      {/* Portal Container */}
+      {/* Fullpage Container */}
       <div
-        id="chat-portal"
+        id="chat-fullpage"
         ref={containerRef}
         style={{
           position: 'fixed',

@@ -138,12 +138,16 @@ export interface WidgetConfig {
 }
 
 /**
+ * Embed type for widget deployment (Schema v2.0)
+ */
+export type EmbedType = 'popup' | 'inline' | 'fullpage' | 'portal';
+
+/**
  * Widget object from API
+ * Schema v2.0: Added widgetKey, embedType, allowedDomains, userId
  */
 export interface Widget {
   id: string;
-  licenseId: string;
-  licenseKey: string; // Added for embed code generation
   name: string;
   config: WidgetConfig;
   isDeployed: boolean;
@@ -151,6 +155,22 @@ export interface Widget {
   deployUrl: string | null;
   createdAt: string;
   updatedAt: string;
+
+  // Schema v2.0: Direct user relationship
+  userId?: string;
+
+  // Schema v2.0: Widget identification for embed URLs
+  widgetKey?: string;
+
+  // Schema v2.0: Embed type (how widget is deployed)
+  embedType?: EmbedType;
+
+  // Schema v2.0: Per-widget domain whitelist (null = allow all)
+  allowedDomains?: string[] | null;
+
+  // Legacy: License relationship (for backward compatibility)
+  licenseId?: string;
+  licenseKey?: string;
   license?: {
     id: string;
     domains: string[];
@@ -161,19 +181,29 @@ export interface Widget {
 
 /**
  * Widget creation payload
+ * Schema v2.0: licenseId is now optional, added embedType and allowedDomains
  */
 export interface CreateWidgetData {
-  licenseId: string;
   name: string;
   config: WidgetConfig;
+  // Schema v2.0: Optional fields
+  embedType?: EmbedType;
+  allowedDomains?: string[];
+  widgetType?: 'n8n' | 'chatkit';
+  // Legacy: For backward compatibility
+  licenseId?: string;
 }
 
 /**
  * Widget update payload
+ * Schema v2.0: Added embedType and allowedDomains
  */
 export interface UpdateWidgetData {
   name?: string;
   config?: WidgetConfig;
+  embedType?: EmbedType;
+  allowedDomains?: string[];
+  status?: 'active' | 'paused';
 }
 
 /**

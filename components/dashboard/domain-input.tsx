@@ -12,7 +12,6 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Alert, AlertDescription } from '@/components/ui/alert';
-import { useLicenseStore } from '@/stores/license-store';
 
 interface DomainInputProps {
   currentDomains: string[];
@@ -56,8 +55,6 @@ export function DomainInput({
   const [newDomain, setNewDomain] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
-
-  const updateLicense = useLicenseStore((state) => state.updateLicense);
 
   /**
    * Add a new domain
