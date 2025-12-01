@@ -819,7 +819,7 @@ export async function createWidgetV2(data: {
       status: data.status || 'active',
       widgetType: data.widgetType || 'n8n',
       version: data.version || 1,
-      deployedAt: data.deployedAt || null,
+      deployedAt: data.deployedAt ?? now, // Schema v2.0: Auto-deploy on creation
       createdAt: now,
       updatedAt: now,
     })
