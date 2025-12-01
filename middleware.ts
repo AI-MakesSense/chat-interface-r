@@ -61,6 +61,7 @@ const PUBLIC_API_ROUTES = [
   '/api/widget/', // Widget serving (validates license) - legacy
   '/api/stripe/webhook', // Stripe webhook (validates signature)
   '/api/auth/logout', // Logout should be accessible
+  '/api/chat-relay', // Chat relay (validates widget internally)
   '/w/', // Widget serving v2.0 (validates widgetKey)
   '/api/w/', // Widget API v2.0 routes
 ];

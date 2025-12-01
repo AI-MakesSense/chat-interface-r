@@ -1,12 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getWidgetById, getLicenseByKey } from '@/lib/db/queries';
+import { getWidgetById, getWidgetByKeyWithUser } from '@/lib/db/queries';
 
 /**
  * Interface for the expected incoming request body
+ * Supports both Schema v2.0 (widgetKey) and legacy (licenseKey + widgetId)
  */
 interface RelayBody {
-  widgetId: string;
-  licenseKey: string;
+  widgetId?: string;
+  licenseKey: string; // In v2.0, this is actually the widgetKey
   message: string;
   sessionId?: string;
   metadata?: Record<string, any>;
@@ -16,6 +17,8 @@ interface RelayBody {
 /**
  * Relay endpoint that forwards chat messages to the configured backend.
  * Supports N8n webhooks. ChatKit widgets connect directly to OpenAI via client-side sessions.
+ *
+ * Schema v2.0: Uses widgetKey (passed as licenseKey for backward compatibility)
  */
 
 // Handle OPTIONS for CORS preflight
@@ -39,18 +42,37 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
 
   try {
     const body: RelayBody = await request.json();
-    const { widgetId, licenseKey, message, sessionId, metadata } = body;
+    const { widgetId, licenseKey, message } = body;
 
-    // 1. Input Validation
-    if (!widgetId || !licenseKey || !message) {
+    // 1. Input Validation - licenseKey (widgetKey in v2.0) and message are required
+    if (!licenseKey || !message) {
       return new NextResponse(
-        JSON.stringify({ error: 'Missing required fields: widgetId, licenseKey, or message' }),
+        JSON.stringify({ error: 'Missing required fields: licenseKey or message' }),
         { status: 400, headers: { 'Content-Type': 'application/json', ...corsHeaders } }
       );
     }
 
-    // 2. Database Lookup
-    const widget = await getWidgetById(widgetId);
+    // 2. Database Lookup - Try Schema v2.0 first (widgetKey), fall back to legacy (widgetId)
+    let widget;
+    let userTier = 'free';
+
+    // Check if licenseKey looks like a widgetKey (16-char alphanumeric)
+    const isWidgetKey = /^[A-Za-z0-9]{16}$/.test(licenseKey);
+
+    if (isWidgetKey) {
+      // Schema v2.0: Look up by widgetKey
+      const widgetWithUser = await getWidgetByKeyWithUser(licenseKey);
+      if (widgetWithUser) {
+        widget = widgetWithUser;
+        userTier = widgetWithUser.user?.tier || 'free';
+      }
+    }
+
+    // Fallback: Try by widgetId if provided and widget not found
+    if (!widget && widgetId) {
+      widget = await getWidgetById(widgetId);
+    }
+
     if (!widget) {
       return new NextResponse(
         JSON.stringify({ error: 'Widget not found' }),
@@ -58,30 +80,13 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
       );
     }
 
-    const license = await getLicenseByKey(licenseKey);
-    if (!license) {
-      return new NextResponse(
-        JSON.stringify({ error: 'License not found' }),
-        { status: 404, headers: { 'Content-Type': 'application/json', ...corsHeaders } }
-      );
-    }
-
-    // 3. SECURITY CHECK: Verify Ownership
-    if (widget.licenseId !== license.id) {
-      console.warn(`[Chat Relay] Unauthorized access: License ${licenseKey} tried to use Widget ${widgetId}`);
-      return new NextResponse(
-        JSON.stringify({ error: 'Unauthorized: Widget does not belong to the provided license' }),
-        { status: 403, headers: { 'Content-Type': 'application/json', ...corsHeaders } }
-      );
-    }
-
-    // 4. Get Config and Determine Provider
+    // 3. Get Config and Determine Provider
     const config = widget.config as any;
     const provider = config?.connection?.provider || 'n8n';
 
-    // 5. Route to Appropriate Handler
+    // 4. Route to Appropriate Handler
     if (provider === 'n8n') {
-      return handleN8nRelay(config, body, license, corsHeaders);
+      return handleN8nRelay(config, body, userTier, corsHeaders);
     } else if (provider === 'chatkit') {
       // ChatKit widgets don't use this relay - they connect directly to OpenAI
       return new NextResponse(
@@ -110,10 +115,11 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
 async function handleN8nRelay(
   config: any,
   body: RelayBody,
-  license: any,
+  userTier: string,
   corsHeaders: Record<string, string>
 ): Promise<NextResponse> {
-  const webhookUrl = config?.connection?.webhookUrl;
+  // Try both old and new config locations for webhook URL
+  const webhookUrl = config?.n8nWebhookUrl || config?.connection?.webhookUrl;
 
   if (!webhookUrl) {
     return new NextResponse(
@@ -130,8 +136,7 @@ async function handleN8nRelay(
     licenseKey: body.licenseKey,
     metadata: {
       ...(body.metadata || {}),
-      tier: license.tier,
-      domainLimit: license.domainLimit
+      tier: userTier
     }
   };
 
