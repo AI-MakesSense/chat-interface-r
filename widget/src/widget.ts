@@ -263,16 +263,19 @@ export function createChatWidget(runtimeConfig: WidgetRuntimeConfig): void {
   `;
   document.head.appendChild(styleEl);
 
-  // Create container
+  // Create container - using flexbox to stack chat window above button (matching preview)
   const container = document.createElement('div');
   container.id = 'n8n-chat-widget-container';
   container.style.cssText = `
     position: fixed;
-    ${mergedConfig.style.position === 'bottom-right' ? 'right: 20px;' : 'left: 20px;'}
-    bottom: 20px;
+    ${mergedConfig.style.position === 'bottom-right' ? 'right: 24px;' : 'left: 24px;'}
+    bottom: 24px;
     z-index: 999999;
     font-family: ${mergedConfig.style.fontFamily};
     font-size: ${mergedConfig.style.fontSize}px;
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
   `;
   document.body.appendChild(container);
 
@@ -342,9 +345,9 @@ export function createChatWidget(runtimeConfig: WidgetRuntimeConfig): void {
   bubble.addEventListener('mouseenter', () => { bubble.style.transform = 'scale(1.05)'; });
   bubble.addEventListener('mouseleave', () => { bubble.style.transform = 'scale(1)'; });
   bubble.addEventListener('click', toggleChat);
-  container.appendChild(bubble);
 
   // Create chat window - matches preview layout (380x600, 24px radius)
+  // Added BEFORE bubble so it appears above in flexbox column layout
   const chatWindow = document.createElement('div');
   chatWindow.id = 'n8n-chat-window';
   chatWindow.style.cssText = `
@@ -365,6 +368,9 @@ export function createChatWidget(runtimeConfig: WidgetRuntimeConfig): void {
   `;
   container.appendChild(chatWindow);
 
+  // Add bubble AFTER chat window so it appears below in flexbox
+  container.appendChild(bubble);
+
   // Header icons (top right) - matching preview
   const headerIcons = document.createElement('div');
   headerIcons.style.cssText = `
@@ -378,6 +384,7 @@ export function createChatWidget(runtimeConfig: WidgetRuntimeConfig): void {
     justify-content: space-between;
     pointer-events: none;
   `;
+  // Only clear history button - close is done via toggle button (matching preview)
   headerIcons.innerHTML = `
     <div style="pointer-events: auto;"></div>
     <div style="display: flex; align-items: center; gap: 4px; pointer-events: auto;">
@@ -399,20 +406,6 @@ export function createChatWidget(runtimeConfig: WidgetRuntimeConfig): void {
           <path d="M3 3v5h5"/>
         </svg>
       </button>
-      <button id="n8n-chat-close" style="
-        width: 32px;
-        height: 32px;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        border-radius: 50%;
-        background: transparent;
-        border: none;
-        cursor: pointer;
-        color: ${subText};
-        transition: background 0.15s;
-        font-size: 20px;
-      " title="Close">×</button>
     </div>
   `;
   chatWindow.appendChild(headerIcons);
@@ -607,7 +600,6 @@ export function createChatWidget(runtimeConfig: WidgetRuntimeConfig): void {
   const sendBtn = composerArea.querySelector('#n8n-send-btn') as HTMLButtonElement;
   const attachBtn = composerArea.querySelector('#n8n-attach-btn') as HTMLButtonElement;
   const fileInput = composerArea.querySelector('#n8n-file-input') as HTMLInputElement;
-  const closeBtn = headerIcons.querySelector('#n8n-chat-close') as HTMLButtonElement;
   const clearBtn = headerIcons.querySelector('#n8n-clear-history') as HTMLButtonElement;
 
   // Update send button style based on input
@@ -628,8 +620,6 @@ export function createChatWidget(runtimeConfig: WidgetRuntimeConfig): void {
     e.preventDefault();
     handleSendMessage();
   });
-
-  closeBtn.addEventListener('click', toggleChat);
 
   clearBtn.addEventListener('click', () => {
     messages.length = 0;
