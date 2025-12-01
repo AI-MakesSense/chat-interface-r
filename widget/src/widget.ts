@@ -276,50 +276,92 @@ export function createChatWidget(runtimeConfig: WidgetRuntimeConfig): void {
   `;
   document.body.appendChild(container);
 
-  // Create chat bubble button
+  // Calculate launcher button colors (matching preview-canvas.tsx getLauncherStyle)
+  let launcherBg: string, launcherColor: string;
+  if (hasAccent) {
+    launcherBg = accentColor;
+    launcherColor = '#ffffff';
+  } else if (customSurface) {
+    launcherBg = customSurface.foreground || '#f8fafc';
+    launcherColor = isDark ? '#e5e5e5' : '#111827';
+  } else {
+    launcherBg = isDark ? '#ffffff' : '#000000';
+    launcherColor = isDark ? '#000000' : '#ffffff';
+  }
+
+  // Create chat bubble button - matching preview exactly (56px, stroke icon)
   const bubble = document.createElement('button');
   bubble.id = 'n8n-chat-bubble';
   bubble.setAttribute('aria-label', 'Open chat');
   bubble.style.cssText = `
-    width: 60px;
-    height: 60px;
+    width: 56px;
+    height: 56px;
     border-radius: 50%;
-    background: ${accentColor};
+    background: ${launcherBg};
     border: none;
     cursor: pointer;
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+    box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -4px rgba(0, 0, 0, 0.1);
     display: flex;
     align-items: center;
     justify-content: center;
-    transition: transform 0.2s, box-shadow 0.2s;
+    transition: transform 0.3s, box-shadow 0.3s;
+    position: relative;
   `;
-  bubble.innerHTML = `
-    <svg width="28" height="28" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-      <path d="M20 2H4C2.9 2 2 2.9 2 4V22L6 18H20C21.1 18 22 17.1 22 16V4C22 2.9 21.1 2 20 2Z" fill="white"/>
+
+  // Icon container for animation
+  const iconContainer = document.createElement('div');
+  iconContainer.style.cssText = `position: relative; width: 24px; height: 24px;`;
+
+  // MessageCircle icon (stroke-based, matching Lucide)
+  const messageIcon = document.createElement('span');
+  messageIcon.id = 'n8n-bubble-message-icon';
+  messageIcon.innerHTML = `
+    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="${launcherColor}" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="position: absolute; inset: 0; transition: all 0.3s; opacity: 1; transform: rotate(0deg) scale(1);">
+      <path d="m3 21 1.9-5.7a8.5 8.5 0 1 1 3.8 3.8z"/>
     </svg>
   `;
-  bubble.addEventListener('mouseenter', () => { bubble.style.transform = 'scale(1.1)'; });
+
+  // X close icon
+  const closeIconEl = document.createElement('span');
+  closeIconEl.id = 'n8n-bubble-close-icon';
+  closeIconEl.innerHTML = `
+    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="${launcherColor}" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="position: absolute; inset: 0; transition: all 0.3s; opacity: 0; transform: rotate(-90deg) scale(0.5);">
+      <path d="M18 6 6 18"/>
+      <path d="m6 6 12 12"/>
+    </svg>
+  `;
+
+  iconContainer.appendChild(messageIcon);
+  iconContainer.appendChild(closeIconEl);
+  bubble.appendChild(iconContainer);
+
+  // References for icon animation
+  const msgIconSvg = messageIcon.querySelector('svg') as SVGElement;
+  const closeIconSvg = closeIconEl.querySelector('svg') as SVGElement;
+
+  bubble.addEventListener('mouseenter', () => { bubble.style.transform = 'scale(1.05)'; });
   bubble.addEventListener('mouseleave', () => { bubble.style.transform = 'scale(1)'; });
   bubble.addEventListener('click', toggleChat);
   container.appendChild(bubble);
 
-  // Create chat window - matches preview layout
+  // Create chat window - matches preview layout (380x600, 24px radius)
   const chatWindow = document.createElement('div');
   chatWindow.id = 'n8n-chat-window';
   chatWindow.style.cssText = `
     display: none;
-    width: 400px;
+    width: 380px;
     height: 600px;
     max-height: 80vh;
     background: ${bg};
     color: ${text};
-    border-radius: ${mergedConfig.style.cornerRadius}px;
-    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.15);
+    border-radius: 24px;
+    box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
     flex-direction: column;
     overflow: hidden;
-    margin-bottom: 12px;
+    margin-bottom: 16px;
     border: 1px solid ${border};
     position: relative;
+    transform-origin: bottom right;
   `;
   container.appendChild(chatWindow);
 
@@ -604,16 +646,49 @@ export function createChatWidget(runtimeConfig: WidgetRuntimeConfig): void {
     });
   }
 
-  // Toggle chat window
+  // Toggle chat window - with icon animation matching preview
   function toggleChat() {
     isOpen = !isOpen;
     if (isOpen) {
+      // Show chat window with animation
       chatWindow.style.display = 'flex';
-      bubble.style.display = 'none';
+      chatWindow.style.opacity = '0';
+      chatWindow.style.transform = 'scale(0.95) translateY(16px)';
+      requestAnimationFrame(() => {
+        chatWindow.style.transition = 'opacity 0.3s cubic-bezier(0.16, 1, 0.3, 1), transform 0.3s cubic-bezier(0.16, 1, 0.3, 1)';
+        chatWindow.style.opacity = '1';
+        chatWindow.style.transform = 'scale(1) translateY(0)';
+      });
+
+      // Animate icons - show X, hide message
+      if (msgIconSvg) {
+        msgIconSvg.style.opacity = '0';
+        msgIconSvg.style.transform = 'rotate(90deg) scale(0.5)';
+      }
+      if (closeIconSvg) {
+        closeIconSvg.style.opacity = '1';
+        closeIconSvg.style.transform = 'rotate(0deg) scale(1)';
+      }
+
       input.focus();
     } else {
-      chatWindow.style.display = 'none';
-      bubble.style.display = 'flex';
+      // Hide chat window with animation
+      chatWindow.style.transition = 'opacity 0.3s cubic-bezier(0.16, 1, 0.3, 1), transform 0.3s cubic-bezier(0.16, 1, 0.3, 1)';
+      chatWindow.style.opacity = '0';
+      chatWindow.style.transform = 'scale(0.95) translateY(16px)';
+      setTimeout(() => {
+        chatWindow.style.display = 'none';
+      }, 300);
+
+      // Animate icons - show message, hide X
+      if (msgIconSvg) {
+        msgIconSvg.style.opacity = '1';
+        msgIconSvg.style.transform = 'rotate(0deg) scale(1)';
+      }
+      if (closeIconSvg) {
+        closeIconSvg.style.opacity = '0';
+        closeIconSvg.style.transform = 'rotate(-90deg) scale(0.5)';
+      }
     }
   }
 
