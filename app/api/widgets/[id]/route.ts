@@ -14,9 +14,60 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { requireAuth } from '@/lib/auth/guard';
-import { getWidgetWithLicense, updateWidget, deleteWidget } from '@/lib/db/queries';
+import { getWidgetById, getWidgetWithLicense, updateWidget, deleteWidget, getUserById } from '@/lib/db/queries';
 import { createWidgetConfigSchema } from '@/lib/validation/widget-schema';
 import { z } from 'zod';
+
+// =============================================================================
+// Helper: Get widget and verify ownership (supports both v1 and v2.0 schema)
+// =============================================================================
+
+async function getWidgetWithOwnership(widgetId: string, userId: string): Promise<{
+  widget: any;
+  tier: string;
+  licenseKey?: string | null;
+} | null> {
+  // First try: Get widget by ID directly
+  const widget = await getWidgetById(widgetId);
+
+  if (!widget) {
+    return null;
+  }
+
+  // Schema v2.0: Check direct userId ownership
+  if (widget.userId) {
+    if (widget.userId !== userId) {
+      return null; // Not owner
+    }
+
+    // Get user tier from user record
+    const user = await getUserById(userId);
+    const tier = user?.tier || 'free';
+
+    return {
+      widget,
+      tier,
+      licenseKey: widget.widgetKey, // Use widgetKey for v2.0
+    };
+  }
+
+  // Legacy (v1): Check ownership through license
+  if (widget.licenseId) {
+    const widgetWithLicense = await getWidgetWithLicense(widgetId);
+    if (!widgetWithLicense || widgetWithLicense.license.userId !== userId) {
+      return null; // Not owner
+    }
+
+    return {
+      widget: widgetWithLicense,
+      tier: widgetWithLicense.license.tier,
+      licenseKey: widgetWithLicense.license.licenseKey,
+    };
+  }
+
+  // Widget has neither userId nor licenseId - orphaned
+  return null;
+}
 
 // =============================================================================
 // Request Validation Schemas
@@ -47,23 +98,18 @@ export async function GET(
     const idSchema = z.string().uuid();
     const widgetId = idSchema.parse(id);
 
-    // 3. Get widget with license information
-    const widget = await getWidgetWithLicense(widgetId);
+    // 3. Get widget and verify ownership (supports both v1 and v2.0)
+    const result = await getWidgetWithOwnership(widgetId, user.sub);
 
-    if (!widget) {
+    if (!result) {
       return NextResponse.json({ error: 'Widget not found' }, { status: 404 });
     }
 
-    // 4. Verify ownership through license
-    if (widget.license.userId !== user.sub) {
-      return NextResponse.json({ error: 'You do not own this widget' }, { status: 403 });
-    }
-
-    // 5. Return widget data with licenseKey
+    // 4. Return widget data with licenseKey/widgetKey
     return NextResponse.json({
       widget: {
-        ...widget,
-        licenseKey: widget.license.licenseKey
+        ...result.widget,
+        licenseKey: result.licenseKey
       }
     });
 
@@ -107,19 +153,16 @@ export async function PATCH(
     const body = await request.json();
     const updates = UpdateWidgetSchema.parse(body);
 
-    // 4. Get widget with license information
-    const widget = await getWidgetWithLicense(widgetId);
+    // 4. Get widget and verify ownership (supports both v1 and v2.0)
+    const result = await getWidgetWithOwnership(widgetId, user.sub);
 
-    if (!widget) {
+    if (!result) {
       return NextResponse.json({ error: 'Widget not found' }, { status: 404 });
     }
 
-    // 5. Verify ownership through license
-    if (widget.license.userId !== user.sub) {
-      return NextResponse.json({ error: 'You do not own this widget' }, { status: 403 });
-    }
+    const { widget, tier } = result;
 
-    // 6. Prepare update data
+    // 5. Prepare update data
     const updateData: any = {};
 
     // Update name if provided
@@ -142,7 +185,7 @@ export async function PATCH(
       console.log('[Widget Update] Merged config keys:', Object.keys(mergedConfig));
 
       // SANITIZATION: Enforce tier restrictions and fix data integrity
-      const sanitizedConfig = sanitizeConfig(mergedConfig, widget.license.tier);
+      const sanitizedConfig = sanitizeConfig(mergedConfig, tier);
 
       console.log('[Widget Update] Post-sanitization config keys:', Object.keys(sanitizedConfig));
       console.log('[Widget Update] Sanitized config sample:', {
@@ -152,13 +195,13 @@ export async function PATCH(
       });
 
       // Validate merged config against tier restrictions
-      const configSchema = createWidgetConfigSchema(widget.license.tier as any, true);
+      const configSchema = createWidgetConfigSchema(tier as any, true);
 
       try {
         configSchema.parse(sanitizedConfig);
       } catch (validationError) {
         console.error('[Widget Update] VALIDATION FAILED');
-        console.error('[Widget Update] Tier:', widget.license.tier);
+        console.error('[Widget Update] Tier:', tier);
         console.error('[Widget Update] Sanitized config:', JSON.stringify(sanitizedConfig, null, 2));
         if (validationError instanceof z.ZodError) {
           console.error('[Widget Update] Validation errors:', validationError.issues);
@@ -179,10 +222,10 @@ export async function PATCH(
       }
     }
 
-    // 7. Update widget in database
+    // 6. Update widget in database
     const updatedWidget = await updateWidget(widgetId, updateData);
 
-    // 8. Return updated widget
+    // 7. Return updated widget
     return NextResponse.json({ widget: updatedWidget });
 
   } catch (error) {
@@ -250,22 +293,17 @@ export async function DELETE(
     const idSchema = z.string().uuid();
     const widgetId = idSchema.parse(id);
 
-    // 3. Get widget with license information
-    const widget = await getWidgetWithLicense(widgetId);
+    // 3. Get widget and verify ownership (supports both v1 and v2.0)
+    const result = await getWidgetWithOwnership(widgetId, user.sub);
 
-    if (!widget) {
+    if (!result) {
       return NextResponse.json({ error: 'Widget not found' }, { status: 404 });
     }
 
-    // 4. Verify ownership through license
-    if (widget.license.userId !== user.sub) {
-      return NextResponse.json({ error: 'You do not own this widget' }, { status: 403 });
-    }
-
-    // 5. Soft delete widget (sets status='deleted')
+    // 4. Soft delete widget (sets status='deleted')
     await deleteWidget(widgetId);
 
-    // 6. Return 204 No Content on success
+    // 5. Return 204 No Content on success
     return new NextResponse(null, { status: 204 });
 
   } catch (error) {
