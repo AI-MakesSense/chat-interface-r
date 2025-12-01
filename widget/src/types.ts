@@ -166,6 +166,9 @@ export interface ColorConfig {
   /** Surface background/foreground colors */
   surface?: SurfaceConfig;
 
+  /** Text color override */
+  text?: string;
+
   /** Icon color override */
   icon?: string;
 
