@@ -5,9 +5,9 @@
  * Usage: pnpm db:seed
  *
  * Creates:
- * - Test user accounts
- * - Sample licenses (basic, pro, agency)
- * - Sample widget configurations
+ * - Test user accounts with subscription tiers
+ * - Sample licenses (basic, pro, agency) - legacy, kept for backward compatibility
+ * - Sample widgets with widgetKey, embedType, userId (new schema v2.0)
  */
 
 // IMPORTANT: Load environment variables FIRST, before any imports
@@ -25,6 +25,20 @@ import { randomBytes } from 'crypto';
  */
 function generateLicenseKey(): string {
   return randomBytes(16).toString('hex');
+}
+
+/**
+ * Generate a widget key (16-char alphanumeric)
+ * Uses base36 encoding for URL-friendly keys
+ */
+function generateWidgetKey(): string {
+  const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
+  let key = '';
+  const bytes = randomBytes(16);
+  for (let i = 0; i < 16; i++) {
+    key += chars[bytes[i] % chars.length];
+  }
+  return key;
 }
 
 /**
@@ -77,7 +91,7 @@ async function seed() {
     await db.delete(users);
     console.log('✓ Cleared existing data\n');
 
-    // 1. Create test users
+    // 1. Create test users with subscription tiers
     console.log('Creating test users...');
 
     const testUser1 = await db.insert(users).values({
@@ -85,6 +99,8 @@ async function seed() {
       passwordHash: await hashPassword('password123'),
       name: 'Test User',
       emailVerified: true,
+      tier: 'basic',
+      subscriptionStatus: 'active',
     }).returning();
 
     const testUser2 = await db.insert(users).values({
@@ -92,6 +108,8 @@ async function seed() {
       passwordHash: await hashPassword('demo1234'),
       name: 'Demo User',
       emailVerified: true,
+      tier: 'pro',
+      subscriptionStatus: 'active',
     }).returning();
 
     const testUser3 = await db.insert(users).values({
@@ -99,6 +117,8 @@ async function seed() {
       passwordHash: await hashPassword('agency1234'),
       name: 'Agency Owner',
       emailVerified: true,
+      tier: 'agency',
+      subscriptionStatus: 'active',
     }).returning();
 
     console.log(`✓ Created ${testUser1.length + testUser2.length + testUser3.length} users`);
@@ -147,18 +167,35 @@ async function seed() {
     console.log(`  - Pro: ${proLicense[0].licenseKey}`);
     console.log(`  - Agency: ${agencyLicense[0].licenseKey}`);
 
-    // 3. Create widgets
+    // 3. Create widgets with new schema fields
     console.log('\nCreating widgets...');
 
+    // Generate widget keys
+    const basicWidgetKey = generateWidgetKey();
+    const proWidgetKey = generateWidgetKey();
+    const agencyWidgetKey = generateWidgetKey();
+    const inlineWidgetKey = generateWidgetKey();
+    const fullpageWidgetKey = generateWidgetKey();
+
+    // Basic widget - popup type (default)
     await db.insert(widgets).values({
       licenseId: basicLicense[0].id,
+      userId: testUser1[0].id,
+      widgetKey: basicWidgetKey,
       name: 'Basic Widget',
+      embedType: 'popup',
+      allowedDomains: ['localhost', 'test.example.com'],
       config: sampleConfig,
     });
 
+    // Pro widget - popup type
     await db.insert(widgets).values({
       licenseId: proLicense[0].id,
+      userId: testUser2[0].id,
+      widgetKey: proWidgetKey,
       name: 'Pro Widget',
+      embedType: 'popup',
+      allowedDomains: ['localhost', 'demo.example.com'],
       config: {
         ...sampleConfig,
         branding: {
@@ -172,9 +209,14 @@ async function seed() {
       },
     });
 
+    // Agency widget - popup type
     await db.insert(widgets).values({
       licenseId: agencyLicense[0].id,
+      userId: testUser3[0].id,
+      widgetKey: agencyWidgetKey,
       name: 'Agency Widget',
+      embedType: 'popup',
+      allowedDomains: null, // Agency can use on any domain
       config: {
         ...sampleConfig,
         branding: {
@@ -188,14 +230,67 @@ async function seed() {
       },
     });
 
-    console.log('✓ Created 3 widgets');
+    // Inline widget example (Pro tier)
+    await db.insert(widgets).values({
+      licenseId: proLicense[0].id,
+      userId: testUser2[0].id,
+      widgetKey: inlineWidgetKey,
+      name: 'Inline Support Widget',
+      embedType: 'inline',
+      allowedDomains: ['localhost', 'demo.example.com'],
+      config: {
+        ...sampleConfig,
+        branding: {
+          ...sampleConfig.branding,
+          companyName: 'Inline Demo',
+          welcomeText: 'Chat with us directly on this page',
+        },
+        style: {
+          ...sampleConfig.style,
+          primaryColor: '#059669', // Emerald
+        },
+      },
+    });
+
+    // Fullpage widget example (Agency tier)
+    await db.insert(widgets).values({
+      licenseId: agencyLicense[0].id,
+      userId: testUser3[0].id,
+      widgetKey: fullpageWidgetKey,
+      name: 'Fullpage Chat Portal',
+      embedType: 'fullpage',
+      allowedDomains: null, // Agency can use on any domain
+      config: {
+        ...sampleConfig,
+        branding: {
+          ...sampleConfig.branding,
+          companyName: 'Chat Portal',
+          welcomeText: 'Welcome to our dedicated support portal',
+        },
+        style: {
+          ...sampleConfig.style,
+          primaryColor: '#7c3aed', // Violet
+        },
+      },
+    });
+
+    console.log('✓ Created 5 widgets');
+    console.log(`  - Basic (popup): ${basicWidgetKey}`);
+    console.log(`  - Pro (popup): ${proWidgetKey}`);
+    console.log(`  - Agency (popup): ${agencyWidgetKey}`);
+    console.log(`  - Inline: ${inlineWidgetKey}`);
+    console.log(`  - Fullpage: ${fullpageWidgetKey}`);
 
     // Print summary
     console.log('\n✅ Seed completed successfully!\n');
-    console.log('Test accounts:');
-    console.log('  Email: test@example.com | Password: password123 | Tier: Basic');
-    console.log('  Email: demo@example.com | Password: demo1234 | Tier: Pro');
-    console.log('  Email: agency@example.com | Password: agency1234 | Tier: Agency\n');
+    console.log('Test accounts (with account-level subscriptions):');
+    console.log('  Email: test@example.com | Password: password123 | Tier: basic');
+    console.log('  Email: demo@example.com | Password: demo1234 | Tier: pro');
+    console.log('  Email: agency@example.com | Password: agency1234 | Tier: agency\n');
+    console.log('Embed types created:');
+    console.log('  - popup: Standard chat bubble (basic, pro, agency)');
+    console.log('  - inline: Embedded in container (pro tier)');
+    console.log('  - fullpage: Full viewport chat (agency tier)\n');
 
     process.exit(0);
   } catch (error) {
