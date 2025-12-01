@@ -311,11 +311,13 @@ function deepMerge(target: any, source: any): any {
 
 /**
  * Strip legacy config properties that conflict with new structure
- * 
+ *
  * Removes old nested objects like:
  * - theme.mode (old) vs themeMode (new)
  * - theme.colors (old) vs color system (new)
- * - behavior, advancedStyling, etc.
+ *
+ * NOTE: advancedStyling and behavior are intentionally PRESERVED
+ * as they are valid config properties used by Pro/Agency tiers.
  */
 function stripLegacyConfigProperties(config: any): any {
   const cleaned = { ...config };
@@ -326,9 +328,7 @@ function stripLegacyConfigProperties(config: any): any {
     delete cleaned.theme;
   }
 
-  // Remove other legacy nested structures
-  delete cleaned.behavior;
-  delete cleaned.advancedStyling;
+  // advancedStyling and behavior are preserved - they are valid config properties
 
   return cleaned;
 }
