@@ -28,6 +28,7 @@ import {
 } from '@/lib/db/queries';
 import { createDefaultConfig } from '@/lib/config/defaults';
 import { createWidgetConfigSchema } from '@/lib/validation/widget-schema';
+import { deepMerge, stripLegacyConfigProperties } from '@/lib/utils/config-helpers';
 import { z } from 'zod';
 
 // =============================================================================
@@ -79,7 +80,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Get tier from user (Schema v2.0) or 'free' default
-    const userTier = ((user as any).tier || 'free') as SubscriptionTier;
+    const userTier = (user.tier || 'free') as SubscriptionTier;
 
     // 4. Determine widget limit and check quota
     let tier: SubscriptionTier;
@@ -270,6 +271,8 @@ export async function GET(request: NextRequest) {
           return {
             ...w,
             licenseKey: (w as any).licenseKey || w.license?.licenseKey,
+            // Compute isDeployed from deployedAt
+            isDeployed: !!(w as any).deployedAt,
             // Schema v2.0: Add embed codes if widgetKey exists
             ...(widgetKey && { embedCodes: generateEmbedCodes(baseUrl, widgetKey, widgetEmbedType) }),
           };
@@ -300,6 +303,8 @@ export async function GET(request: NextRequest) {
           const widgetEmbedType = (w as any).embedType || 'popup';
           return {
             ...w,
+            // Compute isDeployed from deployedAt
+            isDeployed: !!(w as any).deployedAt,
             // Schema v2.0: Add embed codes if widgetKey exists
             ...(widgetKey && { embedCodes: generateEmbedCodes(baseUrl, widgetKey, widgetEmbedType) }),
           };
@@ -344,46 +349,3 @@ function generateEmbedCodes(baseUrl: string, widgetKey: string, primaryEmbedType
   };
 }
 
-/**
- * Deep merge two objects recursively
- * Used to merge user config with defaults while preserving nested structure
- */
-function deepMerge(target: any, source: any): any {
-  const output = { ...target };
-
-  for (const key in source) {
-    if (source[key] && typeof source[key] === 'object' && !Array.isArray(source[key])) {
-      // Recursively merge nested objects
-      output[key] = deepMerge(target[key] || {}, source[key]);
-    } else {
-      // Direct assignment for primitives and arrays
-      output[key] = source[key];
-    }
-  }
-
-  return output;
-}
-
-/**
- * Strip legacy config properties that conflict with new structure
- * 
- * Removes old nested objects like:
- * - theme.mode (old) vs themeMode (new)
- * - theme.colors (old) vs color system (new)
- * - behavior, advancedStyling, etc.
- */
-function stripLegacyConfigProperties(config: any): any {
-  const cleaned = { ...config };
-
-  // Remove legacy nested theme object if it exists
-  // The new structure uses flat properties like themeMode, not nested theme.mode
-  if (cleaned.theme && typeof cleaned.theme === 'object') {
-    delete cleaned.theme;
-  }
-
-  // Remove other legacy nested structures
-  delete cleaned.behavior;
-  delete cleaned.advancedStyling;
-
-  return cleaned;
-}

@@ -104,6 +104,7 @@ function ConfiguratorPage() {
             const widget = await createWidget({
                 name: widgetName,
                 widgetType: 'chatkit',
+                embedType, // Pass the embed type from URL params
                 config: {
                     ...currentConfig,
                     connection: {
@@ -114,7 +115,7 @@ function ConfiguratorPage() {
             });
 
             toast.success('Agent created successfully');
-            router.push(`/configurator/chatkit?widgetId=${widget.id}`);
+            router.push(`/configurator/chatkit?widgetId=${widget.id}&embedType=${embedType}`);
         } catch (error) {
             console.error('Failed to create widget:', error);
             toast.error('Failed to create widget. Please try again.');

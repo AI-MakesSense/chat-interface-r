@@ -114,11 +114,12 @@ function ConfiguratorPage() {
       const widget = await createWidget({
         name: widgetName,
         widgetType: 'n8n',
+        embedType, // Pass the embed type from URL params
         config: currentConfig
       });
 
       toast.success('Widget created successfully');
-      router.push(`/configurator/n8n?widgetId=${widget.id}`);
+      router.push(`/configurator/n8n?widgetId=${widget.id}&embedType=${embedType}`);
     } catch (error) {
       console.error('Failed to create widget:', error);
       toast.error('Failed to create widget. Please try again.');

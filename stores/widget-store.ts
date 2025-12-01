@@ -278,7 +278,7 @@ const defaultConfig: WidgetConfig = {
   useTintedGrayscale: false,
   tintHue: 220,
   tintLevel: 10,
-  shadeLevel: 50,
+  shadeLevel: 10,
   useCustomSurfaceColors: false,
   surfaceBackgroundColor: '#ffffff',
   surfaceForegroundColor: '#f8fafc',
@@ -414,7 +414,7 @@ export const useWidgetStore = create<WidgetState>((set, get) => ({
 
   /**
    * Get single widget by ID
-   * Also fetches the associated license
+   * Schema v2.0: Widgets belong directly to users, no license fetch needed
    */
   getWidget: async (id: string) => {
     set({ isLoading: true, error: null });
@@ -432,24 +432,9 @@ export const useWidgetStore = create<WidgetState>((set, get) => ({
       const data = await response.json();
       const widget = data.widget;
 
-      // Fetch the associated license
-      let license: WidgetLicense | null = null;
-      try {
-        const licenseResponse = await fetch(`/api/licenses/${widget.licenseId}`, {
-          credentials: 'include',
-        });
-        if (licenseResponse.ok) {
-          const licenseData = await licenseResponse.json();
-          license = licenseData.license;
-        }
-      } catch (err) {
-        console.error('Failed to fetch license:', err);
-        // Don't fail the entire operation if license fetch fails
-      }
-
       set({
         currentWidget: widget,
-        currentLicense: license,
+        currentLicense: null, // Schema v2.0: No longer using licenses
         currentConfig: widget.config,
         isLoading: false,
         error: null,
