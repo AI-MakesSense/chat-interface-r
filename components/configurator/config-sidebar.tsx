@@ -47,6 +47,8 @@ interface ConfigSidebarProps {
   onOpenCode: () => void;
   onReset?: () => void;
   widgetName?: string;
+  /** Lock provider selection - used when navigating from /configurator/chatkit or /configurator/n8n */
+  lockedProvider?: 'chatkit' | 'n8n';
 }
 
 const FONT_OPTIONS = [
@@ -294,7 +296,8 @@ export const ConfigSidebar: React.FC<ConfigSidebarProps> = ({
   onChange,
   onOpenCode,
   onReset,
-  widgetName = 'Widget'
+  widgetName = 'Widget',
+  lockedProvider
 }) => {
   const [customFontUrl, setCustomFontUrl] = useState(config.customFontCss || '');
   const [customFontName, setCustomFontName] = useState(config.customFontName || '');
@@ -513,8 +516,8 @@ export const ConfigSidebar: React.FC<ConfigSidebarProps> = ({
                   </Row>
                   <Row>
                     <div className={`w-12 ${theme.textMuted}`}>Shade</div>
-                    <Slider value={config.shadeLevel || 50} max={20} onChange={(v) => handleChange('shadeLevel', v)} isDark={isDark} />
-                    <div className={`w-6 text-right ${theme.textMuted}`}>{config.shadeLevel || 50}</div>
+                    <Slider value={config.shadeLevel ?? 10} max={20} onChange={(v) => handleChange('shadeLevel', v)} isDark={isDark} />
+                    <div className={`w-6 text-right ${theme.textMuted}`}>{config.shadeLevel ?? 10}</div>
                   </Row>
                 </div>
               )}
@@ -787,7 +790,8 @@ export const ConfigSidebar: React.FC<ConfigSidebarProps> = ({
             <Label isDark={isDark}>Connect</Label>
           </Row>
           <div className="space-y-4">
-            {/* Provider Selection */}
+            {/* Provider Selection - only show if not locked */}
+            {!lockedProvider && (
             <div className="space-y-2">
               {/* n8n Option */}
               {(() => {
@@ -955,6 +959,70 @@ export const ConfigSidebar: React.FC<ConfigSidebarProps> = ({
               })()}
 
             </div>
+            )}
+
+            {/* Locked Provider - show only the relevant input */}
+            {lockedProvider === 'n8n' && (
+              <div className="space-y-2">
+                <div className={`text-sm font-medium ${theme.textMuted}`}>n8n Webhook URL</div>
+                <SidebarInput
+                  type="text"
+                  value={config.connection?.webhookUrl || ''}
+                  onChange={(e) => onChange({
+                    ...config,
+                    connection: {
+                      ...config.connection,
+                      provider: 'n8n',
+                      webhookUrl: e.target.value,
+                    }
+                  })}
+                  className="w-full"
+                  placeholder="https://your-n8n-instance.com/webhook/..."
+                  isDark={isDark}
+                />
+              </div>
+            )}
+
+            {lockedProvider === 'chatkit' && (
+              <div className="space-y-3">
+                <div className="space-y-1">
+                  <label className={`text-xs font-medium ${theme.textMuted}`}>Workflow ID</label>
+                  <SidebarInput
+                    type="text"
+                    value={config.connection?.workflowId || ''}
+                    onChange={(e) => onChange({
+                      ...config,
+                      connection: {
+                        ...config.connection,
+                        provider: 'chatkit',
+                        workflowId: e.target.value,
+                      }
+                    })}
+                    className="w-full font-mono text-xs"
+                    placeholder="wf_..."
+                    isDark={isDark}
+                  />
+                </div>
+                <div className="space-y-1">
+                  <label className={`text-xs font-medium ${theme.textMuted}`}>API Key</label>
+                  <SidebarInput
+                    type="password"
+                    value={config.connection?.apiKey || ''}
+                    onChange={(e) => onChange({
+                      ...config,
+                      connection: {
+                        ...config.connection,
+                        provider: 'chatkit',
+                        apiKey: e.target.value,
+                      }
+                    })}
+                    className="w-full font-mono text-xs"
+                    placeholder="sk-..."
+                    isDark={isDark}
+                  />
+                </div>
+              </div>
+            )}
           </div>
         </Section>
       </div >

@@ -10,7 +10,7 @@
 import { useEffect, useState, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useAuthStore } from '@/stores/auth-store';
-import { useWidgetStore, WidgetConfig } from '@/stores/widget-store';
+import { useWidgetStore, WidgetConfig, EmbedType } from '@/stores/widget-store';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -70,6 +70,9 @@ function ConfiguratorPage() {
 
     const [widgetName, setWidgetName] = useState('Untitled Agent');
     const [isCodeModalOpen, setIsCodeModalOpen] = useState(false);
+
+    // Get embed type from URL params (set in create-widget-modal)
+    const embedType = (searchParams?.get('embedType') as EmbedType) || 'popup';
 
     // Load widget if widgetId is provided, otherwise reset for new widget
     useEffect(() => {
@@ -224,6 +227,7 @@ function ConfiguratorPage() {
                     onOpenCode={() => setIsCodeModalOpen(true)}
                     onReset={resetConfig}
                     widgetName={currentWidget?.name}
+                    lockedProvider="chatkit"
                 />
 
                 {/* Preview Canvas */}
@@ -236,6 +240,7 @@ function ConfiguratorPage() {
                 isOpen={isCodeModalOpen}
                 onClose={() => setIsCodeModalOpen(false)}
                 licenseKey={currentWidget?.licenseKey}
+                embedType={embedType}
             />
         </div>
     );

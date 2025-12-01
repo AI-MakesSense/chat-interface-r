@@ -214,32 +214,36 @@ function createDefaultAdvancedStyling(tier: 'basic' | 'pro' | 'agency'): Advance
  * Create complete default widget configuration
  *
  * Business Rules:
+ * - Free tier: Same as basic (branding enabled, no advanced features)
  * - Basic tier: Branding enabled, no advanced features
  * - Pro tier: White-label ready, advanced features enabled
  * - Agency tier: All features, white-label, premium defaults
  *
- * @param tier - License tier ('basic' | 'pro' | 'agency')
+ * @param tier - Subscription tier ('free' | 'basic' | 'pro' | 'agency')
  * @returns Complete WidgetConfig with tier-appropriate defaults
  * @throws Error if tier is invalid, undefined, or null
  */
-export function createDefaultConfig(tier: 'basic' | 'pro' | 'agency'): WidgetConfig {
+export function createDefaultConfig(tier: 'free' | 'basic' | 'pro' | 'agency'): WidgetConfig {
   // Validate tier parameter
   if (!tier || tier === null || tier === undefined) {
     throw new Error('Tier parameter is required');
   }
 
-  if (tier !== 'basic' && tier !== 'pro' && tier !== 'agency') {
-    throw new Error(`Invalid tier: ${tier}. Must be 'basic', 'pro', or 'agency'`);
+  if (tier !== 'free' && tier !== 'basic' && tier !== 'pro' && tier !== 'agency') {
+    throw new Error(`Invalid tier: ${tier}. Must be 'free', 'basic', 'pro', or 'agency'`);
   }
+
+  // Map 'free' to 'basic' for feature purposes
+  const effectiveTier = tier === 'free' ? 'basic' : tier;
 
   // Build complete configuration
   const config: WidgetConfig = {
-    branding: createDefaultBranding(tier),
-    theme: createDefaultTheme(tier),
-    advancedStyling: createDefaultAdvancedStyling(tier),
-    behavior: createDefaultBehavior(tier),
+    branding: createDefaultBranding(effectiveTier),
+    theme: createDefaultTheme(effectiveTier),
+    advancedStyling: createDefaultAdvancedStyling(effectiveTier),
+    behavior: createDefaultBehavior(effectiveTier),
     connection: createDefaultConnection(),
-    features: createDefaultFeatures(tier),
+    features: createDefaultFeatures(effectiveTier),
   };
 
   // Return deep clone for immutability
