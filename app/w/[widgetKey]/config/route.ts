@@ -222,18 +222,22 @@ export async function GET(
       );
     }
 
-    // Check user subscription status
-    if (widget.user.subscriptionStatus !== 'active') {
-      return new NextResponse(
-        JSON.stringify({ error: 'Subscription is not active' }),
-        {
-          status: 403,
-          headers: {
-            'Content-Type': 'application/json',
-            'Access-Control-Allow-Origin': '*'
+    // Check user subscription status (default to 'active' if null for new users)
+    const subscriptionStatus = widget.user.subscriptionStatus || 'active';
+    if (subscriptionStatus !== 'active') {
+      // Allow past_due for grace period
+      if (subscriptionStatus !== 'past_due') {
+        return new NextResponse(
+          JSON.stringify({ error: 'Subscription is not active' }),
+          {
+            status: 403,
+            headers: {
+              'Content-Type': 'application/json',
+              'Access-Control-Allow-Origin': '*'
+            }
           }
-        }
-      );
+        );
+      }
     }
 
     // Check domain restrictions if applicable
