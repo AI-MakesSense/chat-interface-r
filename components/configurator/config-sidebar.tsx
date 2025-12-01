@@ -420,7 +420,7 @@ export const ConfigSidebar: React.FC<ConfigSidebarProps> = ({
         {/* Color Toggles */}
         <Section isDark={isDark}>
           {config.connection?.provider === 'chatkit' ? (
-            // ChatKit Specific Controls
+            // ChatKit Specific Controls - Using ChatKit API ranges
             <div className="space-y-6">
               {/* Grayscale Controls */}
               <div className="space-y-4">
@@ -428,20 +428,20 @@ export const ConfigSidebar: React.FC<ConfigSidebarProps> = ({
 
                 <Row>
                   <div className={`w-12 ${theme.textMuted}`}>Hue</div>
-                  <Slider value={config.chatkitGrayscaleHue || 0} max={9} onChange={(v) => handleChange('chatkitGrayscaleHue', v)} gradient isDark={isDark} />
-                  <div className={`w-8 text-right ${theme.textMuted}`}>{config.chatkitGrayscaleHue || 0}</div>
+                  <Slider value={config.chatkitGrayscaleHue || 0} max={360} onChange={(v) => handleChange('chatkitGrayscaleHue', v)} gradient isDark={isDark} />
+                  <div className={`w-8 text-right ${theme.textMuted}`}>{config.chatkitGrayscaleHue || 0}°</div>
                 </Row>
 
                 <Row>
                   <div className={`w-12 ${theme.textMuted}`}>Tint</div>
-                  <Slider value={config.chatkitGrayscaleTint || 6} max={20} onChange={(v) => handleChange('chatkitGrayscaleTint', v)} isDark={isDark} />
-                  <div className={`w-8 text-right ${theme.textMuted}`}>{config.chatkitGrayscaleTint || 6}%</div>
+                  <Slider value={config.chatkitGrayscaleTint ?? 6} max={9} onChange={(v) => handleChange('chatkitGrayscaleTint', v)} isDark={isDark} />
+                  <div className={`w-8 text-right ${theme.textMuted}`}>{config.chatkitGrayscaleTint ?? 6}</div>
                 </Row>
 
                 <Row>
                   <div className={`w-12 ${theme.textMuted}`}>Shade</div>
-                  <Slider value={config.chatkitGrayscaleShade || -4} max={10} onChange={(v) => handleChange('chatkitGrayscaleShade', v)} isDark={isDark} />
-                  <div className={`w-8 text-right ${theme.textMuted}`}>{config.chatkitGrayscaleShade || -4}%</div>
+                  <Slider value={(config.chatkitGrayscaleShade ?? -4) + 4} max={8} onChange={(v) => handleChange('chatkitGrayscaleShade', v - 4)} isDark={isDark} />
+                  <div className={`w-8 text-right ${theme.textMuted}`}>{config.chatkitGrayscaleShade ?? -4}</div>
                 </Row>
               </div>
 
@@ -478,9 +478,23 @@ export const ConfigSidebar: React.FC<ConfigSidebarProps> = ({
 
                 <Row>
                   <div className={`w-12 ${theme.textMuted}`}>Level</div>
-                  <Slider value={config.chatkitAccentLevel || 1} max={10} onChange={(v) => handleChange('chatkitAccentLevel', v)} isDark={isDark} />
-                  <div className={`w-8 text-right ${theme.textMuted}`}>{config.chatkitAccentLevel || 1}</div>
+                  <Slider value={config.chatkitAccentLevel ?? 1} max={3} onChange={(v) => handleChange('chatkitAccentLevel', v)} isDark={isDark} />
+                  <div className={`w-8 text-right ${theme.textMuted}`}>{config.chatkitAccentLevel ?? 1}</div>
                 </Row>
+              </div>
+
+              {/* Surface Colors - ChatKit supports this too */}
+              <div className="space-y-4">
+                <Row className={config.useCustomSurfaceColors ? 'mb-0' : ''}>
+                  <div className={`font-medium ${theme.text}`}>Custom surface colors</div>
+                  <Toggle checked={config.useCustomSurfaceColors || false} onChange={(v) => handleChange('useCustomSurfaceColors', v)} isDark={isDark} />
+                </Row>
+                {config.useCustomSurfaceColors && (
+                  <div className="animate-in slide-in-from-top-2 fade-in duration-200 space-y-4">
+                    <ColorPicker label="Background" value={config.surfaceBackgroundColor || '#ffffff'} onColorChange={(v) => handleChange('surfaceBackgroundColor', v)} isDark={isDark} />
+                    <ColorPicker label="Foreground" value={config.surfaceForegroundColor || '#f8fafc'} onColorChange={(v) => handleChange('surfaceForegroundColor', v)} isDark={isDark} />
+                  </div>
+                )}
               </div>
             </div>
           ) : (
