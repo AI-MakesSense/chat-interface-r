@@ -32,6 +32,31 @@ export function createChatWidget(runtimeConfig: WidgetRuntimeConfig): void {
   const colorScheme = config.theme?.colorScheme || config.style?.theme || 'light';
   const isDark = colorScheme === 'dark';
 
+  // Font family mapping - matching preview exactly
+  const getFontFamily = (f: string): string => {
+    switch (f) {
+      case 'System':
+        return '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif';
+      case 'Space Grotesk':
+        return '"Space Grotesk", sans-serif';
+      case 'Comfortaa':
+        return '"Comfortaa", cursive';
+      case 'Bricolage Grotesque':
+        return '"Bricolage Grotesque", sans-serif';
+      case 'OpenAI Sans':
+        return '"Inter", sans-serif';
+      case 'system-ui':
+        return '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif';
+      default:
+        return f ? `"${f}", sans-serif` : '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+    }
+  };
+
+  // Get font family from config
+  const rawFontFamily = config.theme?.typography?.fontFamily || config.style?.fontFamily || 'System';
+  const fontFamily = getFontFamily(rawFontFamily);
+  const fontSize = config.theme?.typography?.baseSize || config.style?.fontSize || 16;
+
   // Apply default config with extended theme support
   const mergedConfig: WidgetConfig = {
     branding: {
@@ -45,8 +70,8 @@ export function createChatWidget(runtimeConfig: WidgetRuntimeConfig): void {
       primaryColor: config.theme?.color?.accent?.primary || config.style?.primaryColor || '#0ea5e9',
       backgroundColor: config.theme?.color?.surface?.background || config.style?.backgroundColor || (isDark ? '#1a1a1a' : '#ffffff'),
       textColor: config.style?.textColor || (isDark ? '#e5e5e5' : '#1f2937'),
-      fontFamily: config.theme?.typography?.fontFamily || config.style?.fontFamily || '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
-      fontSize: config.theme?.typography?.baseSize || config.style?.fontSize || 14,
+      fontFamily: fontFamily,
+      fontSize: fontSize,
       position: config.style?.position || 'bottom-right',
       cornerRadius: config.style?.cornerRadius || 12,
     },
@@ -119,6 +144,16 @@ export function createChatWidget(runtimeConfig: WidgetRuntimeConfig): void {
     hoverSurface = isDark ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.05)';
   }
 
+  // Custom text color override (matching preview)
+  if (config.theme?.color?.text) {
+    text = config.theme.color.text;
+  }
+
+  // Custom icon/subText color override (matching preview)
+  if (config.theme?.color?.icon) {
+    subText = config.theme.color.icon;
+  }
+
   // Accent colors
   const accentColor = config.theme?.color?.accent?.primary || mergedConfig.style.primaryColor;
   const hasAccent = !!config.theme?.color?.accent;
@@ -156,6 +191,33 @@ export function createChatWidget(runtimeConfig: WidgetRuntimeConfig): void {
     }
   };
   const padding = getDensityPadding();
+
+  // Inject Google Fonts for known font families
+  const googleFonts: Record<string, string> = {
+    'Space Grotesk': 'Space+Grotesk:wght@400;500;600;700',
+    'Comfortaa': 'Comfortaa:wght@400;500;600;700',
+    'Bricolage Grotesque': 'Bricolage+Grotesque:wght@400;500;600;700',
+    'Inter': 'Inter:wght@400;500;600;700',
+  };
+
+  if (googleFonts[rawFontFamily]) {
+    const linkEl = document.createElement('link');
+    linkEl.rel = 'stylesheet';
+    linkEl.href = `https://fonts.googleapis.com/css2?family=${googleFonts[rawFontFamily]}&display=swap`;
+    document.head.appendChild(linkEl);
+  }
+
+  // Inject custom font CSS if provided (from config.theme.typography.fontSources)
+  const fontSources = config.theme?.typography?.fontSources;
+  if (fontSources && fontSources.length > 0) {
+    fontSources.forEach(source => {
+      if (source.src) {
+        const customFontStyle = document.createElement('style');
+        customFontStyle.textContent = source.src;
+        document.head.appendChild(customFontStyle);
+      }
+    });
+  }
 
   // Inject CSS styles
   const styleEl = document.createElement('style');

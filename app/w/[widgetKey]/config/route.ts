@@ -105,9 +105,16 @@ function translateConfig(dbConfig: any, requestUrl: string, userTier: string): W
     };
   }
 
-  // Icon color
-  if (dbConfig.iconColor) {
+  // Icon color (for subText/icon coloring)
+  if (dbConfig.useCustomIconColor && dbConfig.customIconColor) {
+    theme.color.icon = dbConfig.customIconColor;
+  } else if (dbConfig.iconColor) {
     theme.color.icon = dbConfig.iconColor;
+  }
+
+  // Custom text color
+  if (dbConfig.useCustomTextColor && dbConfig.customTextColor) {
+    theme.color.text = dbConfig.customTextColor;
   }
 
   // User message colors
