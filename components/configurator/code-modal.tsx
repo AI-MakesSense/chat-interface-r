@@ -13,7 +13,6 @@ interface CodeModalProps {
   config: WidgetConfig;
   isOpen: boolean;
   onClose: () => void;
-  licenseKey?: string;
   widgetKey?: string;
   embedType?: EmbedType;
 }
@@ -40,23 +39,29 @@ const embedTypeIcons: Record<string, React.ElementType> = {
   'link': Link,
 };
 
+// Embed type display names
+const embedTypeNames: Record<EmbedType, string> = {
+  popup: 'Popup Widget',
+  inline: 'Inline Widget',
+  fullpage: 'Fullpage Widget',
+  portal: 'Portal Link',
+};
+
 export const CodeModal: React.FC<CodeModalProps> = ({
   config,
   isOpen,
   onClose,
-  licenseKey,
   widgetKey,
-  embedType: defaultEmbedType = 'popup',
+  embedType = 'popup',
 }) => {
-  const [copiedType, setCopiedType] = useState<EmbedType | null>(null);
-  const [selectedTab, setSelectedTab] = useState<EmbedType>(defaultEmbedType);
+  const [copied, setCopied] = useState(false);
 
   useEffect(() => {
-    if (copiedType) {
-      const timer = setTimeout(() => setCopiedType(null), 2000);
+    if (copied) {
+      const timer = setTimeout(() => setCopied(false), 2000);
       return () => clearTimeout(timer);
     }
-  }, [copiedType]);
+  }, [copied]);
 
   if (!isOpen) return null;
 
@@ -64,16 +69,17 @@ export const CodeModal: React.FC<CodeModalProps> = ({
   const isChatkitWidget = config.connection?.provider === 'chatkit';
   const widgetTypeName = isChatkitWidget ? 'ChatKit Agent' : 'N8n Workflow';
 
-  // Use widgetKey if available, fall back to licenseKey for backward compatibility
-  const key = widgetKey || licenseKey || 'YOUR_WIDGET_KEY';
-  const hasValidKey = widgetKey || licenseKey;
+  // Use widgetKey or placeholder
+  const key = widgetKey || 'YOUR_WIDGET_KEY';
+  const hasValidKey = !!widgetKey;
 
-  // Generate all embed codes
+  // Generate all embed codes and find the selected one
   const embedCodes = generateAllEmbedCodes({ widgetKey: key });
+  const currentEmbed = embedCodes.find(e => e.type === embedType) || embedCodes[0];
 
-  const handleCopy = (type: EmbedType, code: string) => {
+  const handleCopy = (code: string) => {
     navigator.clipboard.writeText(code);
-    setCopiedType(type);
+    setCopied(true);
   };
 
   // Render code with syntax highlighting
@@ -129,7 +135,6 @@ export const CodeModal: React.FC<CodeModalProps> = ({
     });
   };
 
-  const currentEmbed = embedCodes.find(e => e.type === selectedTab) || embedCodes[0];
   const Icon = embedTypeIcons[currentEmbed.icon] || MessageCircle;
 
   return (
@@ -145,9 +150,9 @@ export const CodeModal: React.FC<CodeModalProps> = ({
         {/* Header */}
         <div className="flex items-center justify-between px-6 py-4 border-b border-neutral-100">
           <div>
-            <h3 className="text-lg font-semibold text-neutral-900">Widget Embed Code</h3>
+            <h3 className="text-lg font-semibold text-neutral-900">{embedTypeNames[embedType]} Embed Code</h3>
             <p className="text-sm text-neutral-500 mt-0.5">
-              {widgetTypeName} • Choose your embed type below
+              {widgetTypeName} • Copy the code below to embed your widget
             </p>
           </div>
           <button
@@ -156,27 +161,6 @@ export const CodeModal: React.FC<CodeModalProps> = ({
           >
             <X size={20} />
           </button>
-        </div>
-
-        {/* Tabs */}
-        <div className="flex border-b border-neutral-100 px-6">
-          {embedCodes.map((embed) => {
-            const TabIcon = embedTypeIcons[embed.icon] || MessageCircle;
-            return (
-              <button
-                key={embed.type}
-                onClick={() => setSelectedTab(embed.type)}
-                className={`flex items-center gap-2 px-4 py-3 text-sm font-medium border-b-2 transition-colors ${
-                  selectedTab === embed.type
-                    ? 'border-blue-600 text-blue-600'
-                    : 'border-transparent text-neutral-500 hover:text-neutral-900 hover:border-neutral-300'
-                }`}
-              >
-                <TabIcon size={16} />
-                {embed.title}
-              </button>
-            );
-          })}
         </div>
 
         {/* Content Area */}
@@ -190,11 +174,11 @@ export const CodeModal: React.FC<CodeModalProps> = ({
           {/* Code Block */}
           <div className="relative group">
             <button
-              onClick={() => handleCopy(currentEmbed.type, currentEmbed.code)}
+              onClick={() => handleCopy(currentEmbed.code)}
               className="absolute right-4 top-4 p-2 rounded-md bg-white border border-neutral-200 shadow-sm text-neutral-500 hover:text-neutral-900 hover:border-neutral-300 transition-all z-10"
               title="Copy to clipboard"
             >
-              {copiedType === currentEmbed.type ? (
+              {copied ? (
                 <Check size={16} className="text-green-600" />
               ) : (
                 <Copy size={16} />

@@ -13,60 +13,13 @@ import { Widget } from '@/stores/widget-store';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Edit, Trash2, Globe, Calendar, X, Check, Download, ChevronDown, Code } from 'lucide-react';
+import { Edit, Trash2, Globe, Calendar, X, Check, Code } from 'lucide-react';
 import { EmbedTypeBadge } from '@/components/configurator/embed-type-selector';
 import type { EmbedType } from '@/stores/widget-store';
 
 interface WidgetListProps {
     widgets: Widget[];
     onDelete: (id: string) => Promise<void>;
-}
-
-function DownloadButton({ widgetId }: { widgetId: string }) {
-    const [isOpen, setIsOpen] = useState(false);
-
-    const downloadOptions = [
-        { label: 'Website Package', type: 'website', description: 'HTML/JS bundle for websites' },
-        { label: 'Customer Portal', type: 'portal', description: 'Standalone chat portal' },
-        { label: 'Chrome Extension', type: 'extension', description: 'Browser extension' },
-    ];
-
-    return (
-        <div className="relative">
-            <Button
-                variant="outline"
-                size="sm"
-                className="gap-2 w-full"
-                onClick={() => setIsOpen(!isOpen)}
-                onBlur={() => setTimeout(() => setIsOpen(false), 200)} // Simple delay to allow click
-            >
-                <Download className="h-4 w-4" />
-                Download
-                <ChevronDown className="h-3 w-3 opacity-50" />
-            </Button>
-
-            {isOpen && (
-                <div className="absolute bottom-full left-0 mb-2 w-56 rounded-md border bg-popover p-1 text-popover-foreground shadow-md outline-none animate-in fade-in zoom-in-95 z-50">
-                    <div className="px-2 py-1.5 text-xs font-semibold text-muted-foreground">
-                        Download Format
-                    </div>
-                    {downloadOptions.map((option) => (
-                        <a
-                            key={option.type}
-                            href={`/api/widgets/${widgetId}/download?type=${option.type}`}
-                            className="relative flex w-full cursor-pointer select-none items-center rounded-sm py-1.5 px-2 text-sm outline-none hover:bg-accent hover:text-accent-foreground"
-                            onClick={() => setIsOpen(false)}
-                        >
-                            <div className="flex flex-col gap-0.5 text-left">
-                                <span className="font-medium">{option.label}</span>
-                                <span className="text-xs text-muted-foreground">{option.description}</span>
-                            </div>
-                        </a>
-                    ))}
-                </div>
-            )}
-        </div>
-    );
 }
 
 export function WidgetList({ widgets, onDelete }: WidgetListProps) {
@@ -200,11 +153,6 @@ export function WidgetList({ widgets, onDelete }: WidgetListProps) {
                                     </>
                                 )}
                             </Button>
-                        </div>
-                        <div className="flex w-full gap-2">
-                            <div className="flex-1">
-                                <DownloadButton widgetId={widget.id} />
-                            </div>
                         </div>
                         <div className="flex w-full gap-2">
                             {deleteId === widget.id ? (

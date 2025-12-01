@@ -243,7 +243,7 @@ function ConfiguratorPage() {
         config={currentConfig}
         isOpen={isCodeModalOpen}
         onClose={() => setIsCodeModalOpen(false)}
-        licenseKey={currentWidget?.licenseKey}
+        widgetKey={currentWidget?.widgetKey}
         embedType={embedType}
       />
     </div>
