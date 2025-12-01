@@ -1,43 +1,135 @@
 'use client';
 
 import React, { useState, useRef, useEffect } from 'react';
-import { Code, Save, RotateCcw } from 'lucide-react';
+import { Save, RotateCcw } from 'lucide-react';
 import { WidgetConfig, StarterPrompt } from '@/stores/widget-store';
 import {
-  HelpCircle,
-  Box,
-  Sparkles,
-  PenTool,
-  Server,
-  Zap,
-  Image,
-  Terminal,
-  Flag,
-  Heart,
+  // Communication
   MessageCircle,
-  Rocket,
-  Lightbulb,
-  Search,
-  Globe,
+  Mail,
+  Phone,
+  Send,
+  AtSign,
+  MessageSquare,
+  MessagesSquare,
+  // General
+  HelpCircle,
+  Info,
+  AlertCircle,
+  CheckCircle,
+  XCircle,
+  // Objects
+  Box,
+  Gift,
+  ShoppingCart,
+  ShoppingBag,
+  Package,
+  // Creative
+  Sparkles,
+  Wand2,
+  Palette,
+  PenTool,
+  Pencil,
+  Edit3,
+  // Tech
+  Server,
   Cpu,
   Database,
-  Wrench,
+  Terminal,
+  Code,
+  Code2,
+  Braces,
+  FileCode,
+  // Energy/Action
+  Zap,
+  Rocket,
+  Target,
+  TrendingUp,
+  Activity,
+  Play,
+  // Media
+  Image,
+  Camera,
+  Video,
+  Music,
+  Mic,
+  Film,
+  // Navigation
   Compass,
   MapPin,
-  Camera,
-  Mic,
-  BookOpen,
-  Briefcase,
-  Coffee,
+  Map,
+  Navigation,
+  Home,
+  Building,
+  Building2,
+  // Nature/Weather
+  Sun,
+  Moon,
   Cloud,
-  Shield,
-  Bell,
+  CloudRain,
+  Leaf,
+  Flower2,
+  Trees,
+  // People
+  User,
+  Users,
+  UserPlus,
+  UserCheck,
+  Heart,
+  ThumbsUp,
+  ThumbsDown,
+  Smile,
+  // Time
   Calendar,
   Clock,
-  Gift,
+  Timer,
+  History,
+  // Business
+  Briefcase,
   CreditCard,
-  User,
-  Phone,
+  DollarSign,
+  PiggyBank,
+  Receipt,
+  FileText,
+  // Tools
+  Wrench,
+  Settings,
+  Cog,
+  SlidersHorizontal,
+  Filter,
+  // Security
+  Shield,
+  Lock,
+  Key,
+  Eye,
+  EyeOff,
+  // Learning
+  BookOpen,
+  GraduationCap,
+  Library,
+  Lightbulb,
+  Brain,
+  // Web
+  Globe,
+  Link,
+  ExternalLink,
+  Share2,
+  Wifi,
+  // Files
+  File,
+  Folder,
+  FolderOpen,
+  Download,
+  Upload,
+  // Misc
+  Bell,
+  Flag,
+  Star,
+  Award,
+  Crown,
+  Flame,
+  Coffee,
+  Search,
   LucideIcon
 } from 'lucide-react';
 
@@ -198,93 +290,352 @@ const ColorPicker = ({ label, value, onColorChange, isDark }: { label: string; v
   </Row>
 );
 
-// Icon Picker
-const AVAILABLE_ICONS: { id: string; icon: LucideIcon }[] = [
-  { id: 'help', icon: HelpCircle },
-  { id: 'box', icon: Box },
-  { id: 'sparkles', icon: Sparkles },
-  { id: 'pen', icon: PenTool },
-  { id: 'server', icon: Server },
-  { id: 'zap', icon: Zap },
-  { id: 'image', icon: Image },
-  { id: 'terminal', icon: Terminal },
-  { id: 'flag', icon: Flag },
-  { id: 'heart', icon: Heart },
-  { id: 'message', icon: MessageCircle },
-  { id: 'rocket', icon: Rocket },
-  { id: 'lightbulb', icon: Lightbulb },
-  { id: 'search', icon: Search },
-  { id: 'globe', icon: Globe },
-  { id: 'cpu', icon: Cpu },
-  { id: 'database', icon: Database },
-  { id: 'wrench', icon: Wrench },
-  { id: 'compass', icon: Compass },
-  { id: 'mapPin', icon: MapPin },
-  { id: 'camera', icon: Camera },
-  { id: 'mic', icon: Mic },
-  { id: 'book', icon: BookOpen },
-  { id: 'briefcase', icon: Briefcase },
-  { id: 'coffee', icon: Coffee },
-  { id: 'cloud', icon: Cloud },
-  { id: 'shield', icon: Shield },
-  { id: 'bell', icon: Bell },
-  { id: 'calendar', icon: Calendar },
-  { id: 'clock', icon: Clock },
-  { id: 'gift', icon: Gift },
-  { id: 'creditCard', icon: CreditCard },
-  { id: 'user', icon: User },
-  { id: 'phone', icon: Phone },
+// Icon Picker with categorized icons for better UX
+interface IconCategory {
+  label: string;
+  icons: { id: string; icon: LucideIcon; label: string }[];
+}
+
+const ICON_CATEGORIES: IconCategory[] = [
+  {
+    label: 'Popular',
+    icons: [
+      { id: 'sparkles', icon: Sparkles, label: 'Sparkles' },
+      { id: 'message', icon: MessageCircle, label: 'Message' },
+      { id: 'lightbulb', icon: Lightbulb, label: 'Idea' },
+      { id: 'rocket', icon: Rocket, label: 'Rocket' },
+      { id: 'zap', icon: Zap, label: 'Zap' },
+      { id: 'star', icon: Star, label: 'Star' },
+      { id: 'heart', icon: Heart, label: 'Heart' },
+      { id: 'search', icon: Search, label: 'Search' },
+    ]
+  },
+  {
+    label: 'Communication',
+    icons: [
+      { id: 'messageSquare', icon: MessageSquare, label: 'Chat' },
+      { id: 'messagesSquare', icon: MessagesSquare, label: 'Conversation' },
+      { id: 'mail', icon: Mail, label: 'Email' },
+      { id: 'phone', icon: Phone, label: 'Phone' },
+      { id: 'send', icon: Send, label: 'Send' },
+      { id: 'atSign', icon: AtSign, label: 'Mention' },
+    ]
+  },
+  {
+    label: 'Actions',
+    icons: [
+      { id: 'target', icon: Target, label: 'Target' },
+      { id: 'trendingUp', icon: TrendingUp, label: 'Growth' },
+      { id: 'activity', icon: Activity, label: 'Activity' },
+      { id: 'play', icon: Play, label: 'Play' },
+      { id: 'wand', icon: Wand2, label: 'Magic' },
+      { id: 'flame', icon: Flame, label: 'Fire' },
+    ]
+  },
+  {
+    label: 'Tech',
+    icons: [
+      { id: 'code', icon: Code2, label: 'Code' },
+      { id: 'terminal', icon: Terminal, label: 'Terminal' },
+      { id: 'server', icon: Server, label: 'Server' },
+      { id: 'cpu', icon: Cpu, label: 'CPU' },
+      { id: 'database', icon: Database, label: 'Database' },
+      { id: 'braces', icon: Braces, label: 'API' },
+      { id: 'fileCode', icon: FileCode, label: 'Script' },
+      { id: 'globe', icon: Globe, label: 'Web' },
+      { id: 'wifi', icon: Wifi, label: 'Network' },
+    ]
+  },
+  {
+    label: 'Creative',
+    icons: [
+      { id: 'pen', icon: PenTool, label: 'Design' },
+      { id: 'pencil', icon: Pencil, label: 'Write' },
+      { id: 'edit', icon: Edit3, label: 'Edit' },
+      { id: 'palette', icon: Palette, label: 'Colors' },
+      { id: 'image', icon: Image, label: 'Image' },
+      { id: 'camera', icon: Camera, label: 'Camera' },
+      { id: 'video', icon: Video, label: 'Video' },
+      { id: 'music', icon: Music, label: 'Audio' },
+      { id: 'mic', icon: Mic, label: 'Mic' },
+      { id: 'film', icon: Film, label: 'Film' },
+    ]
+  },
+  {
+    label: 'Business',
+    icons: [
+      { id: 'briefcase', icon: Briefcase, label: 'Work' },
+      { id: 'creditCard', icon: CreditCard, label: 'Payment' },
+      { id: 'dollar', icon: DollarSign, label: 'Money' },
+      { id: 'piggyBank', icon: PiggyBank, label: 'Savings' },
+      { id: 'receipt', icon: Receipt, label: 'Receipt' },
+      { id: 'fileText', icon: FileText, label: 'Document' },
+      { id: 'shoppingCart', icon: ShoppingCart, label: 'Cart' },
+      { id: 'shoppingBag', icon: ShoppingBag, label: 'Shop' },
+    ]
+  },
+  {
+    label: 'Learning',
+    icons: [
+      { id: 'book', icon: BookOpen, label: 'Book' },
+      { id: 'graduationCap', icon: GraduationCap, label: 'Education' },
+      { id: 'library', icon: Library, label: 'Library' },
+      { id: 'brain', icon: Brain, label: 'AI/Think' },
+    ]
+  },
+  {
+    label: 'People',
+    icons: [
+      { id: 'user', icon: User, label: 'User' },
+      { id: 'users', icon: Users, label: 'Team' },
+      { id: 'userPlus', icon: UserPlus, label: 'Add User' },
+      { id: 'userCheck', icon: UserCheck, label: 'Verified' },
+      { id: 'smile', icon: Smile, label: 'Happy' },
+      { id: 'thumbsUp', icon: ThumbsUp, label: 'Like' },
+      { id: 'thumbsDown', icon: ThumbsDown, label: 'Dislike' },
+    ]
+  },
+  {
+    label: 'Navigation',
+    icons: [
+      { id: 'compass', icon: Compass, label: 'Explore' },
+      { id: 'mapPin', icon: MapPin, label: 'Location' },
+      { id: 'map', icon: Map, label: 'Map' },
+      { id: 'navigation', icon: Navigation, label: 'Navigate' },
+      { id: 'home', icon: Home, label: 'Home' },
+      { id: 'building', icon: Building2, label: 'Office' },
+    ]
+  },
+  {
+    label: 'Time',
+    icons: [
+      { id: 'calendar', icon: Calendar, label: 'Date' },
+      { id: 'clock', icon: Clock, label: 'Time' },
+      { id: 'timer', icon: Timer, label: 'Timer' },
+      { id: 'history', icon: History, label: 'History' },
+    ]
+  },
+  {
+    label: 'Tools',
+    icons: [
+      { id: 'wrench', icon: Wrench, label: 'Tools' },
+      { id: 'settings', icon: Settings, label: 'Settings' },
+      { id: 'cog', icon: Cog, label: 'Config' },
+      { id: 'sliders', icon: SlidersHorizontal, label: 'Adjust' },
+      { id: 'filter', icon: Filter, label: 'Filter' },
+    ]
+  },
+  {
+    label: 'Security',
+    icons: [
+      { id: 'shield', icon: Shield, label: 'Secure' },
+      { id: 'lock', icon: Lock, label: 'Lock' },
+      { id: 'key', icon: Key, label: 'Key' },
+      { id: 'eye', icon: Eye, label: 'View' },
+      { id: 'eyeOff', icon: EyeOff, label: 'Hide' },
+    ]
+  },
+  {
+    label: 'Status',
+    icons: [
+      { id: 'help', icon: HelpCircle, label: 'Help' },
+      { id: 'info', icon: Info, label: 'Info' },
+      { id: 'alert', icon: AlertCircle, label: 'Warning' },
+      { id: 'check', icon: CheckCircle, label: 'Success' },
+      { id: 'x', icon: XCircle, label: 'Error' },
+      { id: 'bell', icon: Bell, label: 'Notify' },
+    ]
+  },
+  {
+    label: 'Nature',
+    icons: [
+      { id: 'sun', icon: Sun, label: 'Sun' },
+      { id: 'moon', icon: Moon, label: 'Moon' },
+      { id: 'cloud', icon: Cloud, label: 'Cloud' },
+      { id: 'cloudRain', icon: CloudRain, label: 'Rain' },
+      { id: 'leaf', icon: Leaf, label: 'Eco' },
+      { id: 'flower', icon: Flower2, label: 'Flower' },
+      { id: 'tree', icon: Trees, label: 'Nature' },
+    ]
+  },
+  {
+    label: 'Objects',
+    icons: [
+      { id: 'box', icon: Box, label: 'Box' },
+      { id: 'gift', icon: Gift, label: 'Gift' },
+      { id: 'package', icon: Package, label: 'Package' },
+      { id: 'coffee', icon: Coffee, label: 'Coffee' },
+      { id: 'flag', icon: Flag, label: 'Flag' },
+      { id: 'award', icon: Award, label: 'Award' },
+      { id: 'crown', icon: Crown, label: 'Premium' },
+    ]
+  },
+  {
+    label: 'Files',
+    icons: [
+      { id: 'file', icon: File, label: 'File' },
+      { id: 'folder', icon: Folder, label: 'Folder' },
+      { id: 'folderOpen', icon: FolderOpen, label: 'Open' },
+      { id: 'download', icon: Download, label: 'Download' },
+      { id: 'upload', icon: Upload, label: 'Upload' },
+      { id: 'link', icon: Link, label: 'Link' },
+      { id: 'share', icon: Share2, label: 'Share' },
+      { id: 'externalLink', icon: ExternalLink, label: 'External' },
+    ]
+  },
 ];
+
+// Flat list for lookups
+const ALL_ICONS = ICON_CATEGORIES.flatMap(cat => cat.icons);
 
 const IconPicker = ({ value, onChange, isDark }: { value: string; onChange: (val: string) => void; isDark: boolean }) => {
   const [isOpen, setIsOpen] = useState(false);
+  const [searchTerm, setSearchTerm] = useState('');
+  const [activeCategory, setActiveCategory] = useState<string | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
+  const searchInputRef = useRef<HTMLInputElement>(null);
 
-  const SelectedIcon = AVAILABLE_ICONS.find(i => i.id === value)?.icon || HelpCircle;
+  const SelectedIcon = ALL_ICONS.find(i => i.id === value)?.icon || MessageCircle;
+  const selectedLabel = ALL_ICONS.find(i => i.id === value)?.label || 'Select icon';
 
   useEffect(() => {
     const handleOutside = (e: MouseEvent) => {
       if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
         setIsOpen(false);
+        setSearchTerm('');
+        setActiveCategory(null);
       }
     };
     document.addEventListener('mousedown', handleOutside);
     return () => document.removeEventListener('mousedown', handleOutside);
   }, []);
 
+  useEffect(() => {
+    if (isOpen && searchInputRef.current) {
+      searchInputRef.current.focus();
+    }
+  }, [isOpen]);
+
+  // Filter icons by search term
+  const filteredCategories = searchTerm
+    ? [{
+        label: 'Search Results',
+        icons: ALL_ICONS.filter(icon =>
+          icon.label.toLowerCase().includes(searchTerm.toLowerCase()) ||
+          icon.id.toLowerCase().includes(searchTerm.toLowerCase())
+        )
+      }]
+    : activeCategory
+      ? ICON_CATEGORIES.filter(cat => cat.label === activeCategory)
+      : ICON_CATEGORIES;
+
   const buttonClass = isDark
     ? 'bg-[#2a2a2a] border-[#ffffff1a] hover:border-white/40 text-[#afafaf]'
     : 'bg-white border-neutral-200 hover:border-neutral-400 text-neutral-500';
 
   const dropdownClass = isDark
-    ? 'bg-[#1a1a1a] border-[#ffffff1a] text-[#afafaf]'
-    : 'bg-white border-neutral-200 text-neutral-600';
+    ? 'bg-[#1a1a1a] border-[#ffffff1a]'
+    : 'bg-white border-neutral-200';
 
   const itemClass = (isSelected: boolean) => isDark
-    ? (isSelected ? 'bg-white/20 text-white' : 'text-[#afafaf] hover:bg-white/10')
-    : (isSelected ? 'bg-neutral-100 text-neutral-900' : 'text-neutral-500 hover:bg-neutral-50');
+    ? (isSelected ? 'bg-blue-500/30 text-blue-400 ring-1 ring-blue-500/50' : 'text-[#afafaf] hover:bg-white/10 hover:text-white')
+    : (isSelected ? 'bg-blue-50 text-blue-600 ring-1 ring-blue-200' : 'text-neutral-500 hover:bg-neutral-100 hover:text-neutral-700');
+
+  const categoryClass = (isActive: boolean) => isDark
+    ? (isActive ? 'bg-white/20 text-white' : 'text-[#888] hover:text-white hover:bg-white/10')
+    : (isActive ? 'bg-neutral-100 text-neutral-900' : 'text-neutral-400 hover:text-neutral-600 hover:bg-neutral-50');
 
   return (
     <div className="relative" ref={containerRef}>
       <button
         onClick={() => setIsOpen(!isOpen)}
-        className={`w-8 h-8 flex items-center justify-center border rounded transition-colors ${buttonClass}`}
+        className={`w-8 h-8 flex items-center justify-center border rounded transition-all ${buttonClass}`}
+        title={selectedLabel}
       >
         <SelectedIcon size={14} />
       </button>
 
       {isOpen && (
-        <div className={`absolute top-full right-0 mt-1 w-[260px] border rounded-lg shadow-xl z-50 p-2 grid grid-cols-6 gap-1 max-h-[200px] overflow-y-auto custom-scrollbar ${dropdownClass}`}>
-          {AVAILABLE_ICONS.map((item) => (
-            <button
-              key={item.id}
-              onClick={() => { onChange(item.id); setIsOpen(false); }}
-              className={`w-8 h-8 flex items-center justify-center rounded transition-colors ${itemClass(value === item.id)}`}
-              title={item.id}
-            >
-              <item.icon size={14} />
-            </button>
-          ))}
+        <div className={`absolute top-full right-0 mt-1 w-[320px] border rounded-xl shadow-2xl z-50 overflow-hidden ${dropdownClass}`}>
+          {/* Search bar */}
+          <div className={`p-2 border-b ${isDark ? 'border-white/10' : 'border-neutral-100'}`}>
+            <div className={`flex items-center gap-2 px-2 py-1.5 rounded-lg ${isDark ? 'bg-white/5' : 'bg-neutral-50'}`}>
+              <Search size={14} className={isDark ? 'text-[#666]' : 'text-neutral-400'} />
+              <input
+                ref={searchInputRef}
+                type="text"
+                placeholder="Search icons..."
+                value={searchTerm}
+                onChange={(e) => {
+                  setSearchTerm(e.target.value);
+                  setActiveCategory(null);
+                }}
+                className={`flex-1 bg-transparent text-sm outline-none placeholder:text-neutral-400 ${isDark ? 'text-white' : 'text-neutral-900'}`}
+              />
+              {searchTerm && (
+                <button onClick={() => setSearchTerm('')} className={`p-0.5 rounded ${isDark ? 'hover:bg-white/10' : 'hover:bg-neutral-200'}`}>
+                  <XCircle size={12} className={isDark ? 'text-[#666]' : 'text-neutral-400'} />
+                </button>
+              )}
+            </div>
+          </div>
+
+          {/* Category tabs - horizontal scrollable */}
+          {!searchTerm && (
+            <div className={`flex gap-1 p-2 overflow-x-auto border-b ${isDark ? 'border-white/10' : 'border-neutral-100'} custom-scrollbar`}>
+              <button
+                onClick={() => setActiveCategory(null)}
+                className={`px-2 py-1 text-xs font-medium rounded-md whitespace-nowrap transition-colors ${categoryClass(activeCategory === null)}`}
+              >
+                All
+              </button>
+              {ICON_CATEGORIES.map((cat) => (
+                <button
+                  key={cat.label}
+                  onClick={() => setActiveCategory(cat.label)}
+                  className={`px-2 py-1 text-xs font-medium rounded-md whitespace-nowrap transition-colors ${categoryClass(activeCategory === cat.label)}`}
+                >
+                  {cat.label}
+                </button>
+              ))}
+            </div>
+          )}
+
+          {/* Icons grid */}
+          <div className="max-h-[280px] overflow-y-auto custom-scrollbar p-2">
+            {filteredCategories.map((category) => (
+              <div key={category.label} className="mb-3 last:mb-0">
+                {(!activeCategory || searchTerm) && (
+                  <div className={`text-[10px] font-semibold uppercase tracking-wider mb-1.5 px-1 ${isDark ? 'text-[#666]' : 'text-neutral-400'}`}>
+                    {category.label} {searchTerm && `(${category.icons.length})`}
+                  </div>
+                )}
+                <div className="grid grid-cols-8 gap-1">
+                  {category.icons.map((item) => (
+                    <button
+                      key={item.id}
+                      onClick={() => {
+                        onChange(item.id);
+                        setIsOpen(false);
+                        setSearchTerm('');
+                        setActiveCategory(null);
+                      }}
+                      className={`w-8 h-8 flex items-center justify-center rounded-lg transition-all ${itemClass(value === item.id)}`}
+                      title={item.label}
+                    >
+                      <item.icon size={16} />
+                    </button>
+                  ))}
+                </div>
+              </div>
+            ))}
+            {searchTerm && filteredCategories[0]?.icons.length === 0 && (
+              <div className={`text-center py-6 ${isDark ? 'text-[#666]' : 'text-neutral-400'}`}>
+                <Search size={24} className="mx-auto mb-2 opacity-50" />
+                <p className="text-sm">No icons found</p>
+              </div>
+            )}
+          </div>
         </div>
       )}
     </div>
