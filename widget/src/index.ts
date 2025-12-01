@@ -47,25 +47,34 @@ if (typeof window !== 'undefined') {
       }
     }
 
-    // 2. Determine License Key & API Base URL
-    let licenseKey = injectedRelay.licenseKey || '';
+    // 2. Determine Widget Key & API Base URL
+    let widgetKey = injectedRelay.licenseKey || '';
     let apiBaseUrl = '';
+    let isV2 = false; // Track if using v2.0 URL pattern
 
     // Strategy A: Check container ID
     const container = document.querySelector('div[id^="n8n-chat-"]');
-    if (!licenseKey && container) {
-      licenseKey = container.id.replace('n8n-chat-', '');
+    if (!widgetKey && container) {
+      widgetKey = container.id.replace('n8n-chat-', '');
     }
 
-    // Strategy B: Check script tag
-    const scriptTag = document.querySelector('script[src*="/chat-widget.js"], script[src*="/bundle.js"]') as HTMLScriptElement;
+    // Strategy B: Check script tag (supports both legacy and v2.0 URL patterns)
+    const scriptTag = document.querySelector('script[src*="/chat-widget.js"], script[src*="/bundle.js"], script[src*="/w/"]') as HTMLScriptElement;
     if (scriptTag && scriptTag.src) {
       const url = new URL(scriptTag.src);
       apiBaseUrl = url.origin;
 
-      if (!licenseKey) {
-        const match = url.pathname.match(/\/api\/widget\/([^\/]+)\/chat-widget/);
-        if (match && match[1]) licenseKey = match[1];
+      if (!widgetKey) {
+        // Try v2.0 pattern first: /w/[widgetKey].js
+        const v2Match = url.pathname.match(/\/w\/([A-Za-z0-9]{16})(?:\.js)?$/);
+        if (v2Match && v2Match[1]) {
+          widgetKey = v2Match[1];
+          isV2 = true;
+        } else {
+          // Fallback to legacy pattern: /api/widget/[licenseKey]/chat-widget.js
+          const legacyMatch = url.pathname.match(/\/api\/widget\/([^\/]+)\/chat-widget/);
+          if (legacyMatch && legacyMatch[1]) widgetKey = legacyMatch[1];
+        }
       }
     }
 
@@ -74,14 +83,19 @@ if (typeof window !== 'undefined') {
       apiBaseUrl = window.location.origin;
     }
 
-    if (!licenseKey) {
-      console.warn('[N8n Chat Widget] Could not determine license key.');
+    if (!widgetKey) {
+      console.warn('[N8n Chat Widget] Could not determine widget key.');
       return;
     }
 
     // 3. Fetch UI Configuration
+    // Use v2.0 endpoint for v2 widgets, legacy endpoint otherwise
+    const configUrl = isV2
+      ? `${apiBaseUrl}/w/${widgetKey}/config`
+      : `${apiBaseUrl}/api/widget/${widgetKey}/config`;
+
     try {
-      const response = await fetch(`${apiBaseUrl}/api/widget/${licenseKey}/config`);
+      const response = await fetch(configUrl);
       if (!response.ok) throw new Error('Config fetch failed');
 
       const remoteConfig: WidgetConfig = await response.json();
@@ -93,7 +107,7 @@ if (typeof window !== 'undefined') {
         relay: {
           relayUrl: injectedRelay.relayUrl || remoteConfig.connection?.relayEndpoint || `${apiBaseUrl}/api/chat-relay`,
           widgetId: injectedRelay.widgetId || '', // Use injected ID if available
-          licenseKey: licenseKey
+          licenseKey: widgetKey // Use widgetKey for v2.0 (licenseKey for backward compatibility)
         }
       } as unknown as WidgetRuntimeConfig;
 
