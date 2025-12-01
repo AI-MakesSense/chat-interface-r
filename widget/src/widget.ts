@@ -1,16 +1,14 @@
 /**
- * Chat Widget Core
+ * Chat Widget Core - Matching Configurator Preview Design
  *
  * Purpose: Main widget UI and interaction logic
  * Responsibility: Create chat bubble, message list, input, handle sending/receiving
  *
- * Constraints:
- * - Vanilla JavaScript (no framework dependencies)
- * - Minimal DOM manipulation for performance
- * - POST requests to N8n webhook for responses
- * - Markdown rendering for assistant messages
- *
- * Extended to support ChatKit-compatible theming options.
+ * Design: Matches the React configurator preview exactly:
+ * - No header with company name - just icons in corner
+ * - Start screen with centered greeting + prompts
+ * - Prompts disappear when messages exist
+ * - Clean, modern design
  */
 
 import { WidgetRuntimeConfig, WidgetConfig, Message } from './types';
@@ -39,7 +37,7 @@ export function createChatWidget(runtimeConfig: WidgetRuntimeConfig): void {
     branding: {
       companyName: config.branding?.companyName || 'Support',
       welcomeText: config.branding?.welcomeText || config.startScreen?.greeting || 'How can we help you?',
-      firstMessage: config.branding?.firstMessage || 'Hello! Ask me anything.',
+      firstMessage: config.branding?.firstMessage || '',
       logoUrl: config.branding?.logoUrl,
     },
     style: {
@@ -59,17 +57,107 @@ export function createChatWidget(runtimeConfig: WidgetRuntimeConfig): void {
     },
     connection: config.connection,
     license: config.license,
-    // Preserve extended config
     theme: config.theme,
     startScreen: config.startScreen,
     composer: config.composer,
   };
 
+  // Get greeting - use startScreen.greeting, then fall back to legacy welcomeText
+  const greeting = config.startScreen?.greeting || config.branding?.welcomeText || 'How can I help you today?';
+
   // Generate CSS variables
   const cssVariables = createCSSVariables(mergedConfig);
   const fontFaceCSS = createFontFaceCSS(mergedConfig);
 
-  // Inject CSS variables and styles
+  // Calculate colors based on config (matching preview logic)
+  let bg: string, text: string, subText: string, border: string, surface: string, composerSurface: string, hoverSurface: string;
+
+  const tintedGrayscale = config.theme?.color?.grayscale;
+  const customSurface = config.theme?.color?.surface;
+
+  if (tintedGrayscale) {
+    const h = tintedGrayscale.hue || 220;
+    const tLevel = tintedGrayscale.tint || 10;
+    const sLevel = tintedGrayscale.shade || 50;
+
+    if (isDark) {
+      const sat = 5 + tLevel * 2;
+      const lit = 10 + sLevel * 0.5;
+      bg = `hsl(${h}, ${sat}%, ${lit}%)`;
+      surface = `hsl(${h}, ${sat}%, ${lit + 5}%)`;
+      composerSurface = surface;
+      border = `hsla(${h}, ${sat}%, 90%, 0.08)`;
+      text = `hsl(${h}, ${Math.max(0, sat - 10)}%, 90%)`;
+      subText = `hsl(${h}, ${Math.max(0, sat - 10)}%, 60%)`;
+      hoverSurface = `hsla(${h}, ${sat}%, 90%, 0.05)`;
+    } else {
+      const sat = 10 + tLevel * 3;
+      const lit = 98 - sLevel * 2;
+      bg = `hsl(${h}, ${sat}%, ${lit}%)`;
+      surface = `hsl(${h}, ${sat}%, ${lit - 5}%)`;
+      composerSurface = `hsl(${h}, ${sat}%, 100%)`;
+      border = `hsla(${h}, ${sat}%, 10%, 0.08)`;
+      text = `hsl(${h}, ${sat}%, 10%)`;
+      subText = `hsl(${h}, ${sat}%, 40%)`;
+      hoverSurface = `hsla(${h}, ${sat}%, 10%, 0.05)`;
+    }
+  } else if (customSurface) {
+    bg = customSurface.background || (isDark ? '#1a1a1a' : '#ffffff');
+    surface = customSurface.foreground || (isDark ? '#262626' : '#f8fafc');
+    composerSurface = surface;
+    border = isDark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.08)';
+    text = isDark ? '#e5e5e5' : '#111827';
+    subText = isDark ? '#a1a1aa' : '#6b7280';
+    hoverSurface = isDark ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.05)';
+  } else {
+    bg = isDark ? '#1a1a1a' : '#ffffff';
+    text = isDark ? '#e5e5e5' : '#111827';
+    subText = isDark ? '#a1a1aa' : '#6b7280';
+    border = isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.08)';
+    surface = isDark ? '#262626' : '#f3f4f6';
+    composerSurface = isDark ? '#262626' : '#ffffff';
+    hoverSurface = isDark ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.05)';
+  }
+
+  // Accent colors
+  const accentColor = config.theme?.color?.accent?.primary || mergedConfig.style.primaryColor;
+  const hasAccent = !!config.theme?.color?.accent;
+
+  // User message colors
+  let userMsgBg = hasAccent ? accentColor : surface;
+  let userMsgText = hasAccent ? '#ffffff' : text;
+
+  if (config.theme?.color?.userMessage) {
+    userMsgBg = config.theme.color.userMessage.background || userMsgBg;
+    userMsgText = config.theme.color.userMessage.text || userMsgText;
+  }
+
+  // Radius
+  const getRadius = () => {
+    const r = config.theme?.radius || 'medium';
+    switch (r) {
+      case 'none': return '0px';
+      case 'small': return '4px';
+      case 'medium': return '8px';
+      case 'large': return '16px';
+      case 'pill': return '24px';
+      default: return '12px';
+    }
+  };
+  const elementRadius = config.theme?.radius === 'pill' ? '20px' : getRadius();
+
+  // Density
+  const getDensityPadding = () => {
+    const d = config.theme?.density || 'normal';
+    switch (d) {
+      case 'compact': return '1rem';
+      case 'spacious': return '2.5rem';
+      default: return '1.5rem';
+    }
+  };
+  const padding = getDensityPadding();
+
+  // Inject CSS styles
   const styleEl = document.createElement('style');
   styleEl.id = 'n8n-chat-widget-styles';
   styleEl.textContent = `
@@ -86,17 +174,18 @@ export function createChatWidget(runtimeConfig: WidgetRuntimeConfig): void {
       padding: 4px 0;
     }
     .n8n-typing-dot {
-      width: 8px;
-      height: 8px;
-      background: var(--cw-icon-color, #64748b);
+      width: 6px;
+      height: 6px;
+      background: currentColor;
       border-radius: 50%;
-      animation: n8n-typing 1.4s infinite ease-in-out both;
+      opacity: 0.6;
+      animation: n8n-bounce 1.4s infinite ease-in-out both;
     }
     .n8n-typing-dot:nth-child(1) { animation-delay: -0.32s; }
     .n8n-typing-dot:nth-child(2) { animation-delay: -0.16s; }
-    @keyframes n8n-typing {
-      0%, 80%, 100% { transform: scale(0.6); opacity: 0.5; }
-      40% { transform: scale(1); opacity: 1; }
+    @keyframes n8n-bounce {
+      0%, 60%, 100% { transform: translateY(0); }
+      30% { transform: translateY(-4px); }
     }
 
     /* Scrollbar styling */
@@ -107,44 +196,53 @@ export function createChatWidget(runtimeConfig: WidgetRuntimeConfig): void {
       background: transparent;
     }
     #n8n-chat-messages::-webkit-scrollbar-thumb {
-      background: var(--cw-border-color-strong, rgba(0,0,0,0.15));
+      background: ${border};
       border-radius: 3px;
     }
 
-    /* Starter prompts */
+    /* Starter prompts - matching preview */
     .n8n-starter-prompt {
       display: flex;
       align-items: center;
-      gap: 8px;
-      padding: var(--cw-spacing-sm, 8px) var(--cw-spacing-md, 12px);
-      background: var(--cw-surface-fg, #f8fafc);
-      border: 1px solid var(--cw-border-color, rgba(0,0,0,0.1));
-      border-radius: var(--cw-radius-md, 12px);
+      gap: 12px;
+      width: 100%;
+      padding: 8px;
+      background: transparent;
+      border: none;
+      border-radius: 8px;
       cursor: pointer;
-      font-size: var(--cw-font-size-sm, 13px);
-      color: var(--cw-text-color, #1f2937);
-      transition: all 0.15s ease;
+      font-size: 14px;
+      color: ${text};
+      text-align: left;
+      transition: background 0.15s;
     }
     .n8n-starter-prompt:hover {
-      background: var(--cw-accent-lighter, #f0f9ff);
-      border-color: var(--cw-accent-primary, #0ea5e9);
+      background: ${hoverSurface};
+    }
+    .n8n-starter-prompt-icon {
+      color: ${subText};
+      opacity: 0.7;
+      transition: opacity 0.15s;
+    }
+    .n8n-starter-prompt:hover .n8n-starter-prompt-icon {
+      opacity: 1;
     }
 
     /* Markdown content styling */
     .n8n-message-content p { margin: 0 0 0.5em 0; }
     .n8n-message-content p:last-child { margin-bottom: 0; }
     .n8n-message-content code {
-      background: var(--cw-surface-fg, #f1f5f9);
+      background: ${surface};
       padding: 2px 6px;
       border-radius: 4px;
-      font-family: var(--cw-font-family-mono, ui-monospace, monospace);
+      font-family: ui-monospace, monospace;
       font-size: 0.9em;
     }
     .n8n-message-content pre {
       background: ${isDark ? '#0d0d0d' : '#1e293b'};
       color: #e2e8f0;
-      padding: var(--cw-spacing-md, 12px);
-      border-radius: var(--cw-radius-sm, 8px);
+      padding: 12px;
+      border-radius: 8px;
       overflow-x: auto;
       margin: 0.5em 0;
     }
@@ -152,6 +250,15 @@ export function createChatWidget(runtimeConfig: WidgetRuntimeConfig): void {
       background: none;
       padding: 0;
       color: inherit;
+    }
+
+    /* Animation */
+    @keyframes n8n-fade-in {
+      from { opacity: 0; transform: translateY(8px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+    .n8n-animate-in {
+      animation: n8n-fade-in 0.3s ease-out;
     }
   `;
   document.head.appendChild(styleEl);
@@ -164,8 +271,8 @@ export function createChatWidget(runtimeConfig: WidgetRuntimeConfig): void {
     ${mergedConfig.style.position === 'bottom-right' ? 'right: 20px;' : 'left: 20px;'}
     bottom: 20px;
     z-index: 999999;
-    font-family: var(--cw-font-family, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif);
-    font-size: var(--cw-font-size, 14px);
+    font-family: ${mergedConfig.style.fontFamily};
+    font-size: ${mergedConfig.style.fontSize}px;
   `;
   document.body.appendChild(container);
 
@@ -176,11 +283,11 @@ export function createChatWidget(runtimeConfig: WidgetRuntimeConfig): void {
   bubble.style.cssText = `
     width: 60px;
     height: 60px;
-    border-radius: var(--cw-radius-full, 50%);
-    background: var(--cw-accent-primary, ${mergedConfig.style.primaryColor});
+    border-radius: 50%;
+    background: ${accentColor};
     border: none;
     cursor: pointer;
-    box-shadow: var(--cw-shadow-lg, 0 4px 12px rgba(0, 0, 0, 0.15));
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
     display: flex;
     align-items: center;
     justify-content: center;
@@ -188,20 +295,15 @@ export function createChatWidget(runtimeConfig: WidgetRuntimeConfig): void {
   `;
   bubble.innerHTML = `
     <svg width="28" height="28" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-      <path d="M20 2H4C2.9 2 2 2.9 2 4V22L6 18H20C21.1 18 22 17.1 22 16V4C22 2.9 21.1 2 20 2Z"
-        fill="white"/>
+      <path d="M20 2H4C2.9 2 2 2.9 2 4V22L6 18H20C21.1 18 22 17.1 22 16V4C22 2.9 21.1 2 20 2Z" fill="white"/>
     </svg>
   `;
-  bubble.addEventListener('mouseenter', () => {
-    bubble.style.transform = 'scale(1.1)';
-  });
-  bubble.addEventListener('mouseleave', () => {
-    bubble.style.transform = 'scale(1)';
-  });
+  bubble.addEventListener('mouseenter', () => { bubble.style.transform = 'scale(1.1)'; });
+  bubble.addEventListener('mouseleave', () => { bubble.style.transform = 'scale(1)'; });
   bubble.addEventListener('click', toggleChat);
   container.appendChild(bubble);
 
-  // Create chat window
+  // Create chat window - matches preview layout
   const chatWindow = document.createElement('div');
   chatWindow.id = 'n8n-chat-window';
   chatWindow.style.cssText = `
@@ -209,264 +311,296 @@ export function createChatWidget(runtimeConfig: WidgetRuntimeConfig): void {
     width: 400px;
     height: 600px;
     max-height: 80vh;
-    background: var(--cw-surface-bg, ${isDark ? '#1a1a1a' : '#ffffff'});
-    color: var(--cw-text-color, ${isDark ? '#e5e5e5' : '#1f2937'});
-    border-radius: var(--cw-radius-xl, ${mergedConfig.style.cornerRadius}px);
-    box-shadow: var(--cw-shadow-lg, 0 8px 24px rgba(0, 0, 0, 0.15));
+    background: ${bg};
+    color: ${text};
+    border-radius: ${mergedConfig.style.cornerRadius}px;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.15);
     flex-direction: column;
     overflow: hidden;
     margin-bottom: 12px;
-    border: 1px solid var(--cw-border-color, ${isDark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.1)'});
+    border: 1px solid ${border};
+    position: relative;
   `;
   container.appendChild(chatWindow);
 
-  // Create header
-  const header = document.createElement('div');
-  header.style.cssText = `
-    background: var(--cw-accent-primary, ${mergedConfig.style.primaryColor});
-    color: white;
-    padding: var(--cw-spacing-lg, 16px);
+  // Header icons (top right) - matching preview
+  const headerIcons = document.createElement('div');
+  headerIcons.style.cssText = `
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    padding: 16px;
+    z-index: 10;
     display: flex;
-    align-items: center;
     justify-content: space-between;
+    pointer-events: none;
   `;
-  header.innerHTML = `
-    <div style="display: flex; align-items: center; gap: var(--cw-spacing-md, 12px);">
-      ${mergedConfig.branding.logoUrl ? `<img src="${mergedConfig.branding.logoUrl}" alt="Logo" style="width: 36px; height: 36px; border-radius: var(--cw-radius-full, 50%); object-fit: cover;" />` : ''}
-      <div>
-        <div style="font-weight: 600; font-size: var(--cw-font-size-lg, 16px);">${mergedConfig.branding.companyName}</div>
-        <div style="font-size: var(--cw-font-size-sm, 13px); opacity: 0.9;">${mergedConfig.branding.welcomeText}</div>
-      </div>
+  headerIcons.innerHTML = `
+    <div style="pointer-events: auto;"></div>
+    <div style="display: flex; align-items: center; gap: 4px; pointer-events: auto;">
+      <button id="n8n-clear-history" style="
+        width: 32px;
+        height: 32px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        border-radius: 50%;
+        background: transparent;
+        border: none;
+        cursor: pointer;
+        color: ${subText};
+        transition: background 0.15s;
+      " title="Clear History">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/>
+          <path d="M3 3v5h5"/>
+        </svg>
+      </button>
+      <button id="n8n-chat-close" style="
+        width: 32px;
+        height: 32px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        border-radius: 50%;
+        background: transparent;
+        border: none;
+        cursor: pointer;
+        color: ${subText};
+        transition: background 0.15s;
+        font-size: 20px;
+      " title="Close">×</button>
     </div>
-    <button id="n8n-chat-close" style="background: none; border: none; color: white; cursor: pointer; font-size: 24px; line-height: 1; padding: 0; width: 28px; height: 28px; opacity: 0.8; transition: opacity 0.15s;" onmouseover="this.style.opacity='1'" onmouseout="this.style.opacity='0.8'">×</button>
   `;
-  chatWindow.appendChild(header);
+  chatWindow.appendChild(headerIcons);
 
-  // Close button handler
-  const closeBtn = header.querySelector('#n8n-chat-close');
-  closeBtn?.addEventListener('click', toggleChat);
-
-  // Create messages container
-  const messagesContainer = document.createElement('div');
-  messagesContainer.id = 'n8n-chat-messages';
-  messagesContainer.style.cssText = `
+  // Create main content area (scrollable)
+  const mainContent = document.createElement('div');
+  mainContent.id = 'n8n-chat-messages';
+  mainContent.style.cssText = `
     flex: 1;
     overflow-y: auto;
-    padding: var(--cw-spacing-lg, 16px);
-    background: var(--cw-surface-fg, ${isDark ? '#0d0d0d' : '#f8fafc'});
+    display: flex;
+    flex-direction: column;
+    padding: ${padding};
   `;
-  chatWindow.appendChild(messagesContainer);
+  chatWindow.appendChild(mainContent);
 
-  // Create starter prompts container (if prompts exist)
+  // Create start screen (greeting + prompts) - shown when no messages
+  const startScreen = document.createElement('div');
+  startScreen.id = 'n8n-start-screen';
+  startScreen.style.cssText = `
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+  `;
+
+  // Greeting
+  const greetingEl = document.createElement('h2');
+  greetingEl.style.cssText = `
+    font-size: 1.5rem;
+    font-weight: 600;
+    margin-bottom: 1.5rem;
+    line-height: 1.3;
+    letter-spacing: -0.01em;
+    color: ${text};
+  `;
+  greetingEl.textContent = greeting;
+  startScreen.appendChild(greetingEl);
+
+  // Starter prompts
   const starterPrompts = mergedConfig.startScreen?.prompts || [];
-  let starterPromptsContainer: HTMLElement | null = null;
   if (starterPrompts.length > 0) {
-    starterPromptsContainer = document.createElement('div');
-    starterPromptsContainer.id = 'n8n-starter-prompts';
-    starterPromptsContainer.style.cssText = `
-      padding: var(--cw-spacing-md, 12px) var(--cw-spacing-lg, 16px);
-      display: flex;
-      flex-wrap: wrap;
-      gap: var(--cw-spacing-sm, 8px);
-      background: var(--cw-surface-fg, ${isDark ? '#0d0d0d' : '#f8fafc'});
-      border-top: 1px solid var(--cw-border-color, ${isDark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.1)'});
-    `;
+    const promptsContainer = document.createElement('div');
+    promptsContainer.style.cssText = `display: flex; flex-direction: column; gap: 4px;`;
 
     starterPrompts.forEach((prompt) => {
       const promptBtn = document.createElement('button');
       promptBtn.className = 'n8n-starter-prompt';
       promptBtn.innerHTML = `
-        ${prompt.icon ? `<span style="font-size: 16px;">${prompt.icon}</span>` : ''}
-        <span>${prompt.label}</span>
+        <span class="n8n-starter-prompt-icon">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
+          </svg>
+        </span>
+        <span style="font-weight: 500;">${prompt.label}</span>
       `;
       promptBtn.addEventListener('click', () => {
-        const input = document.getElementById('n8n-chat-input') as HTMLInputElement;
-        if (input) {
-          input.value = prompt.prompt || prompt.label;
-          input.focus();
-        }
+        handleSendMessage(prompt.prompt || prompt.label);
       });
-      starterPromptsContainer!.appendChild(promptBtn);
+      promptsContainer.appendChild(promptBtn);
     });
 
-    chatWindow.appendChild(starterPromptsContainer);
+    startScreen.appendChild(promptsContainer);
   }
 
-  // Get placeholder from composer config or use default
-  const inputPlaceholder = mergedConfig.composer?.placeholder || 'Type a message...';
+  mainContent.appendChild(startScreen);
 
-  // Determine if we have accent enabled
-  const hasAccent = !!mergedConfig.theme?.color?.accent;
+  // Messages container (hidden initially, shown when messages exist)
+  const messagesContainer = document.createElement('div');
+  messagesContainer.id = 'n8n-messages-list';
+  messagesContainer.style.cssText = `
+    display: none;
+    flex: 1;
+    flex-direction: column;
+    padding-top: 48px;
+    gap: 16px;
+  `;
+  mainContent.appendChild(messagesContainer);
 
-  // Create input container - matches preview's pill-shaped composer
-  const inputContainer = document.createElement('div');
-  inputContainer.style.cssText = `
-    padding: var(--cw-spacing-lg, 16px);
+  // Composer area - matching preview
+  const composerArea = document.createElement('div');
+  composerArea.style.cssText = `
+    padding: ${padding};
     padding-top: 0;
-    background: var(--cw-surface-bg, ${isDark ? '#1a1a1a' : '#ffffff'});
   `;
 
-  // Build composer form - pill shape like preview
-  const composerRadius = mergedConfig.theme?.radius === 'none' ? '0px' : '999px';
+  const composerRadius = config.theme?.radius === 'none' ? '0px' : '999px';
+  const inputPlaceholder = mergedConfig.composer?.placeholder || 'Type a message...';
 
-  let inputAreaHTML = `
-    <div style="
+  let composerHTML = `
+    <form id="n8n-composer-form" style="
       display: flex;
       align-items: center;
       gap: 8px;
       padding: 6px;
-      background: var(--cw-composer-surface, var(--cw-surface-fg, ${isDark ? '#262626' : '#ffffff'}));
+      background: ${composerSurface};
       border-radius: ${composerRadius};
-      border: 1px solid var(--cw-border-color, ${isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.08)'});
+      border: 1px solid ${border};
       box-shadow: ${isDark ? 'none' : '0 4px 12px rgba(0,0,0,0.05)'};
       transition: box-shadow 0.15s;
     ">
   `;
 
-  // Attachment button (+ icon like preview)
+  // Attachment button
   if (mergedConfig.features.fileAttachmentsEnabled) {
-    inputAreaHTML += `
-      <input
-        type="file"
-        id="n8n-chat-file-input"
-        multiple
-        accept="${mergedConfig.features.allowedExtensions.join(',')}"
-        style="display: none;"
-      />
-      <button
-        id="n8n-chat-attach"
-        type="button"
-        style="
-          background: transparent;
-          color: var(--cw-icon-color, ${isDark ? '#a1a1aa' : '#6b7280'});
-          border: none;
-          border-radius: 50%;
-          width: 32px;
-          height: 32px;
-          min-width: 32px;
-          cursor: pointer;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          transition: background 0.15s;
-        "
-        title="Attach files"
-      >
+    composerHTML += `
+      <input type="file" id="n8n-file-input" multiple accept="${mergedConfig.features.allowedExtensions.map(e => '.' + e).join(',')}" style="display: none;" />
+      <button type="button" id="n8n-attach-btn" style="
+        width: 32px;
+        height: 32px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        border-radius: 50%;
+        background: transparent;
+        border: none;
+        cursor: pointer;
+        color: ${subText};
+        transition: background 0.15s;
+        flex-shrink: 0;
+      ">
         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-          <line x1="12" y1="5" x2="12" y2="19"></line>
-          <line x1="5" y1="12" x2="19" y2="12"></line>
+          <line x1="12" y1="5" x2="12" y2="19"/>
+          <line x1="5" y1="12" x2="19" y2="12"/>
         </svg>
       </button>
     `;
   } else {
-    // Spacer to maintain layout
-    inputAreaHTML += `<div style="width: 8px;"></div>`;
+    composerHTML += `<div style="width: 8px;"></div>`;
   }
 
-  // Input field
-  inputAreaHTML += `
-      <input
-        type="text"
-        id="n8n-chat-input"
-        placeholder="${inputPlaceholder}"
-        style="
-          flex: 1;
-          border: none;
-          background: transparent;
-          outline: none;
-          font-size: var(--cw-font-size-sm, 14px);
-          font-family: inherit;
-          color: var(--cw-text-color, ${isDark ? '#e5e5e5' : '#111827'});
-          padding: 4px 8px;
-        "
-      />
+  // Input
+  composerHTML += `
+    <input type="text" id="n8n-chat-input" placeholder="${inputPlaceholder}" style="
+      flex: 1;
+      border: none;
+      background: transparent;
+      outline: none;
+      font-size: 14px;
+      font-family: inherit;
+      color: ${text};
+      padding: 4px 8px;
+    " />
   `;
 
-  // Send button - matches preview styling
-  inputAreaHTML += `
-      <button
-        id="n8n-chat-send"
-        type="button"
-        style="
-          background: ${hasAccent ? `var(--cw-accent-primary, ${mergedConfig.style.primaryColor})` : (isDark ? '#e5e5e5' : '#171717')};
-          color: ${hasAccent ? '#ffffff' : (isDark ? '#171717' : '#ffffff')};
-          border: none;
-          border-radius: 50%;
-          width: 32px;
-          height: 32px;
-          min-width: 32px;
-          cursor: pointer;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          transition: background 0.15s, opacity 0.15s;
-        "
-      >
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
-          <line x1="12" y1="19" x2="12" y2="5"></line>
-          <polyline points="5 12 12 5 19 12"></polyline>
-        </svg>
-      </button>
-    </div>
+  // Send button
+  composerHTML += `
+    <button type="submit" id="n8n-send-btn" style="
+      width: 32px;
+      height: 32px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      border-radius: 50%;
+      background: ${isDark ? '#404040' : '#f3f4f6'};
+      border: none;
+      cursor: pointer;
+      color: ${isDark ? '#737373' : '#a3a3a3'};
+      transition: background 0.15s, color 0.15s;
+      flex-shrink: 0;
+    ">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
+        <line x1="12" y1="19" x2="12" y2="5"/>
+        <polyline points="5 12 12 5 19 12"/>
+      </svg>
+    </button>
+  </form>
   `;
 
-  inputContainer.innerHTML = inputAreaHTML;
-  chatWindow.appendChild(inputContainer);
+  composerArea.innerHTML = composerHTML;
+  chatWindow.appendChild(composerArea);
 
-  // Add disclaimer if configured
+  // Footer with disclaimer
   if (mergedConfig.composer?.disclaimer) {
-    const disclaimer = document.createElement('div');
-    disclaimer.style.cssText = `
-      padding: var(--cw-spacing-xs, 4px) var(--cw-spacing-lg, 16px) var(--cw-spacing-sm, 8px);
-      background: var(--cw-surface-bg, ${isDark ? '#1a1a1a' : '#ffffff'});
-      font-size: var(--cw-font-size-sm, 12px);
-      color: var(--cw-icon-color, ${isDark ? '#71717a' : '#9ca3af'});
-      text-align: center;
-    `;
-    disclaimer.textContent = mergedConfig.composer.disclaimer;
-    chatWindow.appendChild(disclaimer);
-  }
-
-  // Add branding footer if enabled
-  if (mergedConfig.license?.brandingEnabled) {
     const footer = document.createElement('div');
     footer.style.cssText = `
-      padding: var(--cw-spacing-sm, 8px) var(--cw-spacing-lg, 16px);
-      background: var(--cw-surface-fg, ${isDark ? '#1a1a1a' : '#f8f9fa'});
-      border-top: 1px solid var(--cw-border-color, ${isDark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.1)'});
-      text-align: center;
-      font-size: var(--cw-font-size-sm, 12px);
-      color: var(--cw-icon-color, ${isDark ? '#71717a' : '#6b7280'});
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 8px ${padding};
+      font-size: 10px;
+      color: ${subText};
+      opacity: 0.7;
     `;
-    footer.innerHTML = `Powered by <a href="https://n8n.io" target="_blank" style="color: var(--cw-accent-primary, ${mergedConfig.style.primaryColor}); text-decoration: none;">n8n</a>`;
+    footer.textContent = mergedConfig.composer.disclaimer;
     chatWindow.appendChild(footer);
   }
 
-  // Input and send button handlers
-  const input = inputContainer.querySelector('#n8n-chat-input') as HTMLInputElement;
-  const sendBtn = inputContainer.querySelector('#n8n-chat-send') as HTMLButtonElement;
-  const attachBtn = inputContainer.querySelector('#n8n-chat-attach') as HTMLButtonElement;
-  const fileInput = inputContainer.querySelector('#n8n-chat-file-input') as HTMLInputElement;
+  // Event handlers
+  const form = composerArea.querySelector('#n8n-composer-form') as HTMLFormElement;
+  const input = composerArea.querySelector('#n8n-chat-input') as HTMLInputElement;
+  const sendBtn = composerArea.querySelector('#n8n-send-btn') as HTMLButtonElement;
+  const attachBtn = composerArea.querySelector('#n8n-attach-btn') as HTMLButtonElement;
+  const fileInput = composerArea.querySelector('#n8n-file-input') as HTMLInputElement;
+  const closeBtn = headerIcons.querySelector('#n8n-chat-close') as HTMLButtonElement;
+  const clearBtn = headerIcons.querySelector('#n8n-clear-history') as HTMLButtonElement;
 
-  sendBtn.addEventListener('click', () => handleSendMessage());
-  input.addEventListener('keypress', (e) => {
-    if (e.key === 'Enter') {
-      handleSendMessage();
+  // Update send button style based on input
+  function updateSendButtonStyle() {
+    const hasText = input.value.trim().length > 0;
+    if (hasText) {
+      sendBtn.style.background = hasAccent ? accentColor : (isDark ? '#e5e5e5' : '#171717');
+      sendBtn.style.color = hasAccent ? '#ffffff' : (isDark ? '#171717' : '#ffffff');
+    } else {
+      sendBtn.style.background = isDark ? '#404040' : '#f3f4f6';
+      sendBtn.style.color = isDark ? '#737373' : '#a3a3a3';
     }
+  }
+
+  input.addEventListener('input', updateSendButtonStyle);
+
+  form.addEventListener('submit', (e) => {
+    e.preventDefault();
+    handleSendMessage();
   });
 
-  // File attachment handlers
-  if (attachBtn && fileInput) {
-    attachBtn.addEventListener('click', () => {
-      fileInput.click();
-    });
+  closeBtn.addEventListener('click', toggleChat);
 
+  clearBtn.addEventListener('click', () => {
+    messages.length = 0;
+    messagesContainer.innerHTML = '';
+    messagesContainer.style.display = 'none';
+    startScreen.style.display = 'flex';
+  });
+
+  if (attachBtn && fileInput) {
+    attachBtn.addEventListener('click', () => fileInput.click());
     fileInput.addEventListener('change', (e) => {
       const files = (e.target as HTMLInputElement).files;
-      if (files) {
-        selectedFiles = Array.from(files);
-        console.log(`[N8n Chat Widget] Selected ${selectedFiles.length} file(s)`);
-      }
+      if (files) selectedFiles = Array.from(files);
     });
   }
 
@@ -476,13 +610,6 @@ export function createChatWidget(runtimeConfig: WidgetRuntimeConfig): void {
     if (isOpen) {
       chatWindow.style.display = 'flex';
       bubble.style.display = 'none';
-
-      // Add first message if no messages yet
-      if (messages.length === 0 && mergedConfig.branding.firstMessage) {
-        addMessage('assistant', mergedConfig.branding.firstMessage);
-      }
-
-      // Focus input
       input.focus();
     } else {
       chatWindow.style.display = 'none';
@@ -490,8 +617,19 @@ export function createChatWidget(runtimeConfig: WidgetRuntimeConfig): void {
     }
   }
 
+  // Show messages view (hide start screen)
+  function showMessagesView() {
+    startScreen.style.display = 'none';
+    messagesContainer.style.display = 'flex';
+  }
+
   // Add message to UI
   function addMessage(role: 'user' | 'assistant', content: string, isLoading = false): Message {
+    // Hide start screen, show messages
+    if (messages.length === 0) {
+      showMessagesView();
+    }
+
     const message: Message = {
       id: `msg-${++messageIdCounter}`,
       role,
@@ -502,29 +640,29 @@ export function createChatWidget(runtimeConfig: WidgetRuntimeConfig): void {
 
     const messageEl = document.createElement('div');
     messageEl.id = message.id;
+    messageEl.className = 'n8n-animate-in';
     messageEl.style.cssText = `
-      margin-bottom: var(--cw-spacing-md, 12px);
       display: flex;
-      ${role === 'user' ? 'justify-content: flex-end;' : 'justify-content: flex-start;'}
+      flex-direction: column;
+      ${role === 'user' ? 'align-items: flex-end;' : 'align-items: flex-start;'}
     `;
 
-    const bubble = document.createElement('div');
-    bubble.className = 'n8n-message-content';
-    bubble.style.cssText = `
-      max-width: 75%;
-      padding: var(--cw-spacing-sm, 10px) var(--cw-spacing-md, 14px);
-      border-radius: var(--cw-radius-lg, 12px);
-      font-size: var(--cw-font-size, 14px);
+    const bubbleEl = document.createElement('div');
+    bubbleEl.className = 'n8n-message-content';
+    bubbleEl.style.cssText = `
+      max-width: 85%;
+      padding: 10px 14px;
+      border-radius: ${elementRadius};
       line-height: 1.5;
+      box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
       ${role === 'user'
-        ? `background: var(--cw-user-msg-bg, var(--cw-accent-primary, ${mergedConfig.style.primaryColor})); color: var(--cw-user-msg-text, #ffffff);`
-        : `background: var(--cw-assistant-msg-bg, ${isDark ? '#2a2a2a' : '#f3f4f6'}); color: var(--cw-assistant-msg-text, ${isDark ? '#e5e5e5' : '#1f2937'}); box-shadow: var(--cw-shadow-sm, 0 1px 2px rgba(0, 0, 0, 0.05));`}
+        ? `background: ${userMsgBg}; color: ${userMsgText};`
+        : `background: transparent; color: ${text};`}
     `;
 
-    // Render markdown for assistant messages
     if (role === 'assistant') {
       if (isLoading) {
-        bubble.innerHTML = `
+        bubbleEl.innerHTML = `
           <div class="n8n-typing-container">
             <div class="n8n-typing-dot"></div>
             <div class="n8n-typing-dot"></div>
@@ -532,54 +670,46 @@ export function createChatWidget(runtimeConfig: WidgetRuntimeConfig): void {
           </div>
         `;
       } else {
-        bubble.innerHTML = renderMarkdown(content);
+        bubbleEl.innerHTML = renderMarkdown(content);
       }
     } else {
-      bubble.textContent = content;
+      bubbleEl.textContent = content;
     }
 
-    messageEl.appendChild(bubble);
+    messageEl.appendChild(bubbleEl);
     messagesContainer.appendChild(messageEl);
-
-    // Scroll to bottom
-    messagesContainer.scrollTop = messagesContainer.scrollHeight;
+    mainContent.scrollTop = mainContent.scrollHeight;
 
     return message;
   }
 
-  // Update message content (for streaming)
+  // Update message content
   function updateMessage(messageId: string, content: string) {
     const messageEl = messagesContainer.querySelector(`#${messageId}`) as HTMLElement;
     if (!messageEl) return;
 
-    const bubble = messageEl.querySelector('div');
-    if (bubble) {
-      bubble.innerHTML = renderMarkdown(content);
+    const bubbleEl = messageEl.querySelector('.n8n-message-content');
+    if (bubbleEl) {
+      bubbleEl.innerHTML = renderMarkdown(content);
     }
 
-    // Update message in state
     const message = messages.find(m => m.id === messageId);
-    if (message) {
-      message.content = content;
-    }
+    if (message) message.content = content;
 
-    // Scroll to bottom
-    messagesContainer.scrollTop = messagesContainer.scrollHeight;
+    mainContent.scrollTop = mainContent.scrollHeight;
   }
 
   // Handle sending message
-  async function handleSendMessage() {
-    const text = input.value.trim();
+  async function handleSendMessage(textOverride?: string) {
+    const text = textOverride || input.value.trim();
     if (!text) return;
 
-    // Add user message
     addMessage('user', text);
     input.value = '';
+    updateSendButtonStyle();
 
-    // Create placeholder for assistant response
     const assistantMessage = addMessage('assistant', '', true);
 
-    // Send to N8n webhook with SSE streaming
     try {
       await streamResponse(text, assistantMessage.id);
     } catch (error) {
@@ -588,7 +718,7 @@ export function createChatWidget(runtimeConfig: WidgetRuntimeConfig): void {
     }
   }
 
-  // Capture page context (URL, query params, title, domain)
+  // Capture page context
   function capturePageContext() {
     try {
       const url = new URL(window.location.href);
@@ -599,8 +729,7 @@ export function createChatWidget(runtimeConfig: WidgetRuntimeConfig): void {
         queryParams: Object.fromEntries(url.searchParams),
         domain: window.location.hostname,
       };
-    } catch (error) {
-      console.error('[N8n Chat Widget] Error capturing page context:', error);
+    } catch {
       return {
         pageUrl: window.location.href,
         pagePath: window.location.pathname,
@@ -611,33 +740,21 @@ export function createChatWidget(runtimeConfig: WidgetRuntimeConfig): void {
     }
   }
 
-  // Encode file as base64 for transmission
+  // Encode file as base64
   async function encodeFile(file: File): Promise<FileAttachment> {
     return new Promise((resolve, reject) => {
       const reader = new FileReader();
-
       reader.onload = () => {
         const result = reader.result as string;
-        // Remove data URL prefix (data:...;base64,)
         const base64Data = result.split(',')[1];
-
-        resolve({
-          name: file.name,
-          type: file.type,
-          data: base64Data,
-          size: file.size,
-        });
+        resolve({ name: file.name, type: file.type, data: base64Data, size: file.size });
       };
-
-      reader.onerror = () => {
-        reject(new Error(`Failed to read file: ${file.name}`));
-      };
-
+      reader.onerror = () => reject(new Error(`Failed to read file: ${file.name}`));
       reader.readAsDataURL(file);
     });
   }
 
-  // Send message to N8n webhook using POST
+  // Send message to relay
   async function streamResponse(userMessage: string, assistantMessageId: string) {
     const relayUrl = runtimeConfig.relay.relayUrl;
     const sessionId = sessionManager.getSessionId();
@@ -645,17 +762,11 @@ export function createChatWidget(runtimeConfig: WidgetRuntimeConfig): void {
     try {
       const shouldCaptureContext = mergedConfig.connection?.captureContext !== false;
 
-      // Encode file attachments if present
       let fileAttachments: FileAttachment[] | undefined;
       if (selectedFiles.length > 0 && mergedConfig.features.fileAttachmentsEnabled) {
-        fileAttachments = await Promise.all(
-          selectedFiles.map((file) => encodeFile(file))
-        );
-        // Clear selected files after encoding
+        fileAttachments = await Promise.all(selectedFiles.map(encodeFile));
         selectedFiles = [];
-        if (fileInput) {
-          fileInput.value = '';
-        }
+        if (fileInput) fileInput.value = '';
       }
 
       const payload = buildRelayPayload(runtimeConfig, {
@@ -667,12 +778,9 @@ export function createChatWidget(runtimeConfig: WidgetRuntimeConfig): void {
         attachments: fileAttachments,
       });
 
-      // Send POST request to relay endpoint
       const response = await fetch(relayUrl, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload),
       });
 
@@ -680,13 +788,8 @@ export function createChatWidget(runtimeConfig: WidgetRuntimeConfig): void {
         throw new Error(`HTTP ${response.status}: ${response.statusText}`);
       }
 
-      // Parse JSON response
       const data = await response.json();
-
-      // N8n webhook should return { response: "..." } or { message: "..." }
       const assistantResponse = data.response || data.message || data.output || 'No response received';
-
-      // Update message with response
       updateMessage(assistantMessageId, assistantResponse);
 
     } catch (error) {
