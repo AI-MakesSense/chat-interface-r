@@ -207,7 +207,8 @@ export async function GET(
     if (widget.widgetType === 'chatkit') {
       const host = request.headers.get('host') || 'localhost:3000';
       const protocol = host.includes('localhost') ? 'http' : 'https';
-      const widgetUrl = `${protocol}://${host}/widget/chatkit/${cleanWidgetKey}`;
+      // Use the new v2.0 ChatKit route that uses widgetKey
+      const widgetUrl = `${protocol}://${host}/chatkit/${cleanWidgetKey}`;
 
       const script = `
 (function() {
@@ -220,7 +221,8 @@ export async function GET(
   var iframe = document.createElement('iframe');
   iframe.src = "${widgetUrl}";
   iframe.style.cssText = "width: 100%; height: 100%; border: none; background: transparent; color-scheme: normal;";
-  iframe.allowTransparency = "true";
+  iframe.allow = "clipboard-write";
+  iframe.allowTransparency = true;
 
   container.appendChild(iframe);
   document.body.appendChild(container);

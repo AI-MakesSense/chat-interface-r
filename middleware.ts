@@ -62,8 +62,11 @@ const PUBLIC_API_ROUTES = [
   '/api/stripe/webhook', // Stripe webhook (validates signature)
   '/api/auth/logout', // Logout should be accessible
   '/api/chat-relay', // Chat relay (validates widget internally)
+  '/api/chatkit/', // ChatKit session creation (validates internally)
   '/w/', // Widget serving v2.0 (validates widgetKey)
   '/api/w/', // Widget API v2.0 routes
+  '/chatkit/', // ChatKit widget iframe page v2.0 (validates widgetKey)
+  '/chat/', // Fullpage chat widget (validates widgetKey)
 ];
 
 /**
