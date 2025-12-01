@@ -140,46 +140,57 @@ export const themeSchema = z.object({
 // Advanced Styling Schema (Pro/Agency only)
 // =============================================================================
 
+/**
+ * Message styling schema - all fields optional to allow partial configs
+ * Users don't need to specify every field - only what they want to customize
+ */
 const messageStylingSchema = z.object({
-  userMessageBackground: hexColorSchema,
-  userMessageText: hexColorSchema,
-  botMessageBackground: hexColorSchema,
-  botMessageText: hexColorSchema,
-  messageSpacing: z.number().int().min(0).max(50),
-  bubblePadding: z.number().int().min(5).max(30),
-  showAvatar: z.boolean(),
-  avatarUrl: optionalHttpsUrlSchema,
+  userMessageBackground: hexColorSchema.optional(),
+  userMessageText: hexColorSchema.optional(),
+  botMessageBackground: hexColorSchema.optional(),
+  botMessageText: hexColorSchema.optional(),
+  messageSpacing: z.number().int().min(0).max(50).optional(),
+  bubblePadding: z.number().int().min(5).max(30).optional(),
+  showAvatar: z.boolean().optional(),
+  avatarUrl: optionalHttpsUrlSchema.optional(),
 });
 
+/**
+ * Markdown styling schema - all fields optional to allow partial configs
+ */
 const markdownStylingSchema = z.object({
-  codeBlockBackground: hexColorSchema,
-  codeBlockText: hexColorSchema,
-  codeBlockBorder: hexColorSchema,
-  inlineCodeBackground: hexColorSchema,
-  inlineCodeText: hexColorSchema,
-  linkColor: hexColorSchema,
-  linkHoverColor: hexColorSchema,
-  tableHeaderBackground: hexColorSchema,
-  tableBorderColor: hexColorSchema,
+  codeBlockBackground: hexColorSchema.optional(),
+  codeBlockText: hexColorSchema.optional(),
+  codeBlockBorder: hexColorSchema.optional(),
+  inlineCodeBackground: hexColorSchema.optional(),
+  inlineCodeText: hexColorSchema.optional(),
+  linkColor: hexColorSchema.optional(),
+  linkHoverColor: hexColorSchema.optional(),
+  tableHeaderBackground: hexColorSchema.optional(),
+  tableBorderColor: hexColorSchema.optional(),
 });
 
 export const advancedStylingSchema = z.object({
-  enabled: z.boolean(),
-  messages: messageStylingSchema,
-  markdown: markdownStylingSchema,
+  enabled: z.boolean().optional(),
+  messages: messageStylingSchema.optional(),
+  markdown: markdownStylingSchema.optional(),
 });
 
 // =============================================================================
 // Behavior Schema
 // =============================================================================
 
+/**
+ * Behavior schema - all fields optional to allow partial configs
+ * Users only need to specify the behaviors they want to customize
+ */
 export const behaviorSchema = z.object({
-  autoOpen: z.boolean(),
-  autoOpenDelay: z.number().int().min(0).max(60),
-  showCloseButton: z.boolean(),
-  persistMessages: z.boolean(),
-  enableSoundNotifications: z.boolean(),
-  enableTypingIndicator: z.boolean(),
+  autoOpen: z.boolean().optional(),
+  autoOpenDelay: z.number().int().min(0).max(60).optional(),
+  showCloseButton: z.boolean().optional(),
+  persistMessages: z.boolean().optional(),
+  enableSoundNotifications: z.boolean().optional(),
+  enableTypingIndicator: z.boolean().optional(),
 });
 
 // =============================================================================
