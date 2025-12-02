@@ -19,6 +19,7 @@ interface EmbedTypeOption {
   label: string;
   description: string;
   icon: React.ElementType;
+  available: boolean;
 }
 
 const EMBED_OPTIONS: EmbedTypeOption[] = [
@@ -27,24 +28,28 @@ const EMBED_OPTIONS: EmbedTypeOption[] = [
     label: 'Popup',
     description: 'Floating chat bubble on your website',
     icon: MessageCircle,
+    available: true,
   },
   {
     value: 'inline',
     label: 'Inline',
-    description: 'Embedded in a specific section',
+    description: 'Coming Soon',
     icon: Layout,
+    available: false,
   },
   {
     value: 'fullpage',
     label: 'Fullpage',
     description: 'Standalone chat page',
     icon: Maximize,
+    available: true,
   },
   {
     value: 'portal',
     label: 'Link Only',
-    description: 'Shareable URL for email/QR',
+    description: 'Coming Soon',
     icon: Link,
+    available: false,
   },
 ];
 
@@ -70,37 +75,43 @@ export function EmbedTypeSelector({
         {EMBED_OPTIONS.map((option) => {
           const Icon = option.icon;
           const isSelected = value === option.value;
+          const isDisabled = disabled || !option.available;
 
           return (
             <button
               key={option.value}
               type="button"
-              disabled={disabled}
-              onClick={() => onChange(option.value)}
+              disabled={isDisabled}
+              onClick={() => option.available && onChange(option.value)}
               className={cn(
-                'flex flex-col items-start gap-2 p-4 rounded-lg border-2 transition-all text-left',
-                'hover:border-primary/50 hover:bg-muted/50',
+                'flex flex-col items-start gap-2 p-4 rounded-lg border-2 transition-all text-left relative',
                 'focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2',
-                isSelected
+                isSelected && option.available
                   ? 'border-primary bg-primary/5'
                   : 'border-border bg-background',
+                option.available
+                  ? 'hover:border-primary/50 hover:bg-muted/50'
+                  : 'opacity-50 cursor-not-allowed grayscale',
                 disabled && 'opacity-50 cursor-not-allowed'
               )}
             >
               <div className={cn(
                 'p-2 rounded-md',
-                isSelected ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground'
+                isSelected && option.available ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground'
               )}>
                 <Icon className="h-5 w-5" />
               </div>
               <div>
                 <p className={cn(
                   'font-medium text-sm',
-                  isSelected ? 'text-primary' : 'text-foreground'
+                  isSelected && option.available ? 'text-primary' : 'text-foreground'
                 )}>
                   {option.label}
                 </p>
-                <p className="text-xs text-muted-foreground mt-0.5">
+                <p className={cn(
+                  'text-xs mt-0.5',
+                  !option.available ? 'text-amber-600 dark:text-amber-400 italic' : 'text-muted-foreground'
+                )}>
                   {option.description}
                 </p>
               </div>

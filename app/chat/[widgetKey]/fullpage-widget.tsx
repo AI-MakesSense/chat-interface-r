@@ -4,15 +4,18 @@
  * Fullpage Widget Component (Schema v2.0)
  *
  * Purpose: Client-side component that initializes the widget in fullpage mode
+ * Supports both ChatKit and N8n widget types
  * Uses widgetKey instead of license for configuration
  */
 
 import { useEffect, useRef } from 'react';
 import Script from 'next/script';
+import { ChatKitEmbed } from '@/components/chatkit-embed';
+import { WidgetConfig } from '@/stores/widget-store';
 
 interface FullpageWidgetProps {
   widgetKey: string;
-  config: any;
+  config: WidgetConfig;
   embedType: string;
 }
 
@@ -20,7 +23,13 @@ export default function FullpageWidget({ widgetKey, config, embedType }: Fullpag
   const containerRef = useRef<HTMLDivElement>(null);
   const widgetInitialized = useRef(false);
 
+  // Check if this is a ChatKit widget
+  const isChatKit = config?.connection?.provider === 'chatkit';
+
   useEffect(() => {
+    // Only initialize N8n widget script if not ChatKit
+    if (isChatKit) return;
+
     // Initialize widget only once when script is loaded
     const initializeWidget = () => {
       if (widgetInitialized.current) return;
@@ -33,14 +42,15 @@ export default function FullpageWidget({ widgetKey, config, embedType }: Fullpag
         const { Widget } = (window as any);
 
         // Merge config with fullpage mode settings
+        const configAny = config as any;
         const fullpageConfig = {
           ...config,
           mode: 'fullpage',
           widgetKey: widgetKey,
           embedType: embedType,
           fullpage: {
-            showHeader: config?.fullpage?.showHeader ?? true,
-            headerTitle: config?.fullpage?.headerTitle || config?.branding?.companyName || 'Chat',
+            showHeader: configAny?.fullpage?.showHeader ?? true,
+            headerTitle: configAny?.fullpage?.headerTitle || config?.branding?.companyName || 'Chat',
           },
         };
 
@@ -48,7 +58,7 @@ export default function FullpageWidget({ widgetKey, config, embedType }: Fullpag
         const widget = new Widget(fullpageConfig);
         widget.render();
 
-        console.log('[Fullpage] Widget initialized:', widgetKey);
+        console.log('[Fullpage] N8n Widget initialized:', widgetKey);
       } catch (error) {
         console.error('[Fullpage] Widget initialization failed:', error);
       }
@@ -65,7 +75,7 @@ export default function FullpageWidget({ widgetKey, config, embedType }: Fullpag
     return () => {
       window.removeEventListener('widget-script-loaded', initializeWidget);
     };
-  }, [widgetKey, config, embedType]);
+  }, [widgetKey, config, embedType, isChatKit]);
 
   // Apply global styles via useEffect
   useEffect(() => {
@@ -88,6 +98,25 @@ export default function FullpageWidget({ widgetKey, config, embedType }: Fullpag
     };
   }, []);
 
+  // ChatKit widget - render the ChatKit embed component
+  if (isChatKit) {
+    return (
+      <div
+        style={{
+          position: 'fixed',
+          top: 0,
+          left: 0,
+          width: '100vw',
+          height: '100vh',
+          overflow: 'hidden',
+        }}
+      >
+        <ChatKitEmbed widgetId={widgetKey} config={config} />
+      </div>
+    );
+  }
+
+  // N8n widget - use the script-based widget
   return (
     <>
       {/* Widget Script */}
