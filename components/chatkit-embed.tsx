@@ -4,6 +4,58 @@ import React from 'react';
 import { useChatKit, ChatKit } from '@openai/chatkit-react';
 import { WidgetConfig } from '@/stores/widget-store';
 
+// ChatKit icon type
+type ChatKitIcon = 'sparkle' | 'lightbulb' | 'mail' | 'phone' | 'calendar' | 'globe' | 'search' | 'star' | 'check' | 'info' | 'compass' | 'map-pin' | 'user' | 'write' | 'document' | 'book-open' | 'bug' | 'cube' | 'bolt' | 'chart' | 'keys' | 'notebook' | 'profile';
+
+// Map our icon IDs to ChatKit icon names
+const mapToChatKitIcon = (iconId: string): ChatKitIcon | undefined => {
+    const iconMap: Record<string, ChatKitIcon> = {
+        'sparkles': 'sparkle',
+        'sparkle': 'sparkle',
+        'message': 'sparkle', // fallback since ChatKit doesn't have message
+        'messageSquare': 'sparkle',
+        'lightbulb': 'lightbulb',
+        'mail': 'mail',
+        'phone': 'phone',
+        'calendar': 'calendar',
+        'globe': 'globe',
+        'search': 'search',
+        'star': 'star',
+        'check': 'check',
+        'info': 'info',
+        'compass': 'compass',
+        'mapPin': 'map-pin',
+        'user': 'user',
+        'pen': 'write',
+        'pencil': 'write',
+        'edit': 'write',
+        'fileText': 'document',
+        'book': 'book-open',
+        'bug': 'bug',
+        'cube': 'cube',
+        'zap': 'bolt',
+        'bolt': 'bolt',
+        'chart': 'chart',
+        'key': 'keys',
+        'notebook': 'notebook',
+        'profile': 'profile',
+    };
+    return iconMap[iconId];
+};
+
+// Google Fonts URL mapping for fonts that need to be loaded
+const GOOGLE_FONT_SOURCES: Record<string, string> = {
+    'Inter': 'https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap',
+    'Roboto': 'https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700&display=swap',
+    'Open Sans': 'https://fonts.googleapis.com/css2?family=Open+Sans:wght@400;500;600;700&display=swap',
+    'Lato': 'https://fonts.googleapis.com/css2?family=Lato:wght@400;700&display=swap',
+    'Montserrat': 'https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700&display=swap',
+    'Poppins': 'https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&display=swap',
+    'Space Grotesk': 'https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&display=swap',
+    'Comfortaa': 'https://fonts.googleapis.com/css2?family=Comfortaa:wght@400;500;600;700&display=swap',
+    'Bricolage Grotesque': 'https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:wght@400;500;600;700&display=swap',
+};
+
 // Font family helper
 const getFontFamily = (f: string): string => {
     switch (f) {
@@ -26,8 +78,21 @@ interface ChatKitEmbedProps {
 }
 
 export const ChatKitEmbed: React.FC<ChatKitEmbedProps> = ({ widgetId, config }) => {
-    // Build font sources for custom fonts
+    // Build font sources for Google Fonts and custom fonts
     const fontSources: { family: string; src: string; weight?: number; display?: 'swap' }[] = [];
+
+    // Add Google Font source if needed
+    const fontFamily = config.fontFamily || 'system-ui';
+    if (GOOGLE_FONT_SOURCES[fontFamily]) {
+        fontSources.push({
+            family: fontFamily,
+            src: GOOGLE_FONT_SOURCES[fontFamily],
+            weight: 400,
+            display: 'swap',
+        });
+    }
+
+    // Add custom font source if configured
     if (config.useCustomFont && config.customFontCss && config.customFontName) {
         // Extract URL from @import statement
         const urlMatch = config.customFontCss.match(/url\(['"]?([^'"]+)['"]?\)/);
@@ -92,11 +157,25 @@ export const ChatKitEmbed: React.FC<ChatKitEmbedProps> = ({ widgetId, config }) 
         },
         startScreen: {
             greeting: config.greeting,
-            prompts: config.starterPrompts?.map(p => ({ label: p.label, prompt: p.label })) || [],
+            prompts: config.starterPrompts?.map(p => {
+                const mappedIcon = p.icon ? mapToChatKitIcon(p.icon) : undefined;
+                return {
+                    label: p.label,
+                    prompt: p.label,
+                    ...(mappedIcon ? { icon: mappedIcon } : {}),
+                };
+            }) || [],
         },
         composer: config.placeholder ? {
             placeholder: config.placeholder,
         } : undefined,
+        // Disclaimer if configured
+        ...(config.disclaimer ? {
+            disclaimer: {
+                text: config.disclaimer,
+                highContrast: false,
+            },
+        } : {}),
     });
 
     return (
