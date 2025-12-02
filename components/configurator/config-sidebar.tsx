@@ -489,7 +489,40 @@ const ICON_CATEGORIES: IconCategory[] = [
 // Flat list for lookups
 const ALL_ICONS = ICON_CATEGORIES.flatMap(cat => cat.icons);
 
-const IconPicker = ({ value, onChange, isDark }: { value: string; onChange: (val: string) => void; isDark: boolean }) => {
+// ChatKit only supports these 23 icons - map our icon IDs to the ones that work
+const CHATKIT_SUPPORTED_ICON_IDS = new Set([
+  // Direct matches
+  'sparkle', 'sparkles', 'lightbulb', 'mail', 'phone', 'calendar', 'globe',
+  'search', 'star', 'check', 'info', 'compass', 'mapPin', 'user', 'bug',
+  // Icons that map to supported ChatKit icons
+  'message', 'messageSquare', 'messagesSquare', 'send', 'atSign', // → sparkle/mail
+  'rocket', 'zap', 'play', 'flame', 'bolt', // → bolt
+  'heart', 'award', 'crown', // → star
+  'target', 'map', 'navigation', // → compass
+  'trendingUp', 'activity', 'dollar', 'piggyBank', 'chart', // → chart
+  'code', 'terminal', 'server', 'cpu', 'database', 'braces', 'wrench',
+  'settings', 'cog', 'sliders', 'box', 'gift', 'package', 'shoppingCart',
+  'shoppingBag', 'cube', // → cube
+  'fileCode', 'receipt', 'fileText', 'file', 'folder', 'folderOpen',
+  'download', 'upload', 'document', // → document
+  'wifi', 'cloud', 'cloudRain', 'link', 'share', 'externalLink', // → globe
+  'pen', 'pencil', 'edit', 'write', // → write
+  'book', 'graduationCap', 'library', // → book-open
+  'brain', // → lightbulb
+  'users', 'userPlus', 'userCheck', 'smile', // → user
+  'thumbsUp', // → check
+  'thumbsDown', 'help', 'alert', 'x', 'bell', 'flag', // → info
+  'filter', 'eye', 'eyeOff', // → search
+  'creditCard', 'shield', 'lock', 'key', 'keys', // → keys
+  'briefcase', 'home', 'building', 'profile', // → profile
+  'clock', 'timer', 'history', // → calendar
+  'wand', 'palette', 'image', 'camera', 'video', 'music', 'film',
+  'sun', 'moon', 'leaf', 'flower', 'tree', 'coffee', // → sparkle
+  'mic', // → phone
+  'notebook', // → notebook
+]);
+
+const IconPicker = ({ value, onChange, isDark, provider }: { value: string; onChange: (val: string) => void; isDark: boolean; provider?: 'chatkit' | 'n8n' }) => {
   const [isOpen, setIsOpen] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   const [activeCategory, setActiveCategory] = useState<string | null>(null);
@@ -572,18 +605,33 @@ const IconPicker = ({ value, onChange, isDark }: { value: string; onChange: (val
     }
   }, [isOpen]);
 
+  // Filter icons based on provider (ChatKit has limited icon support)
+  const isChatKit = provider === 'chatkit';
+  const filterByProvider = (icons: typeof ALL_ICONS) =>
+    isChatKit ? icons.filter(icon => CHATKIT_SUPPORTED_ICON_IDS.has(icon.id)) : icons;
+
+  // Filter categories for ChatKit - only show categories that have supported icons
+  const availableCategories = isChatKit
+    ? ICON_CATEGORIES.map(cat => ({
+        ...cat,
+        icons: cat.icons.filter(icon => CHATKIT_SUPPORTED_ICON_IDS.has(icon.id))
+      })).filter(cat => cat.icons.length > 0)
+    : ICON_CATEGORIES;
+
+  const availableIcons = filterByProvider(ALL_ICONS);
+
   // Filter icons by search term
   const filteredCategories = searchTerm
     ? [{
         label: 'Search Results',
-        icons: ALL_ICONS.filter(icon =>
+        icons: availableIcons.filter(icon =>
           icon.label.toLowerCase().includes(searchTerm.toLowerCase()) ||
           icon.id.toLowerCase().includes(searchTerm.toLowerCase())
         )
       }]
     : activeCategory
-      ? ICON_CATEGORIES.filter(cat => cat.label === activeCategory)
-      : ICON_CATEGORIES;
+      ? availableCategories.filter(cat => cat.label === activeCategory)
+      : availableCategories;
 
   const buttonClass = isDark
     ? 'bg-[#2a2a2a] border-[#ffffff1a] hover:border-white/40 text-[#afafaf]'
@@ -643,7 +691,7 @@ const IconPicker = ({ value, onChange, isDark }: { value: string; onChange: (val
           >
             All
           </button>
-          {ICON_CATEGORIES.map((cat) => (
+          {availableCategories.map((cat) => (
             <button
               key={cat.label}
               onClick={() => setActiveCategory(cat.label)}
@@ -1178,7 +1226,7 @@ export const ConfigSidebar: React.FC<ConfigSidebarProps> = ({
               <div className="space-y-2 mt-2">
                 {(config.starterPrompts || []).map((prompt: StarterPrompt, index: number) => (
                   <div key={index} className="flex gap-2 animate-in slide-in-from-top-1 fade-in duration-200">
-                    <IconPicker value={prompt.icon} onChange={(val) => updatePrompt(index, 'icon', val)} isDark={isDark} />
+                    <IconPicker value={prompt.icon} onChange={(val) => updatePrompt(index, 'icon', val)} isDark={isDark} provider={lockedProvider} />
                     <SidebarInput
                       type="text"
                       value={prompt.label}
