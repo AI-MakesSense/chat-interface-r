@@ -678,17 +678,37 @@ export const ConfigSidebar: React.FC<ConfigSidebarProps> = ({
     handleChange('starterPrompts', newPrompts);
   };
 
+  // Use ref to track last processed prompt count to avoid duplicate processing
+  const lastPromptCountRef = useRef((config.starterPrompts || []).length);
+
+  // Sync ref when config changes externally (e.g., loading saved widget)
+  useEffect(() => {
+    lastPromptCountRef.current = (config.starterPrompts || []).length;
+  }, [config.starterPrompts]);
+
   const handlePromptCountChange = (count: number) => {
-    let current = [...(config.starterPrompts || [])];
-    if (count > current.length) {
-      const toAdd = count - current.length;
-      for (let i = 0; i < toAdd; i++) {
-        current.push({ label: 'New prompt', icon: 'message' });
-      }
-    } else if (count < current.length) {
-      current = current.slice(0, count);
+    // Skip if count hasn't changed (prevents duplicate processing from rapid slider events)
+    if (count === lastPromptCountRef.current) {
+      return;
     }
-    handleChange('starterPrompts', current);
+    lastPromptCountRef.current = count;
+
+    // Build array of exactly 'count' prompts
+    // Preserve existing prompts where possible, add new ones if needed
+    const existing = config.starterPrompts || [];
+    const newPrompts: StarterPrompt[] = [];
+
+    for (let i = 0; i < count; i++) {
+      if (i < existing.length) {
+        // Keep existing prompt
+        newPrompts.push(existing[i]);
+      } else {
+        // Add new prompt
+        newPrompts.push({ label: 'New prompt', icon: 'message' });
+      }
+    }
+
+    handleChange('starterPrompts', newPrompts);
   };
 
   const handleSaveCustomFont = () => {

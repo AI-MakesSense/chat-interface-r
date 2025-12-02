@@ -209,25 +209,81 @@ export async function GET(
       const protocol = host.includes('localhost') ? 'http' : 'https';
       // Use the new v2.0 ChatKit route that uses widgetKey
       const widgetUrl = `${protocol}://${host}/chatkit/${cleanWidgetKey}`;
+      const embedType = (widget as any).embedType || 'popup';
 
-      const script = `
+      let script: string;
+
+      if (embedType === 'inline') {
+        // Inline mode: embed in a container specified by data-container attribute
+        script = `
 (function() {
   if (document.getElementById('chatkit-widget-container')) return;
 
+  var scriptTag = document.currentScript;
+  var containerId = scriptTag && scriptTag.getAttribute('data-container');
+  var targetContainer = containerId ? document.getElementById(containerId) : null;
+
+  if (targetContainer) {
+    // Inline mode - embed in the target container
+    var iframe = document.createElement('iframe');
+    iframe.src = "${widgetUrl}";
+    iframe.style.cssText = "width: 100%; height: 100%; border: none; background: transparent;";
+    iframe.allow = "clipboard-write";
+    targetContainer.innerHTML = '';
+    targetContainer.appendChild(iframe);
+  } else {
+    console.warn('ChatKit: Container element not found. Use data-container attribute to specify the container ID.');
+  }
+})();
+        `;
+      } else {
+        // Popup mode (default): floating chat bubble with toggle
+        const config = widget.config as any;
+        const accentColor = config?.chatkitAccentPrimary || config?.accentColor || '#0f172a';
+        const position = config?.style?.position || 'bottom-right';
+        const positionStyles = position === 'bottom-left'
+          ? 'left: 20px; right: auto;'
+          : 'right: 20px; left: auto;';
+
+        script = `
+(function() {
+  if (document.getElementById('chatkit-widget-container')) return;
+
+  var isOpen = false;
+
+  // Create toggle button
+  var toggleBtn = document.createElement('button');
+  toggleBtn.id = 'chatkit-widget-toggle';
+  toggleBtn.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path></svg>';
+  toggleBtn.style.cssText = "position: fixed; bottom: 20px; ${positionStyles} width: 56px; height: 56px; border-radius: 50%; background: ${accentColor}; color: white; border: none; cursor: pointer; z-index: 999998; display: flex; align-items: center; justify-content: center; box-shadow: 0 4px 12px rgba(0,0,0,0.15); transition: transform 0.2s, box-shadow 0.2s;";
+  toggleBtn.onmouseenter = function() { toggleBtn.style.transform = 'scale(1.05)'; toggleBtn.style.boxShadow = '0 6px 16px rgba(0,0,0,0.2)'; };
+  toggleBtn.onmouseleave = function() { toggleBtn.style.transform = 'scale(1)'; toggleBtn.style.boxShadow = '0 4px 12px rgba(0,0,0,0.15)'; };
+
+  // Create container for iframe
   var container = document.createElement('div');
   container.id = 'chatkit-widget-container';
-  container.style.cssText = "position: fixed; bottom: 0; right: 0; width: 100vw; height: 100vh; border: none; z-index: 999999; pointer-events: none;";
+  container.style.cssText = "position: fixed; bottom: 90px; ${positionStyles} width: 400px; height: 600px; max-height: calc(100vh - 120px); border-radius: 16px; overflow: hidden; box-shadow: 0 8px 32px rgba(0,0,0,0.2); z-index: 999999; display: none; background: white;";
 
   var iframe = document.createElement('iframe');
   iframe.src = "${widgetUrl}";
-  iframe.style.cssText = "width: 100%; height: 100%; border: none; background: transparent; color-scheme: normal;";
+  iframe.style.cssText = "width: 100%; height: 100%; border: none; background: transparent;";
   iframe.allow = "clipboard-write";
-  iframe.allowTransparency = true;
 
   container.appendChild(iframe);
   document.body.appendChild(container);
+  document.body.appendChild(toggleBtn);
+
+  // Toggle chat open/closed
+  toggleBtn.onclick = function() {
+    isOpen = !isOpen;
+    container.style.display = isOpen ? 'block' : 'none';
+    toggleBtn.innerHTML = isOpen
+      ? '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>'
+      : '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path></svg>';
+  };
 })();
-      `;
+        `;
+      }
 
       return new NextResponse(script, {
         status: 200,
