@@ -166,15 +166,21 @@ function ConfiguratorPage() {
     });
   };
 
+  // Redirect to login if not authenticated (must be in useEffect for client-side navigation)
+  useEffect(() => {
+    if (!authLoading && !isAuthenticated) {
+      router.push('/auth/login');
+    }
+  }, [authLoading, isAuthenticated, router]);
+
   // Loading state
   if (authLoading || isLoading) {
     return <ConfiguratorLoading />;
   }
 
-  // Not authenticated
+  // Not authenticated - show loading while redirect happens
   if (!isAuthenticated || !user) {
-    router.push('/auth/login');
-    return null;
+    return <ConfiguratorLoading />;
   }
 
 
