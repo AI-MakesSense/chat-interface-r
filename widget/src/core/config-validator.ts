@@ -13,9 +13,9 @@ export class ConfigValidator {
    * @throws Error if configuration is invalid
    */
   public static validate(config: ExtendedWidgetConfig): void {
-    // License is required for portal mode
-    if (config.mode === 'portal' && !config.license) {
-      throw new Error('License required for portal mode');
+    // Portal mode requires either license (legacy) or widgetKey (v2.0)
+    if (config.mode === 'portal' && !config.license && !(config as any).widgetKey) {
+      throw new Error('License or widgetKey required for portal mode');
     }
 
     // Validate webhook URL if provided
