@@ -1,6 +1,7 @@
 'use client';
 
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useCallback } from 'react';
+import { createPortal } from 'react-dom';
 import { Save, RotateCcw } from 'lucide-react';
 import { WidgetConfig, StarterPrompt } from '@/stores/widget-store';
 import {
@@ -492,15 +493,69 @@ const IconPicker = ({ value, onChange, isDark }: { value: string; onChange: (val
   const [isOpen, setIsOpen] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   const [activeCategory, setActiveCategory] = useState<string | null>(null);
+  const [mounted, setMounted] = useState(false);
+  const [position, setPosition] = useState({ top: 0, left: 0 });
   const containerRef = useRef<HTMLDivElement>(null);
+  const dropdownRef = useRef<HTMLDivElement>(null);
   const searchInputRef = useRef<HTMLInputElement>(null);
 
   const SelectedIcon = ALL_ICONS.find(i => i.id === value)?.icon || MessageCircle;
   const selectedLabel = ALL_ICONS.find(i => i.id === value)?.label || 'Select icon';
 
+  // Mount state for portal
+  useEffect(() => {
+    setMounted(true);
+  }, []);
+
+  // Calculate position when opening
+  const calculatePosition = useCallback(() => {
+    if (!containerRef.current) return;
+
+    const button = containerRef.current.getBoundingClientRect();
+    const dropdownWidth = 320;
+    const dropdownHeight = 400;
+    const padding = 8;
+
+    const viewportWidth = window.innerWidth;
+    const viewportHeight = window.innerHeight;
+
+    // Position to the right of the button, or left if not enough space
+    let left = button.right + 8;
+    if (left + dropdownWidth + padding > viewportWidth) {
+      // Try left side
+      left = button.left - dropdownWidth - 8;
+      if (left < padding) {
+        // Fallback: align with right edge of viewport
+        left = viewportWidth - dropdownWidth - padding;
+      }
+    }
+
+    // Vertical: align top with button, adjust if near bottom
+    let top = button.top;
+    if (top + dropdownHeight + padding > viewportHeight) {
+      top = viewportHeight - dropdownHeight - padding;
+    }
+    if (top < padding) {
+      top = padding;
+    }
+
+    setPosition({ top, left });
+  }, []);
+
+  useEffect(() => {
+    if (isOpen) {
+      calculatePosition();
+    }
+  }, [isOpen, calculatePosition]);
+
   useEffect(() => {
     const handleOutside = (e: MouseEvent) => {
-      if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
+      if (
+        containerRef.current &&
+        !containerRef.current.contains(e.target as Node) &&
+        dropdownRef.current &&
+        !dropdownRef.current.contains(e.target as Node)
+      ) {
         setIsOpen(false);
         setSearchTerm('');
         setActiveCategory(null);
@@ -512,7 +567,8 @@ const IconPicker = ({ value, onChange, isDark }: { value: string; onChange: (val
 
   useEffect(() => {
     if (isOpen && searchInputRef.current) {
-      searchInputRef.current.focus();
+      // Small delay to ensure portal is rendered
+      setTimeout(() => searchInputRef.current?.focus(), 50);
     }
   }, [isOpen]);
 
@@ -545,6 +601,98 @@ const IconPicker = ({ value, onChange, isDark }: { value: string; onChange: (val
     ? (isActive ? 'bg-white/20 text-white' : 'text-[#888] hover:text-white hover:bg-white/10')
     : (isActive ? 'bg-neutral-100 text-neutral-900' : 'text-neutral-400 hover:text-neutral-600 hover:bg-neutral-50');
 
+  const dropdown = isOpen && mounted && (
+    <div
+      ref={dropdownRef}
+      className={`fixed w-[320px] border rounded-xl shadow-2xl overflow-hidden animate-in fade-in zoom-in-95 duration-100 ${dropdownClass}`}
+      style={{
+        top: position.top,
+        left: position.left,
+        zIndex: 9999,
+      }}
+    >
+      {/* Search bar */}
+      <div className={`p-2 border-b ${isDark ? 'border-white/10' : 'border-neutral-100'}`}>
+        <div className={`flex items-center gap-2 px-2 py-1.5 rounded-lg ${isDark ? 'bg-white/5' : 'bg-neutral-50'}`}>
+          <Search size={14} className={isDark ? 'text-[#666]' : 'text-neutral-400'} />
+          <input
+            ref={searchInputRef}
+            type="text"
+            placeholder="Search icons..."
+            value={searchTerm}
+            onChange={(e) => {
+              setSearchTerm(e.target.value);
+              setActiveCategory(null);
+            }}
+            className={`flex-1 bg-transparent text-sm outline-none placeholder:text-neutral-400 ${isDark ? 'text-white' : 'text-neutral-900'}`}
+          />
+          {searchTerm && (
+            <button onClick={() => setSearchTerm('')} className={`p-0.5 rounded ${isDark ? 'hover:bg-white/10' : 'hover:bg-neutral-200'}`}>
+              <XCircle size={12} className={isDark ? 'text-[#666]' : 'text-neutral-400'} />
+            </button>
+          )}
+        </div>
+      </div>
+
+      {/* Category tabs - horizontal scrollable */}
+      {!searchTerm && (
+        <div className={`flex gap-1 p-2 overflow-x-auto border-b ${isDark ? 'border-white/10' : 'border-neutral-100'} custom-scrollbar`}>
+          <button
+            onClick={() => setActiveCategory(null)}
+            className={`px-2 py-1 text-xs font-medium rounded-md whitespace-nowrap transition-colors ${categoryClass(activeCategory === null)}`}
+          >
+            All
+          </button>
+          {ICON_CATEGORIES.map((cat) => (
+            <button
+              key={cat.label}
+              onClick={() => setActiveCategory(cat.label)}
+              className={`px-2 py-1 text-xs font-medium rounded-md whitespace-nowrap transition-colors ${categoryClass(activeCategory === cat.label)}`}
+            >
+              {cat.label}
+            </button>
+          ))}
+        </div>
+      )}
+
+      {/* Icons grid */}
+      <div className="max-h-[280px] overflow-y-auto custom-scrollbar p-2">
+        {filteredCategories.map((category) => (
+          <div key={category.label} className="mb-3 last:mb-0">
+            {(!activeCategory || searchTerm) && (
+              <div className={`text-[10px] font-semibold uppercase tracking-wider mb-1.5 px-1 ${isDark ? 'text-[#666]' : 'text-neutral-400'}`}>
+                {category.label} {searchTerm && `(${category.icons.length})`}
+              </div>
+            )}
+            <div className="grid grid-cols-8 gap-1">
+              {category.icons.map((item) => (
+                <button
+                  key={item.id}
+                  onClick={() => {
+                    onChange(item.id);
+                    setIsOpen(false);
+                    setSearchTerm('');
+                    setActiveCategory(null);
+                  }}
+                  className={`w-8 h-8 flex items-center justify-center rounded-lg transition-all ${itemClass(value === item.id)}`}
+                  title={item.label}
+                >
+                  <item.icon size={16} />
+                </button>
+              ))}
+            </div>
+          </div>
+        ))}
+        {searchTerm && filteredCategories[0]?.icons.length === 0 && (
+          <div className={`text-center py-6 ${isDark ? 'text-[#666]' : 'text-neutral-400'}`}>
+            <Search size={24} className="mx-auto mb-2 opacity-50" />
+            <p className="text-sm">No icons found</p>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+
   return (
     <div className="relative" ref={containerRef}>
       <button
@@ -555,89 +703,7 @@ const IconPicker = ({ value, onChange, isDark }: { value: string; onChange: (val
         <SelectedIcon size={14} />
       </button>
 
-      {isOpen && (
-        <div className={`absolute top-full right-0 mt-1 w-[320px] border rounded-xl shadow-2xl z-50 overflow-hidden ${dropdownClass}`}>
-          {/* Search bar */}
-          <div className={`p-2 border-b ${isDark ? 'border-white/10' : 'border-neutral-100'}`}>
-            <div className={`flex items-center gap-2 px-2 py-1.5 rounded-lg ${isDark ? 'bg-white/5' : 'bg-neutral-50'}`}>
-              <Search size={14} className={isDark ? 'text-[#666]' : 'text-neutral-400'} />
-              <input
-                ref={searchInputRef}
-                type="text"
-                placeholder="Search icons..."
-                value={searchTerm}
-                onChange={(e) => {
-                  setSearchTerm(e.target.value);
-                  setActiveCategory(null);
-                }}
-                className={`flex-1 bg-transparent text-sm outline-none placeholder:text-neutral-400 ${isDark ? 'text-white' : 'text-neutral-900'}`}
-              />
-              {searchTerm && (
-                <button onClick={() => setSearchTerm('')} className={`p-0.5 rounded ${isDark ? 'hover:bg-white/10' : 'hover:bg-neutral-200'}`}>
-                  <XCircle size={12} className={isDark ? 'text-[#666]' : 'text-neutral-400'} />
-                </button>
-              )}
-            </div>
-          </div>
-
-          {/* Category tabs - horizontal scrollable */}
-          {!searchTerm && (
-            <div className={`flex gap-1 p-2 overflow-x-auto border-b ${isDark ? 'border-white/10' : 'border-neutral-100'} custom-scrollbar`}>
-              <button
-                onClick={() => setActiveCategory(null)}
-                className={`px-2 py-1 text-xs font-medium rounded-md whitespace-nowrap transition-colors ${categoryClass(activeCategory === null)}`}
-              >
-                All
-              </button>
-              {ICON_CATEGORIES.map((cat) => (
-                <button
-                  key={cat.label}
-                  onClick={() => setActiveCategory(cat.label)}
-                  className={`px-2 py-1 text-xs font-medium rounded-md whitespace-nowrap transition-colors ${categoryClass(activeCategory === cat.label)}`}
-                >
-                  {cat.label}
-                </button>
-              ))}
-            </div>
-          )}
-
-          {/* Icons grid */}
-          <div className="max-h-[280px] overflow-y-auto custom-scrollbar p-2">
-            {filteredCategories.map((category) => (
-              <div key={category.label} className="mb-3 last:mb-0">
-                {(!activeCategory || searchTerm) && (
-                  <div className={`text-[10px] font-semibold uppercase tracking-wider mb-1.5 px-1 ${isDark ? 'text-[#666]' : 'text-neutral-400'}`}>
-                    {category.label} {searchTerm && `(${category.icons.length})`}
-                  </div>
-                )}
-                <div className="grid grid-cols-8 gap-1">
-                  {category.icons.map((item) => (
-                    <button
-                      key={item.id}
-                      onClick={() => {
-                        onChange(item.id);
-                        setIsOpen(false);
-                        setSearchTerm('');
-                        setActiveCategory(null);
-                      }}
-                      className={`w-8 h-8 flex items-center justify-center rounded-lg transition-all ${itemClass(value === item.id)}`}
-                      title={item.label}
-                    >
-                      <item.icon size={16} />
-                    </button>
-                  ))}
-                </div>
-              </div>
-            ))}
-            {searchTerm && filteredCategories[0]?.icons.length === 0 && (
-              <div className={`text-center py-6 ${isDark ? 'text-[#666]' : 'text-neutral-400'}`}>
-                <Search size={24} className="mx-auto mb-2 opacity-50" />
-                <p className="text-sm">No icons found</p>
-              </div>
-            )}
-          </div>
-        </div>
-      )}
+      {mounted && dropdown && createPortal(dropdown, document.body)}
     </div>
   );
 };
