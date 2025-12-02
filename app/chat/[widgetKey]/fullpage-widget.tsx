@@ -41,21 +41,21 @@ export default function FullpageWidget({ widgetKey, config, embedType }: Fullpag
       try {
         const { Widget } = (window as any);
 
-        // Merge config with fullpage mode settings
+        // Merge config with portal mode settings (portal = fullscreen chat)
         const configAny = config as any;
-        const fullpageConfig = {
+        const portalConfig = {
           ...config,
-          mode: 'fullpage',
+          mode: 'portal',  // Widget recognizes 'portal' mode for fullscreen
           widgetKey: widgetKey,
           embedType: embedType,
-          fullpage: {
-            showHeader: configAny?.fullpage?.showHeader ?? true,
-            headerTitle: configAny?.fullpage?.headerTitle || config?.branding?.companyName || 'Chat',
+          portal: {
+            showHeader: configAny?.portal?.showHeader ?? true,
+            headerTitle: configAny?.portal?.headerTitle || config?.branding?.companyName || 'Chat',
           },
         };
 
-        // Initialize widget in fullpage mode
-        const widget = new Widget(fullpageConfig);
+        // Initialize widget in portal mode (fullscreen)
+        const widget = new Widget(portalConfig);
         widget.render();
 
         console.log('[Fullpage] N8n Widget initialized:', widgetKey);
@@ -129,9 +129,9 @@ export default function FullpageWidget({ widgetKey, config, embedType }: Fullpag
         }}
       />
 
-      {/* Fullpage Container */}
+      {/* Portal Container - widget looks for id="chat-portal" */}
       <div
-        id="chat-fullpage"
+        id="chat-portal"
         ref={containerRef}
         style={{
           position: 'fixed',
