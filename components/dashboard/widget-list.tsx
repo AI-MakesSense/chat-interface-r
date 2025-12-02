@@ -13,9 +13,52 @@ import { Widget } from '@/stores/widget-store';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Edit, Trash2, Globe, Calendar, X, Check, Code } from 'lucide-react';
+import { Edit, Trash2, Globe, Calendar, X, Check, Code, Bot, Webhook } from 'lucide-react';
 import { EmbedTypeBadge } from '@/components/configurator/embed-type-selector';
 import type { EmbedType } from '@/stores/widget-store';
+
+/**
+ * Determine widget type from config
+ */
+function getWidgetType(widget: Widget): 'chatkit' | 'n8n' {
+    return widget.config?.connection?.provider === 'chatkit' ? 'chatkit' : 'n8n';
+}
+
+/**
+ * Check if widget is properly connected based on its type
+ */
+function isWidgetConnected(widget: Widget): boolean {
+    const config = widget.config;
+    const type = getWidgetType(widget);
+
+    if (type === 'chatkit') {
+        // ChatKit requires workflowId and apiKey
+        return !!(config?.connection?.workflowId && config?.connection?.apiKey);
+    } else {
+        // N8n requires webhookUrl
+        return !!((config as any)?.n8nWebhookUrl || config?.connection?.webhookUrl);
+    }
+}
+
+/**
+ * Widget type badge component
+ */
+function WidgetTypeBadge({ type }: { type: 'chatkit' | 'n8n' }) {
+    if (type === 'chatkit') {
+        return (
+            <Badge variant="outline" className="bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 border-indigo-500/20 gap-1">
+                <Bot className="h-3 w-3" />
+                ChatKit
+            </Badge>
+        );
+    }
+    return (
+        <Badge variant="outline" className="bg-orange-500/10 text-orange-600 dark:text-orange-400 border-orange-500/20 gap-1">
+            <Webhook className="h-3 w-3" />
+            N8n
+        </Badge>
+    );
+}
 
 interface WidgetListProps {
     widgets: Widget[];
@@ -120,17 +163,25 @@ export function WidgetList({ widgets, onDelete }: WidgetListProps) {
                                 <Calendar className="h-4 w-4" />
                                 <span>Created {new Date(widget.createdAt).toLocaleDateString()}</span>
                             </div>
-                            {(widget.config as any).n8nWebhookUrl || widget.config.connection?.webhookUrl ? (
-                                <div className="flex items-center gap-2 text-green-600 dark:text-green-400">
-                                    <div className="h-2 w-2 rounded-full bg-current" />
-                                    <span>Connected to N8n</span>
-                                </div>
-                            ) : (
-                                <div className="flex items-center gap-2 text-amber-600 dark:text-amber-400">
-                                    <div className="h-2 w-2 rounded-full bg-current" />
-                                    <span>No webhook configured</span>
-                                </div>
-                            )}
+                            {(() => {
+                                const widgetType = getWidgetType(widget);
+                                const connected = isWidgetConnected(widget);
+
+                                return (
+                                    <div className="flex items-center gap-2">
+                                        <div className={`flex items-center gap-2 ${connected ? 'text-green-600 dark:text-green-400' : 'text-amber-600 dark:text-amber-400'}`}>
+                                            <div className="h-2 w-2 rounded-full bg-current" />
+                                            <span>
+                                                {connected
+                                                    ? (widgetType === 'chatkit' ? 'Agent Connected' : 'Workflow Connected')
+                                                    : (widgetType === 'chatkit' ? 'Agent not configured' : 'Webhook not configured')
+                                                }
+                                            </span>
+                                        </div>
+                                        <WidgetTypeBadge type={widgetType} />
+                                    </div>
+                                );
+                            })()}
                         </div>
                     </CardContent>
                     <CardFooter className="flex flex-col gap-2 pt-4 border-t">

@@ -46,3 +46,6 @@ drizzle/
 
 # generated widget
 public/widget/chat-widget.iife.js
+
+# Sentry Config File
+.env.sentry-build-plugin
