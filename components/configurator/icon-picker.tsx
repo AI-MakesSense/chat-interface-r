@@ -1,6 +1,7 @@
 'use client';
 
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useCallback } from 'react';
+import { createPortal } from 'react-dom';
 import {
   HelpCircle,
   Box,
@@ -81,21 +82,120 @@ interface IconPickerProps {
   onChange: (value: string) => void;
 }
 
+interface DropdownPosition {
+  top: number;
+  left: number;
+}
+
 export const IconPicker: React.FC<IconPickerProps> = ({ value, onChange }) => {
   const [isOpen, setIsOpen] = useState(false);
+  const [position, setPosition] = useState<DropdownPosition>({ top: 0, left: 0 });
+  const [mounted, setMounted] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
+  const dropdownRef = useRef<HTMLDivElement>(null);
 
   const SelectedIcon = AVAILABLE_ICONS.find((i) => i.id === value)?.icon || HelpCircle;
 
+  // Wait for client-side mount for portal
+  useEffect(() => {
+    setMounted(true);
+  }, []);
+
+  // Calculate optimal dropdown position using fixed positioning
+  const calculatePosition = useCallback(() => {
+    if (!containerRef.current) return;
+
+    const button = containerRef.current.getBoundingClientRect();
+    const dropdownWidth = 260;
+    const dropdownHeight = 200;
+    const padding = 8;
+
+    const viewportWidth = window.innerWidth;
+    const viewportHeight = window.innerHeight;
+
+    let top = button.bottom + 4; // 4px gap below button
+    let left = button.left;
+
+    // Horizontal: if dropdown would go off-screen right, align to right edge
+    if (left + dropdownWidth + padding > viewportWidth) {
+      left = button.right - dropdownWidth;
+    }
+    // If still off-screen left, align to left edge with padding
+    if (left < padding) {
+      left = padding;
+    }
+
+    // Vertical: if dropdown would go off-screen bottom, position above button
+    if (top + dropdownHeight + padding > viewportHeight) {
+      top = button.top - dropdownHeight - 4;
+    }
+    // If still off-screen top, position at top with padding
+    if (top < padding) {
+      top = padding;
+    }
+
+    setPosition({ top, left });
+  }, []);
+
   useEffect(() => {
     const handleOutside = (e: MouseEvent) => {
-      if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
+      if (
+        containerRef.current &&
+        !containerRef.current.contains(e.target as Node) &&
+        dropdownRef.current &&
+        !dropdownRef.current.contains(e.target as Node)
+      ) {
         setIsOpen(false);
       }
     };
     document.addEventListener('mousedown', handleOutside);
     return () => document.removeEventListener('mousedown', handleOutside);
   }, []);
+
+  // Calculate position when opening
+  useEffect(() => {
+    if (isOpen) {
+      calculatePosition();
+    }
+  }, [isOpen, calculatePosition]);
+
+  // Close on scroll
+  useEffect(() => {
+    if (!isOpen) return;
+    const handleScroll = () => setIsOpen(false);
+    window.addEventListener('scroll', handleScroll, true);
+    return () => window.removeEventListener('scroll', handleScroll, true);
+  }, [isOpen]);
+
+  const dropdown = isOpen && mounted && (
+    <div
+      ref={dropdownRef}
+      className="fixed w-[260px] border border-border rounded-lg shadow-xl p-2 grid grid-cols-6 gap-1 max-h-[200px] overflow-y-auto bg-popover animate-in fade-in zoom-in-95 duration-100"
+      style={{
+        top: position.top,
+        left: position.left,
+        zIndex: 9999,
+      }}
+    >
+      {AVAILABLE_ICONS.map((item) => (
+        <button
+          key={item.id}
+          onClick={() => {
+            onChange(item.id);
+            setIsOpen(false);
+          }}
+          className={`w-8 h-8 flex items-center justify-center rounded transition-colors ${
+            value === item.id
+              ? 'bg-primary/20 text-primary'
+              : 'text-muted-foreground hover:bg-muted'
+          }`}
+          title={item.id}
+        >
+          <item.icon size={14} />
+        </button>
+      ))}
+    </div>
+  );
 
   return (
     <div className="relative" ref={containerRef}>
@@ -106,27 +206,7 @@ export const IconPicker: React.FC<IconPickerProps> = ({ value, onChange }) => {
         <SelectedIcon size={14} />
       </button>
 
-      {isOpen && (
-        <div className="absolute top-full left-0 mt-1 w-[260px] border border-border rounded-lg shadow-xl z-50 p-2 grid grid-cols-6 gap-1 max-h-[200px] overflow-y-auto bg-popover">
-          {AVAILABLE_ICONS.map((item) => (
-            <button
-              key={item.id}
-              onClick={() => {
-                onChange(item.id);
-                setIsOpen(false);
-              }}
-              className={`w-8 h-8 flex items-center justify-center rounded transition-colors ${
-                value === item.id
-                  ? 'bg-primary/20 text-primary'
-                  : 'text-muted-foreground hover:bg-muted'
-              }`}
-              title={item.id}
-            >
-              <item.icon size={14} />
-            </button>
-          ))}
-        </div>
-      )}
+      {mounted && dropdown && createPortal(dropdown, document.body)}
     </div>
   );
 };
