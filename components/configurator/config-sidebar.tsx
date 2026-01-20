@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useRef, useEffect } from 'react';
-import { Code, Save, RotateCcw } from 'lucide-react';
+import { Code, Save, RotateCcw, Palette, Type, Layout, Settings, Building2 } from 'lucide-react';
 import { WidgetConfig, StarterPrompt } from '@/stores/widget-store';
 import {
   HelpCircle,
@@ -40,6 +40,23 @@ import {
   Phone,
   LucideIcon
 } from 'lucide-react';
+
+// Tab definitions
+type TabId = 'branding' | 'colors' | 'typography' | 'layout' | 'advanced';
+
+interface Tab {
+  id: TabId;
+  label: string;
+  icon: React.ElementType;
+}
+
+const TABS: Tab[] = [
+  { id: 'branding', label: 'Branding', icon: Building2 },
+  { id: 'colors', label: 'Colors', icon: Palette },
+  { id: 'typography', label: 'Typography', icon: Type },
+  { id: 'layout', label: 'Layout', icon: Layout },
+  { id: 'advanced', label: 'Advanced', icon: Settings },
+];
 
 interface ConfigSidebarProps {
   config: WidgetConfig;
@@ -298,6 +315,7 @@ export const ConfigSidebar: React.FC<ConfigSidebarProps> = ({
 }) => {
   const [customFontUrl, setCustomFontUrl] = useState(config.customFontCss || '');
   const [customFontName, setCustomFontName] = useState(config.customFontName || '');
+  const [activeTab, setActiveTab] = useState<TabId>('branding');
 
   const isDark = config.themeMode === 'dark';
 
@@ -356,6 +374,47 @@ export const ConfigSidebar: React.FC<ConfigSidebarProps> = ({
     });
   };
 
+  const handleBrandingChange = (field: keyof typeof config.branding, value: string) => {
+    onChange({
+      ...config,
+      branding: {
+        ...config.branding,
+        [field]: value,
+      },
+    });
+  };
+
+  // Tab Navigation Component
+  const TabNavigation = () => (
+    <div className={`flex border-b ${theme.border} overflow-x-auto`}>
+      {TABS.map((tab) => {
+        const Icon = tab.icon;
+        const isActive = activeTab === tab.id;
+        return (
+          <button
+            key={tab.id}
+            onClick={() => setActiveTab(tab.id)}
+            className={`flex-1 min-w-0 flex items-center justify-center gap-1.5 px-3 py-2.5 text-xs font-medium transition-colors relative whitespace-nowrap
+              ${isActive
+                ? isDark
+                  ? 'text-white'
+                  : 'text-neutral-900'
+                : isDark
+                  ? 'text-neutral-500 hover:text-neutral-300'
+                  : 'text-neutral-400 hover:text-neutral-600'
+              }`}
+          >
+            <Icon size={14} />
+            <span className="hidden sm:inline">{tab.label}</span>
+            {isActive && (
+              <div className={`absolute bottom-0 left-0 right-0 h-0.5 ${isDark ? 'bg-blue-500' : 'bg-blue-600'}`} />
+            )}
+          </button>
+        );
+      })}
+    </div>
+  );
+
   return (
     <aside className={`w-[380px] flex-shrink-0 flex flex-col h-full border-r text-sm select-none z-20 shadow-xl transition-colors duration-300 ${theme.bg} ${theme.border}`}>
       {/* Header */}
@@ -385,11 +444,82 @@ export const ConfigSidebar: React.FC<ConfigSidebarProps> = ({
         </div>
       </div>
 
+      {/* Tab Navigation */}
+      <TabNavigation />
+
       <div className="flex-1 overflow-y-auto custom-scrollbar">
-        {/* Color Scheme */}
-        <Section isDark={isDark}>
-          <Row>
-            <div className={`font-semibold ${theme.text}`}>Color scheme</div>
+        {/* ===== BRANDING TAB ===== */}
+        {activeTab === 'branding' && (
+          <>
+            <Section isDark={isDark}>
+              <Row className="mb-3">
+                <Label isDark={isDark}>Company Info</Label>
+              </Row>
+              <div className="space-y-3">
+                <Row>
+                  <div className={theme.textMuted}>Company Name</div>
+                  <SidebarInput
+                    type="text"
+                    value={config.branding?.companyName || ''}
+                    onChange={(e) => handleBrandingChange('companyName', e.target.value)}
+                    className="text-right w-40"
+                    placeholder="My Company"
+                    isDark={isDark}
+                  />
+                </Row>
+                <Row>
+                  <div className={theme.textMuted}>Logo URL</div>
+                  <SidebarInput
+                    type="text"
+                    value={config.branding?.logoUrl || ''}
+                    onChange={(e) => handleBrandingChange('logoUrl', e.target.value)}
+                    className="text-right w-40"
+                    placeholder="https://..."
+                    isDark={isDark}
+                  />
+                </Row>
+              </div>
+            </Section>
+
+            <Section isDark={isDark}>
+              <Row className="mb-3">
+                <Label isDark={isDark}>Messages</Label>
+              </Row>
+              <div className="space-y-3">
+                <Row>
+                  <div className={theme.textMuted}>Welcome Text</div>
+                  <SidebarInput
+                    type="text"
+                    value={config.branding?.welcomeText || ''}
+                    onChange={(e) => handleBrandingChange('welcomeText', e.target.value)}
+                    className="text-right w-40"
+                    placeholder="How can we help?"
+                    isDark={isDark}
+                  />
+                </Row>
+                <Row>
+                  <div className={theme.textMuted}>First Message</div>
+                  <SidebarInput
+                    type="text"
+                    value={config.branding?.firstMessage || ''}
+                    onChange={(e) => handleBrandingChange('firstMessage', e.target.value)}
+                    className="text-right w-40"
+                    placeholder="Hello!"
+                    isDark={isDark}
+                  />
+                </Row>
+              </div>
+            </Section>
+          </>
+        )}
+
+        {/* ===== COLORS TAB ===== */}
+        {activeTab === 'colors' && (
+          <>
+            {/* Color Scheme */}
+            <Section isDark={isDark}>
+              <Row>
+                <div className={`font-semibold ${theme.text}`}>Color scheme</div>
             <div className={`p-0.5 rounded-md flex relative ${isDark ? 'bg-[#0D0D0D]' : 'bg-neutral-100'}`}>
               {/* Animated background pill */}
               <div
@@ -567,9 +697,14 @@ export const ConfigSidebar: React.FC<ConfigSidebarProps> = ({
             </>
           )}
         </Section>
+          </>
+        )}
 
-        {/* Typography */}
-        <Section isDark={isDark}>
+        {/* ===== TYPOGRAPHY TAB ===== */}
+        {activeTab === 'typography' && (
+          <>
+            {/* Typography */}
+            <Section isDark={isDark}>
           <Row className="mb-3">
             <Label isDark={isDark}>Typography</Label>
           </Row>
@@ -650,11 +785,16 @@ export const ConfigSidebar: React.FC<ConfigSidebarProps> = ({
             )}
           </div>
         </Section>
+          </>
+        )}
 
-        {/* Style */}
-        <Section isDark={isDark}>
-          <Row className="mb-3">
-            <Label isDark={isDark}>Style</Label>
+        {/* ===== LAYOUT TAB ===== */}
+        {activeTab === 'layout' && (
+          <>
+            {/* Style */}
+            <Section isDark={isDark}>
+              <Row className="mb-3">
+                <Label isDark={isDark}>Style</Label>
           </Row>
           <div className="space-y-3">
             <Row>
@@ -772,11 +912,16 @@ export const ConfigSidebar: React.FC<ConfigSidebarProps> = ({
             </Row>
           </div>
         </Section>
+          </>
+        )}
 
-        {/* Model Picker */}
-        <Section isDark={isDark}>
-          <Row>
-            <Label isDark={isDark}>Model picker</Label>
+        {/* ===== ADVANCED TAB ===== */}
+        {activeTab === 'advanced' && (
+          <>
+            {/* Model Picker */}
+            <Section isDark={isDark}>
+              <Row>
+                <Label isDark={isDark}>Model picker</Label>
             <Toggle checked={config.enableModelPicker || false} onChange={(v) => handleChange('enableModelPicker', v)} isDark={isDark} />
           </Row>
         </Section>
@@ -957,6 +1102,8 @@ export const ConfigSidebar: React.FC<ConfigSidebarProps> = ({
             </div>
           </div>
         </Section>
+          </>
+        )}
       </div >
     </aside >
   );

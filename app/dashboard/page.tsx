@@ -20,6 +20,8 @@ import { WidgetList } from '@/components/dashboard/widget-list';
 import { CreateWidgetModal } from '@/components/dashboard/create-widget-modal';
 import { Plus, LayoutGrid, CreditCard, LogOut, User } from 'lucide-react';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+import { toast } from 'sonner';
+import { ThemeToggle } from '@/components/theme-toggle';
 
 /**
  * Dashboard page component
@@ -49,9 +51,11 @@ export default function DashboardPage() {
   const handleLogout = async () => {
     try {
       await logout();
+      toast.success("You've been logged out");
       router.push('/auth/login');
     } catch (error) {
       console.error('Logout failed:', error);
+      toast.error('Logout failed. Please try again.');
     }
   };
 
@@ -127,6 +131,7 @@ export default function DashboardPage() {
           </div>
 
           <div className="flex items-center gap-4">
+            <ThemeToggle />
             <div className="flex items-center gap-3 pl-4 border-l border-white/10">
               <div className="text-right hidden sm:block">
                 <p className="text-sm font-medium text-white">{user.name || 'User'}</p>

@@ -53,16 +53,21 @@ function getCacheKey(license: License): string {
  *
  * @param license - License object from database
  * @param widgetId - Optional widget ID for relay configuration
+ * @param widgetKey - Optional widget key for secure relay authentication (preferred over license key)
  * @returns Widget bundle JavaScript with injected flags
  *
  * Features:
  * - Caches bundles in memory for performance (60s TTL)
  * - Injects license-specific flags
  * - Injects relay configuration if widgetId is provided
+ * - Uses widget key instead of license key for security when available
  * - Different bundles for different license configurations
  */
-export async function serveWidgetBundle(license: License, widgetId?: string): Promise<string> {
-  const cacheKey = getCacheKey(license);
+export async function serveWidgetBundle(license: License, widgetId?: string, widgetKey?: string): Promise<string> {
+  // Cache key includes widgetKey if present to avoid serving cached bundles with wrong key
+  const cacheKey = widgetKey
+    ? `${getCacheKey(license)}-${widgetKey}`
+    : getCacheKey(license);
   const now = Date.now();
 
   // Check cache
@@ -75,7 +80,8 @@ export async function serveWidgetBundle(license: License, widgetId?: string): Pr
   const rawBundle = await readWidgetBundle();
 
   // Inject license flags and relay config
-  const bundleWithFlags = injectLicenseFlags(rawBundle, license, widgetId);
+  // Pass widgetKey to use instead of licenseKey for security
+  const bundleWithFlags = injectLicenseFlags(rawBundle, license, widgetId, widgetKey);
 
   // Update cache
   bundleCache.set(cacheKey, {

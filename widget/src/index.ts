@@ -5,15 +5,14 @@
  * Responsibility: Initialize widget, create UI, handle user interaction
  */
 
-import { createChatWidget } from './widget';
-import { WidgetRuntimeConfig, WidgetConfig } from './types';
-import { Widget as WidgetConstructor } from './core/widget';
+import { WidgetRuntimeConfig, WidgetConfig, ExtendedWidgetConfig } from './types';
+import { Widget } from './core/widget';
 
 // Expose the Widget constructor globally for portal/embedded modes.
 if (typeof window !== 'undefined') {
   const globalWindow = window as any;
-  globalWindow.Widget = WidgetConstructor;
-  globalWindow.N8nWidget = WidgetConstructor;
+  globalWindow.Widget = Widget;
+  globalWindow.N8nWidget = Widget;
 }
 
 (function () {
@@ -34,12 +33,15 @@ if (typeof window !== 'undefined') {
     // Handle case where injectedConfig might be nested or flat
     const injectedRelay = injectedConfig.relay || (injectedConfig.uiConfig ? injectedConfig.uiConfig.relay : {});
 
-    // Check if we have a FULL configuration (Legacy or fully injected mode)
-    // We check both flat structure and nested uiConfig structure
-    if (injectedRelay && injectedRelay.relayUrl && (injectedConfig.branding || (injectedConfig.uiConfig && injectedConfig.uiConfig.branding))) {
+    // Check if we have a FULL configuration (Legacy or fully injected mode - e.g. Portal)
+    const isFullConfig = injectedConfig.branding || (injectedConfig.uiConfig && injectedConfig.uiConfig.branding);
+
+    if (injectedRelay && injectedRelay.relayUrl && isFullConfig) {
       console.log('[N8n Chat Widget] Using existing full configuration');
       try {
-        createChatWidget(injectedConfig as WidgetRuntimeConfig);
+        // Normalize config for Widget class
+        const config = normalizeConfig(injectedConfig);
+        new Widget(config).render();
         return;
       } catch (error) {
         console.error('[N8n Chat Widget] Initialization error:', error);
@@ -86,22 +88,25 @@ if (typeof window !== 'undefined') {
 
       const remoteConfig: WidgetConfig = await response.json();
 
-      // 4. Construct Runtime Config
-      // CRITICAL FIX: Nest the remoteConfig inside 'uiConfig' to match widget.ts expectations
-      const runtimeConfig: WidgetRuntimeConfig = {
-        uiConfig: remoteConfig, // Nesting the config here!
-        relay: {
-          relayUrl: injectedRelay.relayUrl || remoteConfig.connection?.relayEndpoint || `${apiBaseUrl}/api/chat-relay`,
-          widgetId: injectedRelay.widgetId || '', // Use injected ID if available
-          licenseKey: licenseKey
-        }
-      } as unknown as WidgetRuntimeConfig;
+      // 4. Construct Config for Widget Class
+      const config: ExtendedWidgetConfig = {
+        ...remoteConfig,
+        connection: {
+          ...remoteConfig.connection,
+          relayEndpoint: injectedRelay.relayUrl || remoteConfig.connection?.relayEndpoint || `${apiBaseUrl}/api/chat-relay`,
+        },
+        license: {
+          ...remoteConfig.license,
+          key: licenseKey
+        },
+        widgetId: injectedRelay.widgetId || remoteConfig.widgetId || ''
+      };
 
       // Save config to window so the internal message handler can find it if needed
-      (window as any).ChatWidgetConfig = runtimeConfig;
+      (window as any).ChatWidgetConfig = config;
 
       // 5. Initialize
-      createChatWidget(runtimeConfig);
+      new Widget(config).render();
 
     } catch (error) {
       console.error('[N8n Chat Widget] Boot error:', error);
@@ -109,5 +114,27 @@ if (typeof window !== 'undefined') {
         container.innerHTML = '<div style="color:red;padding:10px;border:1px solid red">Widget Error: Config Load Failed</div>';
       }
     }
+  }
+
+  /**
+   * Helper to normalize fetching vs injected config structures
+   */
+  function normalizeConfig(input: any): ExtendedWidgetConfig {
+    // If it has uiConfig (RuntimeConfig wrapper), unwrap it
+    if (input.uiConfig) {
+      const config = input.uiConfig;
+      if (input.relay) {
+        config.connection = {
+          ...config.connection,
+          relayEndpoint: input.relay.relayUrl
+        };
+        config.license = {
+          ...config.license,
+          key: input.relay.licenseKey
+        };
+      }
+      return config;
+    }
+    return input as ExtendedWidgetConfig;
   }
 })();

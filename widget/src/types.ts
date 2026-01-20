@@ -86,10 +86,19 @@ export interface LicenseConfig {
   [key: string]: any;
 }
 
+/**
+ * Relay configuration for backend communication
+ *
+ * Authentication:
+ * - widgetKey (PREFERRED): Secure, scoped to single widget
+ * - licenseKey (LEGACY): Kept for backward compatibility
+ */
 export interface RelayConfig {
   relayUrl: string;
   widgetId: string;
-  licenseKey: string;
+  // Authentication - prefer widgetKey when available
+  widgetKey?: string;  // Preferred: secure, scoped to single widget
+  licenseKey?: string; // Legacy: kept for backward compatibility
 }
 
 export interface Message {

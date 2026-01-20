@@ -39,3 +39,40 @@ export function generateLicenseKey(): string {
   // Convert to lowercase hexadecimal string (32 characters)
   return bytes.toString('hex');
 }
+
+/**
+ * Generate a cryptographically secure widget key.
+ *
+ * This function creates a 16-character alphanumeric string using Node.js's
+ * crypto.randomBytes for cryptographic security. Each call generates a unique
+ * key with ~95 bits of entropy (16 characters from 62-character alphabet).
+ *
+ * Widget keys are used in embed URLs as a safer alternative to license keys:
+ * - Shorter and more user-friendly in URLs
+ * - Scoped to a single widget (not all widgets under a license)
+ * - Can be rotated without affecting other widgets
+ *
+ * @returns {string} A 16-character alphanumeric string
+ *
+ * @example
+ * ```typescript
+ * const widgetKey = generateWidgetKey();
+ * // Returns: "aB3cD4eF5gH6iJ7k"
+ * ```
+ */
+export function generateWidgetKey(): string {
+  // Use alphanumeric characters (62 chars total)
+  const alphabet = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
+
+  // Generate 16 random bytes
+  const bytes = crypto.randomBytes(16);
+
+  // Convert each byte to a character from our alphabet
+  let result = '';
+  for (let i = 0; i < 16; i++) {
+    // Use modulo to map byte value to alphabet index
+    result += alphabet[bytes[i] % alphabet.length];
+  }
+
+  return result;
+}

@@ -67,10 +67,9 @@ function translateConfig(dbConfig: any, requestUrl: string): WidgetConfig {
         dbConfig.style?.cornerRadius ||
         12;
 
-    // Get webhook URL - check multiple locations
-    const webhookUrl = dbConfig.n8nWebhookUrl ||
-        dbConfig.connection?.webhookUrl ||
-        '';
+    // NOTE: Webhook URL is intentionally NOT sent to the client
+    // It stays server-side and is only used by the relay endpoint
+    // This prevents direct access to N8n webhooks bypassing our security controls
 
     // Build extended theme configuration
     const theme: WidgetConfig['theme'] = {
@@ -186,7 +185,7 @@ function translateConfig(dbConfig: any, requestUrl: string): WidgetConfig {
             maxFileSizeKB: dbConfig.features?.maxFileSize || 5120,
         },
         connection: {
-            webhookUrl: webhookUrl,
+            // NOTE: webhookUrl is NOT exposed to client - only relay endpoint
             relayEndpoint: `${new URL(requestUrl).origin}/api/chat-relay`,
         },
         // AgentKit / OpenAI configuration

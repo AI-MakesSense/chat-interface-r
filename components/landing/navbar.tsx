@@ -1,6 +1,7 @@
 import Link from 'next/link';
 import { Button } from '@/components/ui/button';
 import { MessageSquare } from 'lucide-react';
+import { ThemeToggle } from '@/components/theme-toggle';
 
 export function Navbar() {
     return (
@@ -15,6 +16,7 @@ export function Navbar() {
                     </span>
                 </div>
                 <div className="flex items-center gap-4">
+                    <ThemeToggle />
                     <Link href="/auth/login">
                         <Button variant="ghost" className="text-sm font-medium text-zinc-400 hover:text-white hover:bg-white/10">
                             Sign In

@@ -5,14 +5,16 @@
  * Extracted from Widget class for better separation of concerns
  */
 
-import { ExtendedWidgetConfig } from './widget';
+import { ExtendedWidgetConfig, Widget } from './widget';
 
 export class PortalRenderer {
   private config: ExtendedWidgetConfig;
+  private widget: Widget;
   private chatWindow: HTMLElement | null = null;
 
-  constructor(config: ExtendedWidgetConfig) {
+  constructor(config: ExtendedWidgetConfig, widget: Widget) {
     this.config = config;
+    this.widget = widget;
   }
 
   /**
@@ -38,14 +40,40 @@ export class PortalRenderer {
     // Add to DOM
     targetContainer.appendChild(this.chatWindow);
 
-    // Make visible immediately (no toggle needed)
+    // Make visible immediately
     this.chatWindow.classList.add('visible');
     this.chatWindow.style.display = 'flex';
+
+    // Populate widget UI references
+    this.widget.ui.chatWindow = this.chatWindow;
+    this.widget.ui.messagesContainer = this.chatWindow.querySelector('.chat-messages');
+    this.widget.ui.input = this.chatWindow.querySelector('.chat-input');
+    this.widget.ui.sendBtn = this.chatWindow.querySelector('.send-btn') as HTMLElement;
+
+    // Bind events
+    this.bindEvents();
 
     // Auto-focus input
     this.autoFocusInput();
 
     return this.chatWindow;
+  }
+
+  /**
+   * Bind DOM events to widget methods
+   */
+  private bindEvents(): void {
+    if (this.widget.ui.sendBtn) {
+      this.widget.ui.sendBtn.addEventListener('click', () => this.widget.handleSendMessage());
+    }
+
+    if (this.widget.ui.input) {
+      this.widget.ui.input.addEventListener('keypress', (e) => {
+        if (e.key === 'Enter') {
+          this.widget.handleSendMessage();
+        }
+      });
+    }
   }
 
   /**
@@ -63,10 +91,10 @@ export class PortalRenderer {
 
     // Apply base styles
     const baseStyles = `
-      background: white;
+      background: ${this.config.style?.theme === 'dark' ? '#1a1a1a' : 'white'};
+      color: ${this.config.style?.theme === 'dark' ? 'white' : 'inherit'};
       flex-direction: column;
       overflow: hidden;
-      ${this.config.style?.theme === 'dark' ? 'background: #1a1a1a; color: white;' : ''}
     `;
 
     chatWindow.style.cssText = baseStyles;
@@ -109,24 +137,6 @@ export class PortalRenderer {
     titleEl.textContent = title;
     header.appendChild(titleEl);
 
-    // Minimize button (only if not portal mode)
-    if (showMinimize) {
-      const minimizeBtn = document.createElement('button');
-      minimizeBtn.className = 'minimize-btn';
-      minimizeBtn.innerHTML = '×';
-      minimizeBtn.style.cssText = `
-        background: none;
-        border: none;
-        color: white;
-        font-size: 24px;
-        cursor: pointer;
-        padding: 0;
-        width: 24px;
-        height: 24px;
-      `;
-      header.appendChild(minimizeBtn);
-    }
-
     return header;
   }
 
@@ -144,16 +154,17 @@ export class PortalRenderer {
 
     // Add welcome message
     if (this.config.branding?.firstMessage) {
-      const welcomeMsg = document.createElement('div');
-      welcomeMsg.className = 'message assistant';
-      welcomeMsg.style.cssText = `
-        background: #f0f0f0;
-        padding: 12px;
-        border-radius: 8px;
-        margin-bottom: 12px;
-      `;
-      welcomeMsg.textContent = this.config.branding.firstMessage;
-      messagesArea.appendChild(welcomeMsg);
+      // We don't verify against widget.messages length here because render usually happens once.
+      // But we should let the Widget class manage messages.
+      // However, for initial render, we can just rely on the Widget class adding it if needed.
+      // Or we can pre-render it here if the widget state is empty.
+      // Given Widget logic: it adds message on toggleChat. For Portal, it's always open.
+      // So we should probably let Widget add it in render() or manually here.
+      // Current Widget logic adds it in toggleChat() if messages.length === 0.
+      // Since Portal calls addMessage explicitly on init in my new Widget class, we might duplicate it if we keep this.
+      // I will REMOVE this manual addition here and rely on Widget class state.
+      // Wait, the Widget.ts addMessage logic adds to DOM.
+      // So we just return an empty container here.
     }
 
     return messagesArea;
@@ -167,7 +178,7 @@ export class PortalRenderer {
     inputArea.className = 'chat-input-area';
     inputArea.style.cssText = `
       padding: 16px;
-      border-top: 1px solid #e0e0e0;
+      border-top: 1px solid ${this.config.style?.theme === 'dark' ? '#333' : '#e0e0e0'};
       display: flex;
       gap: 8px;
     `;
@@ -180,9 +191,11 @@ export class PortalRenderer {
     input.style.cssText = `
       flex: 1;
       padding: 12px;
-      border: 1px solid #e0e0e0;
+      border: 1px solid ${this.config.style?.theme === 'dark' ? '#333' : '#e0e0e0'};
       border-radius: 8px;
       font-size: 14px;
+      background: ${this.config.style?.theme === 'dark' ? '#262626' : 'white'};
+      color: ${this.config.style?.theme === 'dark' ? 'white' : 'inherit'};
     `;
 
     // Send button
@@ -232,12 +245,10 @@ export class PortalRenderer {
     const width = window.innerWidth;
     const height = window.innerHeight;
 
-    // Mobile detection
     if (width < 768) {
       element.classList.add('mobile');
     }
 
-    // Landscape detection
     if (width > height) {
       element.classList.add('landscape');
     }

@@ -93,6 +93,21 @@ function ConfiguratorPage() {
         }
     }, [currentWidget]);
 
+    // Unsaved changes warning - beforeunload event
+    useEffect(() => {
+        const handleBeforeUnload = (e: BeforeUnloadEvent) => {
+            if (hasUnsavedChanges) {
+                e.preventDefault();
+                // Modern browsers require returnValue to be set
+                e.returnValue = '';
+                return '';
+            }
+        };
+
+        window.addEventListener('beforeunload', handleBeforeUnload);
+        return () => window.removeEventListener('beforeunload', handleBeforeUnload);
+    }, [hasUnsavedChanges]);
+
     // Handle creating a new widget
     const handleCreateWidget = async () => {
         if (!widgetName.trim()) {
@@ -208,6 +223,8 @@ function ConfiguratorPage() {
                         onClick={handleSave}
                         disabled={isSaving}
                         size="sm"
+                        variant={hasUnsavedChanges ? 'default' : 'outline'}
+                        className={hasUnsavedChanges ? 'animate-pulse shadow-md' : ''}
                     >
                         {isSaving ? (
                             <>
@@ -217,7 +234,7 @@ function ConfiguratorPage() {
                         ) : (
                             <>
                                 <Save className="h-4 w-4 mr-2" />
-                                Save
+                                {hasUnsavedChanges ? 'Save Changes' : 'Saved'}
                             </>
                         )}
                     </Button>

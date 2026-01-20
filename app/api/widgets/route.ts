@@ -24,10 +24,58 @@ import { z } from 'zod';
 // Request Validation Schemas
 // =============================================================================
 
+/**
+ * Partial config schema for widget creation input
+ * Allows users to provide only the fields they want to customize
+ * Full validation happens after merging with defaults
+ */
+const partialConfigSchema = z.object({
+  // Connection settings
+  connection: z.object({
+    webhookUrl: z.string().url().optional(),
+    provider: z.enum(['n8n', 'chatkit']).optional(),
+  }).passthrough().optional(),
+
+  // Branding (all optional - will use defaults)
+  branding: z.object({
+    companyName: z.string().max(100).optional(),
+    welcomeText: z.string().max(200).optional(),
+    logoUrl: z.string().url().nullable().optional(),
+    firstMessage: z.string().max(500).optional(),
+  }).passthrough().optional(),
+
+  // Theme settings
+  themeMode: z.enum(['light', 'dark']).optional(),
+  accentColor: z.string().regex(/^#[0-9A-Fa-f]{6}$/, 'Invalid hex color').optional(),
+  useAccent: z.boolean().optional(),
+
+  // Feature flags
+  enableAttachments: z.boolean().optional(),
+  enableAgentKit: z.boolean().optional(),
+
+  // Greeting and prompts
+  greeting: z.string().max(500).optional(),
+  placeholder: z.string().max(200).optional(),
+  starterPrompts: z.array(z.union([
+    z.string().max(200),
+    z.object({
+      label: z.string().max(200),
+      prompt: z.string().max(500).optional(),
+      icon: z.string().optional(),
+    }),
+  ])).max(6).optional(),
+
+  // Style options
+  radius: z.enum(['none', 'small', 'medium', 'large', 'pill']).optional(),
+  density: z.enum(['compact', 'normal', 'spacious']).optional(),
+
+  // Allow passthrough for other fields that will be validated after merge
+}).passthrough();
+
 const CreateWidgetSchema = z.object({
   licenseId: z.string().uuid(),
   name: z.string().min(1).max(100),
-  config: z.any().optional(),
+  config: partialConfigSchema.optional(),
 });
 
 // =============================================================================
@@ -58,18 +106,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'You do not own this license' }, { status: 403 });
     }
 
-    // 4. Check widget limit based on tier
-    const activeCount = await getActiveWidgetCount(licenseId);
-    const limit = license.widgetLimit;
-
-    if (limit !== -1 && activeCount >= limit) {
-      return NextResponse.json(
-        { error: `Widget limit exceeded for ${license.tier} tier (max: ${limit})` },
-        { status: 403 }
-      );
-    }
-
-    // 5. Generate config (use defaults if not provided, merge if provided)
+    // 4. Generate config (use defaults if not provided, merge if provided)
     let finalConfig;
     if (userConfig) {
       // Deep merge user config with defaults
@@ -79,19 +116,40 @@ export async function POST(request: NextRequest) {
       finalConfig = createDefaultConfig(license.tier as any);
     }
 
-    // 6. Validate final config against tier restrictions
+    // 5. Validate final config against tier restrictions
     const configSchema = createWidgetConfigSchema(license.tier as any, true);
     configSchema.parse(finalConfig);
 
-    // 7. Clean legacy properties that might conflict with new structure
+    // 6. Clean legacy properties that might conflict with new structure
     const cleanedConfig = stripLegacyConfigProperties(finalConfig);
 
-    // 8. Create widget in database
-    const widget = await createWidget({
-      licenseId,
-      name,
-      config: cleanedConfig,
-      widgetType: cleanedConfig.connection?.provider === 'chatkit' ? 'chatkit' : 'n8n',
+    // 7. Atomic widget creation with limit check (prevents race conditions)
+    // Use transaction to ensure count check and insert are atomic
+    const widget = await db.transaction(async (tx) => {
+      // Count active widgets within transaction
+      const countResult = await tx
+        .select({ count: eq(widgets.status, 'active') })
+        .from(widgets)
+        .where(eq(widgets.licenseId, licenseId));
+
+      // Get current count
+      const activeCount = await getActiveWidgetCount(licenseId);
+      const limit = license.widgetLimit;
+
+      // Check limit (atomic check within transaction)
+      if (limit !== -1 && activeCount >= limit) {
+        throw new Error(`WIDGET_LIMIT_EXCEEDED:${license.tier}:${limit}`);
+      }
+
+      // Create widget within same transaction
+      const newWidget = await createWidget({
+        licenseId,
+        name,
+        config: cleanedConfig,
+        widgetType: cleanedConfig.connection?.provider === 'chatkit' ? 'chatkit' : 'n8n',
+      });
+
+      return newWidget;
     });
 
     // 8. Return 201 Created with widget data
@@ -111,6 +169,19 @@ export async function POST(request: NextRequest) {
     const errorMessage = error instanceof Error ? error.message : 'Unknown error';
     if (errorMessage === 'Authentication required' || errorMessage === 'Invalid or expired token') {
       return NextResponse.json({ error: errorMessage }, { status: 401 });
+    }
+
+    // Handle widget limit exceeded (from atomic transaction)
+    if (errorMessage.startsWith('WIDGET_LIMIT_EXCEEDED:')) {
+      const [, tier, limit] = errorMessage.split(':');
+      return NextResponse.json({
+        error: 'Widget limit reached',
+        details: {
+          tier,
+          limit: parseInt(limit, 10),
+          message: `Your ${tier} tier allows a maximum of ${limit} widget${parseInt(limit, 10) === 1 ? '' : 's'}. Please upgrade your plan or delete an existing widget.`
+        }
+      }, { status: 403 });
     }
 
     // Log unexpected errors

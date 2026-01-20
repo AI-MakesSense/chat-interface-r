@@ -370,6 +370,32 @@ export type WidgetWithLicense = Widget & {
 };
 
 /**
+ * Get widget by widget key (for embed URLs)
+ * Returns widget with license data for authorization checks
+ * Returns null if widget not found or deleted
+ */
+export async function getWidgetByKey(widgetKey: string): Promise<WidgetWithLicense | null> {
+  const result = await db
+    .select()
+    .from(widgets)
+    .innerJoin(licenses, eq(widgets.licenseId, licenses.id))
+    .where(
+      and(
+        eq(widgets.widgetKey, widgetKey),
+        ne(widgets.status, 'deleted')
+      )
+    )
+    .limit(1);
+
+  if (!result[0]) return null;
+
+  return {
+    ...result[0].widgets,
+    license: result[0].licenses,
+  };
+}
+
+/**
  * Get widget by ID
  * Returns widget including soft-deleted ones (status='deleted')
  * Throws error for invalid UUID format
@@ -408,6 +434,7 @@ export async function getWidgetWithLicense(id: string): Promise<WidgetWithLicens
 /**
  * Create a new widget
  * Sets default status='active' and version=1 if not provided
+ * Automatically generates a unique widgetKey for embed URLs
  * Sets timestamps using client-side time for consistency
  */
 export async function createWidget(data: {
@@ -418,7 +445,11 @@ export async function createWidget(data: {
   widgetType?: string;
   version?: number;
   deployedAt?: Date | null;
+  widgetKey?: string; // Can be provided, but usually auto-generated
 }): Promise<Widget> {
+  // Import here to avoid circular dependency
+  const { generateWidgetKey } = await import('@/lib/license/generate');
+
   const now = new Date();
   const [widget] = await db
     .insert(widgets)
@@ -428,6 +459,7 @@ export async function createWidget(data: {
       config: data.config,
       status: data.status || 'active',
       widgetType: data.widgetType || 'n8n',
+      widgetKey: data.widgetKey || generateWidgetKey(), // Auto-generate secure widget key
       version: data.version || 1,
       deployedAt: data.deployedAt || null,
       createdAt: now,

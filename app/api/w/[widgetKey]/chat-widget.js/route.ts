@@ -1,25 +1,31 @@
 /**
- * Widget Serving API Route
+ * Widget Serving API Route (By Widget Key)
  *
- * Purpose: Serve embeddable chat widget with license validation and domain checks
- * Route: GET /api/widget/[license]/chat-widget.js
+ * Purpose: Serve embeddable chat widget using widget key (instead of license key)
+ * Route: GET /api/w/[widgetKey]/chat-widget.js
+ *
+ * This is the SECURE route that should be used for embedding widgets.
+ * Widget keys are:
+ * - Scoped to a single widget (not all widgets under a license)
+ * - Can be rotated without affecting other widgets
+ * - Don't expose the license key which controls multiple resources
  *
  * Features:
  * - Referer header validation
- * - Domain authorization checking
+ * - Domain authorization checking (uses license domains)
  * - License status validation
- * - IP and license-based rate limiting
+ * - IP and widget-based rate limiting
  * - Caching headers for performance
  * - CORS support
  *
  * Security:
- * - Domain validation prevents license key theft
+ * - Domain validation prevents widget key theft
  * - Rate limiting prevents abuse
  * - No sensitive data in error responses
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import { getLicenseByKey, getWidgetsByLicenseId } from '@/lib/db/queries';
+import { getWidgetByKey } from '@/lib/db/queries';
 import { normalizeDomain } from '@/lib/license/domain';
 import { extractDomainFromReferer, createResponseHeaders } from '@/lib/widget/headers';
 import { createErrorScript, logWidgetError, ErrorType } from '@/lib/widget/error';
@@ -28,84 +34,56 @@ import { serveWidgetBundle } from '@/lib/widget/serve';
 
 /**
  * Extract IP address from request
- *
- * @param request - Next.js request object
- * @returns IP address string
  */
 function getClientIP(request: NextRequest): string {
-  // Check x-forwarded-for header (common in proxies/CDNs)
   const forwarded = request.headers.get('x-forwarded-for');
   if (forwarded) {
-    // Take first IP if multiple (client IP)
     return forwarded.split(',')[0].trim();
   }
-
-  // Check x-real-ip header (common in nginx)
   const realIp = request.headers.get('x-real-ip');
   if (realIp) {
     return realIp;
   }
-
-  // Fallback to a default (shouldn't happen in production)
   return 'unknown';
 }
 
 /**
  * Create error response with JavaScript error script
- *
- * @param errorType - Type of error that occurred
- * @param context - Additional error context for logging
- * @returns NextResponse with error script
  */
 function createErrorResponse(
   errorType: ErrorType,
   context?: Record<string, any>
 ): NextResponse {
-  // Log the error
   logWidgetError(errorType, context);
-
-  // Create error script
   const errorScript = createErrorScript(errorType);
-
-  // Determine status code based on error type
-  let status = 403; // Default to Forbidden
+  let status = 403;
   if (errorType === 'INTERNAL_ERROR') {
     status = 500;
   }
-
-  // Create response with error script
   const headers = createResponseHeaders();
-  return new NextResponse(errorScript, {
-    status,
-    headers
-  });
+  return new NextResponse(errorScript, { status, headers });
 }
 
 /**
- * GET handler for widget serving endpoint
- *
- * @param request - Next.js request object
- * @param params - Route parameters containing license key
- * @returns NextResponse with widget bundle or error script
+ * GET handler for widget serving endpoint (by widget key)
  */
 export async function GET(
   request: NextRequest,
-  { params }: { params: Promise<{ license: string }> }
+  { params }: { params: Promise<{ widgetKey: string }> }
 ): Promise<NextResponse> {
   try {
-    // Extract license key from route params (await for Next.js 16)
-    const { license: licenseKey } = await params;
+    const { widgetKey } = await params;
 
     // Step 1: Extract and validate referer header
     const referer = request.headers.get('referer');
     if (!referer) {
-      return createErrorResponse('REFERER_MISSING', { licenseKey });
+      return createErrorResponse('REFERER_MISSING', { widgetKey });
     }
 
     // Step 2: Extract domain from referer
     const domain = extractDomainFromReferer(referer);
     if (!domain) {
-      return createErrorResponse('REFERER_MISSING', { licenseKey, referer });
+      return createErrorResponse('REFERER_MISSING', { widgetKey, referer });
     }
 
     // Step 3: Get client IP for rate limiting
@@ -124,25 +102,27 @@ export async function GET(
       });
     }
 
-    // Step 5: Fetch license from database
-    const license = await getLicenseByKey(licenseKey);
-    if (!license) {
+    // Step 5: Fetch widget and license from database by widget key
+    const widget = await getWidgetByKey(widgetKey);
+    if (!widget) {
       return createErrorResponse('LICENSE_INVALID', {
-        licenseKey,
+        widgetKey,
         domain,
         ip: clientIP
       });
     }
 
-    // Step 6: Check license rate limit (100 req/min)
-    const licenseRateLimit = await checkRateLimit(licenseKey, 'license');
-    if (!licenseRateLimit.allowed) {
+    const license = widget.license;
+
+    // Step 6: Check license rate limit (100 req/min) using widget key
+    const widgetRateLimit = await checkRateLimit(widgetKey, 'license');
+    if (!widgetRateLimit.allowed) {
       const errorScript = createErrorScript('INTERNAL_ERROR');
       return new NextResponse(errorScript, {
         status: 429,
         headers: {
           ...createResponseHeaders(),
-          ...buildRateLimitHeaders(licenseRateLimit),
+          ...buildRateLimitHeaders(widgetRateLimit),
         }
       });
     }
@@ -150,7 +130,7 @@ export async function GET(
     // Step 7: Validate license status
     if (license.status === 'expired') {
       return createErrorResponse('LICENSE_EXPIRED', {
-        licenseKey,
+        widgetKey,
         domain,
         ip: clientIP
       });
@@ -158,7 +138,7 @@ export async function GET(
 
     if (license.status === 'cancelled') {
       return createErrorResponse('LICENSE_CANCELLED', {
-        licenseKey,
+        widgetKey,
         domain,
         ip: clientIP
       });
@@ -166,7 +146,7 @@ export async function GET(
 
     if (license.status !== 'active') {
       return createErrorResponse('LICENSE_INVALID', {
-        licenseKey,
+        widgetKey,
         domain,
         status: license.status,
         ip: clientIP
@@ -178,7 +158,7 @@ export async function GET(
       const now = new Date();
       if (license.expiresAt <= now) {
         return createErrorResponse('LICENSE_EXPIRED', {
-          licenseKey,
+          widgetKey,
           domain,
           expiresAt: license.expiresAt.toISOString(),
           ip: clientIP
@@ -187,53 +167,60 @@ export async function GET(
     }
 
     // Step 9: Validate domain authorization
-    // Normalize both domains for comparison
     const normalizedRequestDomain = normalizeDomain(domain);
 
     // Agency tier allows any domain
     if (license.tier !== 'agency') {
-      // Check if domain is in allowed list (including subdomains)
-      const isAuthorized = normalizedRequestDomain === 'localhost' || license.domains.some(allowedDomain => {
+      // Check widget-specific allowed domains first, then license domains
+      const allowedDomains = widget.allowedDomains || license.domains;
+
+      const isAuthorized = normalizedRequestDomain === 'localhost' || allowedDomains.some(allowedDomain => {
         const normalizedAllowed = normalizeDomain(allowedDomain);
-        // Allow exact match OR subdomain match (e.g., project.user.replit.dev matches replit.dev)
         return normalizedAllowed === normalizedRequestDomain ||
           normalizedRequestDomain.endsWith('.' + normalizedAllowed);
       });
 
       if (!isAuthorized) {
         return createErrorResponse('DOMAIN_UNAUTHORIZED', {
-          licenseKey,
+          widgetKey,
           domain: normalizedRequestDomain,
-          allowedDomains: license.domains,
+          allowedDomains,
           ip: clientIP
         });
       }
     }
 
-    // Step 10: Get widgets for this license to inject relay configuration
-    const widgets = await getWidgetsByLicenseId(license.id);
-    const widgetId = widgets.length > 0 ? widgets[0].id : undefined;
+    // Step 10: Check widget status
+    if (widget.status !== 'active') {
+      return createErrorResponse('LICENSE_INVALID', {
+        widgetKey,
+        domain,
+        widgetStatus: widget.status,
+        ip: clientIP
+      });
+    }
 
     // Step 11: Serve widget bundle with injected flags and relay config
     // Check if it's a ChatKit widget
-    if (widgets.length > 0 && widgets[0].widgetType === 'chatkit') {
+    if (widget.widgetType === 'chatkit') {
       const host = request.headers.get('host') || 'localhost:3000';
       const protocol = host.includes('localhost') ? 'http' : 'https';
-      const widgetUrl = `${protocol}://${host}/widget/chatkit/${licenseKey}`;
+      // For ChatKit widgets, use the widget key in the URL
+      const widgetUrl = `${protocol}://${host}/widget/chatkit/${widgetKey}`;
 
       const script = `
 (function() {
   if (document.getElementById('chatkit-widget-container')) return;
-  
+
   var container = document.createElement('div');
   container.id = 'chatkit-widget-container';
   container.style.cssText = "position: fixed; bottom: 0; right: 0; width: 100vw; height: 100vh; border: none; z-index: 999999; pointer-events: none;";
-  
+
   var iframe = document.createElement('iframe');
   iframe.src = "${widgetUrl}";
   iframe.style.cssText = "width: 100%; height: 100%; border: none; background: transparent; color-scheme: normal;";
   iframe.allowTransparency = "true";
-  
+
   container.appendChild(iframe);
   document.body.appendChild(container);
 })();
@@ -248,19 +235,16 @@ export async function GET(
       });
     }
 
-    const widgetBundle = await serveWidgetBundle(license, widgetId);
+    // Serve standard widget bundle, passing widget key (not license key)
+    const widgetBundle = await serveWidgetBundle(license, widget.id, widgetKey);
 
-    // Step 12: Return successful response
     return new NextResponse(widgetBundle, {
       status: 200,
       headers: createResponseHeaders()
     });
 
   } catch (error) {
-    // Log internal error
     console.error('[Widget Serving] Internal error:', error);
-
-    // Return generic error response
     return createErrorResponse('INTERNAL_ERROR', {
       error: error instanceof Error ? error.message : 'Unknown error'
     });

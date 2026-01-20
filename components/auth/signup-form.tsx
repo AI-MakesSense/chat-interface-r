@@ -27,6 +27,8 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Alert, AlertDescription } from '@/components/ui/alert';
+import { toast } from 'sonner';
+import { Eye, EyeOff } from 'lucide-react';
 
 /**
  * Signup form validation schema
@@ -96,6 +98,8 @@ export function SignupForm({
   const router = useRouter();
   const signup = useAuthStore((state) => state.signup);
   const [error, setError] = useState<string | null>(null);
+  const [showPassword, setShowPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
 
   const {
     register,
@@ -119,6 +123,9 @@ export function SignupForm({
         password: data.password,
         name: data.name,
       });
+
+      // Show success toast
+      toast.success('Account created successfully!');
 
       // Success callback
       onSuccess?.();
@@ -185,14 +192,30 @@ export function SignupForm({
           {/* Password Field */}
           <div className="space-y-2">
             <Label htmlFor="password">Password</Label>
-            <Input
-              id="password"
-              type="password"
-              placeholder="Create a strong password"
-              autoComplete="new-password"
-              disabled={isSubmitting}
-              {...register('password')}
-            />
+            <div className="relative">
+              <Input
+                id="password"
+                type={showPassword ? 'text' : 'password'}
+                placeholder="Create a strong password"
+                autoComplete="new-password"
+                disabled={isSubmitting}
+                className="pr-10"
+                {...register('password')}
+              />
+              <button
+                type="button"
+                onClick={() => setShowPassword(!showPassword)}
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
+                tabIndex={-1}
+                aria-label={showPassword ? 'Hide password' : 'Show password'}
+              >
+                {showPassword ? (
+                  <EyeOff className="h-4 w-4" />
+                ) : (
+                  <Eye className="h-4 w-4" />
+                )}
+              </button>
+            </div>
             {errors.password && (
               <p className="text-sm text-red-500">{errors.password.message}</p>
             )}
@@ -204,14 +227,30 @@ export function SignupForm({
           {/* Confirm Password Field */}
           <div className="space-y-2">
             <Label htmlFor="confirmPassword">Confirm Password</Label>
-            <Input
-              id="confirmPassword"
-              type="password"
-              placeholder="Re-enter your password"
-              autoComplete="new-password"
-              disabled={isSubmitting}
-              {...register('confirmPassword')}
-            />
+            <div className="relative">
+              <Input
+                id="confirmPassword"
+                type={showConfirmPassword ? 'text' : 'password'}
+                placeholder="Re-enter your password"
+                autoComplete="new-password"
+                disabled={isSubmitting}
+                className="pr-10"
+                {...register('confirmPassword')}
+              />
+              <button
+                type="button"
+                onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
+                tabIndex={-1}
+                aria-label={showConfirmPassword ? 'Hide password' : 'Show password'}
+              >
+                {showConfirmPassword ? (
+                  <EyeOff className="h-4 w-4" />
+                ) : (
+                  <Eye className="h-4 w-4" />
+                )}
+              </button>
+            </div>
             {errors.confirmPassword && (
               <p className="text-sm text-red-500">{errors.confirmPassword.message}</p>
             )}
