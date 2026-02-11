@@ -15,6 +15,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Bot, Webhook, Plus, MessageCircle, Layout, Maximize, Link } from 'lucide-react';
 import type { EmbedType } from '@/stores/widget-store';
+import { CHATKIT_UI_ENABLED } from '@/lib/feature-flags';
 
 interface CreateWidgetModalProps {
     children?: React.ReactNode;
@@ -31,11 +32,12 @@ export function CreateWidgetModal({ children }: CreateWidgetModalProps) {
     const router = useRouter();
     const [isOpen, setIsOpen] = useState(false);
     const [name, setName] = useState('');
-    const [type, setType] = useState<'chatkit' | 'n8n'>('chatkit');
+    const [type, setType] = useState<'chatkit' | 'n8n'>(CHATKIT_UI_ENABLED ? 'chatkit' : 'n8n');
     const [embedType, setEmbedType] = useState<EmbedType>('popup');
 
     const handleCreate = () => {
-        const path = type === 'chatkit' ? '/configurator/chatkit' : '/configurator/n8n';
+        const selectedType = !CHATKIT_UI_ENABLED && type === 'chatkit' ? 'n8n' : type;
+        const path = selectedType === 'chatkit' ? '/configurator/chatkit' : '/configurator/n8n';
         const params = new URLSearchParams();
         if (name.trim()) params.set('name', name.trim());
         if (embedType !== 'popup') params.set('embedType', embedType);
@@ -58,14 +60,17 @@ export function CreateWidgetModal({ children }: CreateWidgetModalProps) {
                 <DialogHeader>
                     <DialogTitle>Create New Interface</DialogTitle>
                     <DialogDescription className="text-zinc-400">
-                        Choose your interface type and give it a name to get started.
+                        {CHATKIT_UI_ENABLED
+                            ? 'Choose your interface type and give it a name to get started.'
+                            : 'Create your n8n interface and give it a name to get started.'}
                     </DialogDescription>
                 </DialogHeader>
 
                 <div className="grid gap-6 py-4">
                     <div className="grid gap-2">
                         <Label htmlFor="type" className="text-zinc-300">Interface Type</Label>
-                        <div className="grid grid-cols-2 gap-4">
+                        <div className={`grid gap-4 ${CHATKIT_UI_ENABLED ? 'grid-cols-2' : 'grid-cols-1'}`}>
+                            {CHATKIT_UI_ENABLED && (
                             <div
                                 className={`cursor-pointer rounded-lg border p-4 hover:bg-zinc-900 transition-colors ${type === 'chatkit' ? 'border-indigo-500 bg-zinc-900 ring-1 ring-indigo-500' : 'border-zinc-800 bg-black'}`}
                                 onClick={() => setType('chatkit')}
@@ -76,6 +81,7 @@ export function CreateWidgetModal({ children }: CreateWidgetModalProps) {
                                 </div>
                                 <p className="text-xs text-zinc-500">Native OpenAI Agent integration with streaming.</p>
                             </div>
+                            )}
 
                             <div
                                 className={`cursor-pointer rounded-lg border p-4 hover:bg-zinc-900 transition-colors ${type === 'n8n' ? 'border-blue-500 bg-zinc-900 ring-1 ring-blue-500' : 'border-zinc-800 bg-black'}`}
@@ -96,7 +102,7 @@ export function CreateWidgetModal({ children }: CreateWidgetModalProps) {
                             id="name"
                             value={name}
                             onChange={(e) => setName(e.target.value)}
-                            placeholder={type === 'chatkit' ? "My Support Agent" : "My Workflow Widget"}
+                            placeholder={type === 'chatkit' && CHATKIT_UI_ENABLED ? "My Support Agent" : "My Workflow Widget"}
                             className="bg-zinc-900 border-zinc-800 text-white placeholder:text-zinc-600 focus-visible:ring-indigo-500"
                             onKeyDown={(e) => e.key === 'Enter' && handleCreate()}
                         />
@@ -138,7 +144,7 @@ export function CreateWidgetModal({ children }: CreateWidgetModalProps) {
                         Cancel
                     </Button>
                     <Button onClick={handleCreate} className="bg-indigo-600 hover:bg-indigo-700 text-white">
-                        Create {type === 'chatkit' ? 'Agent' : 'Widget'}
+                        Create {type === 'chatkit' && CHATKIT_UI_ENABLED ? 'Agent' : 'Widget'}
                     </Button>
                 </div>
             </DialogContent>

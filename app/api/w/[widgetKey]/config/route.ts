@@ -10,6 +10,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getWidgetByKeyWithUser } from '@/lib/db/queries';
 import { normalizeDomain } from '@/lib/license/domain';
+import { CHATKIT_SERVER_ENABLED } from '@/lib/feature-flags';
 import type { WidgetConfig } from '@/widget/src/types';
 
 /**
@@ -176,7 +177,7 @@ function translateConfig(dbConfig: any, requestUrl: string, widgetKey: string, u
       webhookUrl: webhookUrl,
       relayEndpoint: `${new URL(requestUrl).origin}/api/chat-relay`,
     },
-    agentKit: dbConfig.enableAgentKit ? {
+    agentKit: CHATKIT_SERVER_ENABLED && dbConfig.enableAgentKit ? {
       enabled: true,
       relayEndpoint: `${new URL(requestUrl).origin}/api/chat-relay/openai`,
       hasWorkflowId: !!dbConfig.agentKitWorkflowId,

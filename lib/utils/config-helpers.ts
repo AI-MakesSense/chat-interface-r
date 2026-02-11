@@ -130,3 +130,33 @@ export function sanitizeConfig(config: any, tier: string): any {
 
   return sanitized;
 }
+
+/**
+ * Forces configuration to use the n8n provider.
+ * Used when ChatKit/Agent mode is disabled behind feature flags.
+ */
+export function forceN8nProviderConfig(config: any): any {
+  const normalized = JSON.parse(JSON.stringify(config ?? {}));
+
+  const connection =
+    normalized.connection && typeof normalized.connection === 'object'
+      ? normalized.connection
+      : {};
+
+  connection.provider = 'n8n';
+  delete connection.workflowId;
+  delete connection.apiKey;
+  normalized.connection = connection;
+
+  // Legacy AgentKit fields (flat config shape)
+  if ('enableAgentKit' in normalized) {
+    normalized.enableAgentKit = false;
+  }
+  delete normalized.agentKitWorkflowId;
+  delete normalized.agentKitApiKey;
+
+  // Runtime-only server response shape (defensive cleanup)
+  delete normalized.agentKit;
+
+  return normalized;
+}

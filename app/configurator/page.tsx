@@ -6,6 +6,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Bot, Webhook } from 'lucide-react';
+import { CHATKIT_UI_ENABLED } from '@/lib/feature-flags';
 
 export default function ConfiguratorSelectionPage() {
     const router = useRouter();
@@ -13,8 +14,9 @@ export default function ConfiguratorSelectionPage() {
     const [n8nName, setN8nName] = useState('');
 
     const handleCreate = (type: 'chatkit' | 'n8n') => {
-        const name = type === 'chatkit' ? chatKitName : n8nName;
-        const path = type === 'chatkit' ? '/configurator/chatkit' : '/configurator/n8n';
+        const selectedType = !CHATKIT_UI_ENABLED && type === 'chatkit' ? 'n8n' : type;
+        const name = selectedType === 'chatkit' ? chatKitName : n8nName;
+        const path = selectedType === 'chatkit' ? '/configurator/chatkit' : '/configurator/n8n';
         const query = name.trim() ? `?name=${encodeURIComponent(name.trim())}` : '';
         router.push(`${path}${query}`);
     };
@@ -22,14 +24,19 @@ export default function ConfiguratorSelectionPage() {
     return (
         <div className="container mx-auto py-10 px-4 max-w-5xl">
             <div className="text-center mb-12">
-                <h1 className="text-4xl font-bold tracking-tight mb-4">Choose Your Interface</h1>
+                <h1 className="text-4xl font-bold tracking-tight mb-4">
+                    {CHATKIT_UI_ENABLED ? 'Choose Your Interface' : 'Build Your n8n Interface'}
+                </h1>
                 <p className="text-muted-foreground text-lg max-w-2xl mx-auto">
-                    Select the type of chat widget you want to build. Each interface is optimized for specific use cases.
+                    {CHATKIT_UI_ENABLED
+                        ? 'Select the type of chat widget you want to build. Each interface is optimized for specific use cases.'
+                        : 'Create and customize an n8n chat widget for your workflow.'}
                 </p>
             </div>
 
-            <div className="grid md:grid-cols-2 gap-8">
+            <div className={`grid gap-8 ${CHATKIT_UI_ENABLED ? 'md:grid-cols-2' : 'md:grid-cols-1'}`}>
                 {/* ChatKit Option */}
+                {CHATKIT_UI_ENABLED && (
                 <Card className="h-full transition-all duration-300 hover:border-primary hover:shadow-lg bg-card/50 backdrop-blur-sm flex flex-col">
                     <CardHeader>
                         <div className="w-12 h-12 rounded-lg bg-primary/10 flex items-center justify-center mb-4">
@@ -71,6 +78,7 @@ export default function ConfiguratorSelectionPage() {
                         </div>
                     </CardContent>
                 </Card>
+                )}
 
                 {/* N8n Option */}
                 <Card className="h-full transition-all duration-300 hover:border-blue-500 hover:shadow-lg bg-card/50 backdrop-blur-sm flex flex-col">

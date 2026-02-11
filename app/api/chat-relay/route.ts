@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getWidgetById, getWidgetByKeyWithUser } from '@/lib/db/queries';
+import { CHATKIT_SERVER_ENABLED } from '@/lib/feature-flags';
 
 /**
  * Interface for the expected incoming request body
@@ -88,6 +89,12 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     if (provider === 'n8n') {
       return handleN8nRelay(config, body, userTier, corsHeaders);
     } else if (provider === 'chatkit') {
+      if (!CHATKIT_SERVER_ENABLED) {
+        return new NextResponse(
+          JSON.stringify({ error: 'Provider is disabled' }),
+          { status: 400, headers: { 'Content-Type': 'application/json', ...corsHeaders } }
+        );
+      }
       // ChatKit widgets don't use this relay - they connect directly to OpenAI
       return new NextResponse(
         JSON.stringify({ error: 'ChatKit widgets connect directly to OpenAI via client-side session' }),

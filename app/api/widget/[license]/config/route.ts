@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getLicenseByKey, getWidgetsByLicenseId } from '@/lib/db/queries';
+import { CHATKIT_SERVER_ENABLED } from '@/lib/feature-flags';
 import type { WidgetConfig } from '@/widget/src/types';
 
 /**
@@ -191,7 +192,7 @@ function translateConfig(dbConfig: any, requestUrl: string): WidgetConfig {
         },
         // AgentKit / OpenAI configuration
         // Note: API key and workflow ID are NOT sent to client - they stay server-side
-        agentKit: dbConfig.enableAgentKit ? {
+        agentKit: CHATKIT_SERVER_ENABLED && dbConfig.enableAgentKit ? {
             enabled: true,
             relayEndpoint: `${new URL(requestUrl).origin}/api/chat-relay/openai`,
             // Indicate if credentials are configured (without exposing them)

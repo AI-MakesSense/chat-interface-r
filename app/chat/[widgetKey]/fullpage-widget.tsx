@@ -12,6 +12,7 @@ import { useEffect, useRef } from 'react';
 import Script from 'next/script';
 import { ChatKitEmbed } from '@/components/chatkit-embed';
 import { WidgetConfig } from '@/stores/widget-store';
+import { CHATKIT_UI_ENABLED } from '@/lib/feature-flags';
 
 interface FullpageWidgetProps {
   widgetKey: string;
@@ -24,7 +25,7 @@ export default function FullpageWidget({ widgetKey, config, embedType }: Fullpag
   const widgetInitialized = useRef(false);
 
   // Check if this is a ChatKit widget
-  const isChatKit = config?.connection?.provider === 'chatkit';
+  const isChatKit = CHATKIT_UI_ENABLED && config?.connection?.provider === 'chatkit';
 
   useEffect(() => {
     // Only initialize N8n widget script if not ChatKit

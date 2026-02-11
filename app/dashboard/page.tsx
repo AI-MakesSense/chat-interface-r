@@ -206,8 +206,7 @@ export default function DashboardPage() {
                 </div>
                 <h3 className="text-xl font-semibold mb-2 text-white">No interfaces yet</h3>
                 <p className="text-zinc-400 max-w-sm mb-8">
-                  Create your first chat interface to start engaging with your users.
-                  Choose between OpenAI Agents or N8n Workflows.
+                  Create your first n8n chat interface to start engaging with your users.
                 </p>
                 <CreateWidgetModal>
                   <Button className="bg-indigo-600 hover:bg-indigo-700 text-white gap-2">

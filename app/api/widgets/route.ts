@@ -28,7 +28,8 @@ import {
 } from '@/lib/db/queries';
 import { createDefaultConfig } from '@/lib/config/defaults';
 import { createWidgetConfigSchema } from '@/lib/validation/widget-schema';
-import { deepMerge, stripLegacyConfigProperties } from '@/lib/utils/config-helpers';
+import { deepMerge, forceN8nProviderConfig, stripLegacyConfigProperties } from '@/lib/utils/config-helpers';
+import { CHATKIT_SERVER_ENABLED } from '@/lib/feature-flags';
 import { z } from 'zod';
 
 // =============================================================================
@@ -72,6 +73,17 @@ export async function POST(request: NextRequest) {
     // 2. Parse and validate request body
     const body = await request.json();
     const { licenseId, name, config: userConfig, embedType, allowedDomains, widgetType: requestWidgetType } = CreateWidgetSchema.parse(body);
+
+    // Force n8n-only mode when ChatKit is disabled.
+    if (!CHATKIT_SERVER_ENABLED) {
+      const requestedProvider = (userConfig as any)?.connection?.provider;
+      if (requestWidgetType === 'chatkit' || requestedProvider === 'chatkit') {
+        return NextResponse.json(
+          { error: 'ChatKit provider is disabled' },
+          { status: 400 }
+        );
+      }
+    }
 
     // 3. Get user data for tier information
     const user = await getUserById(authUser.sub);
@@ -138,10 +150,15 @@ export async function POST(request: NextRequest) {
     configSchema.parse(finalConfig);
 
     // 7. Clean legacy properties that might conflict with new structure
-    const cleanedConfig = stripLegacyConfigProperties(finalConfig);
+    let cleanedConfig = stripLegacyConfigProperties(finalConfig);
+    if (!CHATKIT_SERVER_ENABLED) {
+      cleanedConfig = forceN8nProviderConfig(cleanedConfig);
+    }
 
     // 8. Determine widget type
-    const finalWidgetType = requestWidgetType || (cleanedConfig.connection?.provider === 'chatkit' ? 'chatkit' : 'n8n');
+    const finalWidgetType = CHATKIT_SERVER_ENABLED
+      ? (requestWidgetType || (cleanedConfig.connection?.provider === 'chatkit' ? 'chatkit' : 'n8n'))
+      : 'n8n';
 
     // 9. Create widget using appropriate method
     let widget;
@@ -268,8 +285,13 @@ export async function GET(request: NextRequest) {
         widgets: result.widgets.map(w => {
           const widgetKey = (w as any).widgetKey;
           const widgetEmbedType = (w as any).embedType || 'popup';
+          const normalizedConfig = !CHATKIT_SERVER_ENABLED
+            ? forceN8nProviderConfig((w as any).config)
+            : (w as any).config;
           return {
             ...w,
+            config: normalizedConfig,
+            widgetType: !CHATKIT_SERVER_ENABLED ? 'n8n' : (w as any).widgetType,
             licenseKey: (w as any).licenseKey || w.license?.licenseKey,
             // Compute isDeployed from deployedAt
             isDeployed: !!(w as any).deployedAt,
@@ -301,8 +323,13 @@ export async function GET(request: NextRequest) {
         widgets: result.widgets.map(w => {
           const widgetKey = (w as any).widgetKey;
           const widgetEmbedType = (w as any).embedType || 'popup';
+          const normalizedConfig = !CHATKIT_SERVER_ENABLED
+            ? forceN8nProviderConfig((w as any).config)
+            : (w as any).config;
           return {
             ...w,
+            config: normalizedConfig,
+            widgetType: !CHATKIT_SERVER_ENABLED ? 'n8n' : (w as any).widgetType,
             // Compute isDeployed from deployedAt
             isDeployed: !!(w as any).deployedAt,
             // Schema v2.0: Add embed codes if widgetKey exists
@@ -348,4 +375,3 @@ function generateEmbedCodes(baseUrl: string, widgetKey: string, primaryEmbedType
     portal: `${baseUrl}/chat/portal/${widgetKey}`,
   };
 }
-

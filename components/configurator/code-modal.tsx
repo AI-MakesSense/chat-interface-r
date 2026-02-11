@@ -8,6 +8,7 @@ import {
   type EmbedType,
   type EmbedCodeResult,
 } from '@/lib/embed';
+import { CHATKIT_UI_ENABLED } from '@/lib/feature-flags';
 
 interface CodeModalProps {
   config: WidgetConfig;
@@ -66,7 +67,7 @@ export const CodeModal: React.FC<CodeModalProps> = ({
   if (!isOpen) return null;
 
   // Determine widget type from config
-  const isChatkitWidget = config.connection?.provider === 'chatkit';
+  const isChatkitWidget = CHATKIT_UI_ENABLED && config.connection?.provider === 'chatkit';
   const widgetTypeName = isChatkitWidget ? 'ChatKit Agent' : 'N8n Workflow';
 
   // Use widgetKey or placeholder

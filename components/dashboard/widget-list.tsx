@@ -16,11 +16,15 @@ import { Badge } from '@/components/ui/badge';
 import { Edit, Trash2, Globe, Calendar, X, Check, Code, Bot, Webhook } from 'lucide-react';
 import { EmbedTypeBadge } from '@/components/configurator/embed-type-selector';
 import type { EmbedType } from '@/stores/widget-store';
+import { CHATKIT_UI_ENABLED } from '@/lib/feature-flags';
 
 /**
  * Determine widget type from config
  */
 function getWidgetType(widget: Widget): 'chatkit' | 'n8n' {
+    if (!CHATKIT_UI_ENABLED) {
+        return 'n8n';
+    }
     return widget.config?.connection?.provider === 'chatkit' ? 'chatkit' : 'n8n';
 }
 
@@ -44,7 +48,7 @@ function isWidgetConnected(widget: Widget): boolean {
  * Widget type badge component
  */
 function WidgetTypeBadge({ type }: { type: 'chatkit' | 'n8n' }) {
-    if (type === 'chatkit') {
+    if (CHATKIT_UI_ENABLED && type === 'chatkit') {
         return (
             <Badge variant="outline" className="bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 border-indigo-500/20 gap-1">
                 <Bot className="h-3 w-3" />
@@ -89,7 +93,8 @@ export function WidgetList({ widgets, onDelete }: WidgetListProps) {
      */
     const handleCopyEmbed = (widget: Widget) => {
         const baseUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://chat-interface-r.vercel.app';
-        const widgetType = widget.config?.connection?.provider === 'chatkit' ? 'ChatKit Agent' : 'N8n Workflow';
+        const providerType = getWidgetType(widget);
+        const widgetType = providerType === 'chatkit' ? 'ChatKit Agent' : 'N8n Workflow';
 
         let embedCode: string;
 
@@ -235,7 +240,7 @@ export function WidgetList({ widgets, onDelete }: WidgetListProps) {
                                         size="sm"
                                         className="flex-1 gap-2"
                                         onClick={() => {
-                                            const provider = widget.config?.connection?.provider;
+                                            const provider = getWidgetType(widget);
                                             const path = provider === 'chatkit' ? '/configurator/chatkit' : '/configurator/n8n';
                                             router.push(`${path}?widgetId=${widget.id}`);
                                         }}

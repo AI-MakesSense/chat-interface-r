@@ -4,6 +4,7 @@ import { licenses, widgets } from '@/lib/db/schema';
 import { eq } from 'drizzle-orm';
 import { ChatKitEmbed } from '@/components/chatkit-embed';
 import { WidgetConfig } from '@/stores/widget-store';
+import { CHATKIT_SERVER_ENABLED } from '@/lib/feature-flags';
 
 interface PageProps {
     params: {
@@ -12,6 +13,10 @@ interface PageProps {
 }
 
 export default async function ChatKitWidgetPage({ params }: PageProps) {
+    if (!CHATKIT_SERVER_ENABLED) {
+        notFound();
+    }
+
     const { license: licenseKey } = params;
 
     // Fetch license

@@ -25,6 +25,7 @@ import { extractDomainFromReferer, createResponseHeaders } from '@/lib/widget/he
 import { createErrorScript, logWidgetError, ErrorType } from '@/lib/widget/error';
 import { checkRateLimit } from '@/lib/widget/rate-limit';
 import { serveWidgetBundle } from '@/lib/widget/serve';
+import { CHATKIT_SERVER_ENABLED } from '@/lib/feature-flags';
 
 /**
  * Extract IP address from request
@@ -217,6 +218,15 @@ export async function GET(
     // Step 11: Serve widget bundle with injected flags and relay config
     // Check if it's a ChatKit widget
     if (widgets.length > 0 && widgets[0].widgetType === 'chatkit') {
+      if (!CHATKIT_SERVER_ENABLED) {
+        return createErrorResponse('LICENSE_INVALID', {
+          licenseKey,
+          domain: normalizedRequestDomain,
+          reason: 'provider_disabled',
+          ip: clientIP
+        });
+      }
+
       const host = request.headers.get('host') || 'localhost:3000';
       const protocol = host.includes('localhost') ? 'http' : 'https';
       const widgetUrl = `${protocol}://${host}/widget/chatkit/${licenseKey}`;

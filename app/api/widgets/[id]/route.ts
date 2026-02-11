@@ -16,7 +16,8 @@ import { NextRequest, NextResponse } from 'next/server';
 import { requireAuth } from '@/lib/auth/guard';
 import { getWidgetById, getWidgetWithLicense, updateWidget, deleteWidget, getUserById } from '@/lib/db/queries';
 import { createWidgetConfigSchema } from '@/lib/validation/widget-schema';
-import { deepMerge, stripLegacyConfigProperties, sanitizeConfig } from '@/lib/utils/config-helpers';
+import { deepMerge, stripLegacyConfigProperties, sanitizeConfig, forceN8nProviderConfig } from '@/lib/utils/config-helpers';
+import { CHATKIT_SERVER_ENABLED } from '@/lib/feature-flags';
 import { z } from 'zod';
 
 // =============================================================================
@@ -107,9 +108,17 @@ export async function GET(
     }
 
     // 4. Return widget data with licenseKey/widgetKey
+    const normalizedWidget = !CHATKIT_SERVER_ENABLED
+      ? {
+          ...result.widget,
+          config: forceN8nProviderConfig((result.widget as any).config),
+          widgetType: 'n8n',
+        }
+      : result.widget;
+
     return NextResponse.json({
       widget: {
-        ...result.widget,
+        ...normalizedWidget,
         licenseKey: result.licenseKey
       }
     });
@@ -189,7 +198,10 @@ export async function PATCH(
       configSchema.parse(sanitizedConfig);
 
       // Strip legacy properties that might conflict with new structure
-      const cleanedConfig = stripLegacyConfigProperties(sanitizedConfig);
+      let cleanedConfig = stripLegacyConfigProperties(sanitizedConfig);
+      if (!CHATKIT_SERVER_ENABLED) {
+        cleanedConfig = forceN8nProviderConfig(cleanedConfig);
+      }
 
       updateData.config = cleanedConfig;
       // Increment version only when config changes
@@ -198,6 +210,9 @@ export async function PATCH(
       // Also update widgetType based on provider
       if (cleanedConfig.connection?.provider) {
         updateData.widgetType = cleanedConfig.connection.provider === 'chatkit' ? 'chatkit' : 'n8n';
+      }
+      if (!CHATKIT_SERVER_ENABLED) {
+        updateData.widgetType = 'n8n';
       }
     }
 
@@ -301,4 +316,3 @@ export async function DELETE(
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 }
-

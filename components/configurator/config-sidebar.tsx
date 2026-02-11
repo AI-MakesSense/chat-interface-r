@@ -133,6 +133,7 @@ import {
   Search,
   LucideIcon
 } from 'lucide-react';
+import { CHATKIT_UI_ENABLED } from '@/lib/feature-flags';
 
 interface ConfigSidebarProps {
   config: WidgetConfig;
@@ -606,7 +607,7 @@ const IconPicker = ({ value, onChange, isDark, provider }: { value: string; onCh
   }, [isOpen]);
 
   // Filter icons based on provider (ChatKit has limited icon support)
-  const isChatKit = provider === 'chatkit';
+  const isChatKit = CHATKIT_UI_ENABLED && provider === 'chatkit';
   const filterByProvider = (icons: typeof ALL_ICONS) =>
     isChatKit ? icons.filter(icon => CHATKIT_SUPPORTED_ICON_IDS.has(icon.id)) : icons;
 
@@ -768,6 +769,17 @@ export const ConfigSidebar: React.FC<ConfigSidebarProps> = ({
   const [customFontName, setCustomFontName] = useState(config.customFontName || '');
 
   const isDark = config.themeMode === 'dark';
+  const resolvedProvider =
+    CHATKIT_UI_ENABLED
+      ? (lockedProvider || config.connection?.provider || 'n8n')
+      : 'n8n';
+  const availableFontOptions = CHATKIT_UI_ENABLED
+    ? FONT_OPTIONS
+    : FONT_OPTIONS.filter((font) => font !== 'OpenAI Sans');
+  const selectedFontFamily =
+    !CHATKIT_UI_ENABLED && config.fontFamily === 'OpenAI Sans'
+      ? 'Inter'
+      : (config.fontFamily || 'system-ui');
 
   // Dynamic Theme Classes
   const theme = {
@@ -904,7 +916,7 @@ export const ConfigSidebar: React.FC<ConfigSidebarProps> = ({
 
         {/* Color Toggles */}
         <Section isDark={isDark}>
-          {config.connection?.provider === 'chatkit' ? (
+          {resolvedProvider === 'chatkit' ? (
             // ChatKit Specific Controls - Using ChatKit API ranges
             <div className="space-y-6">
               {/* Grayscale Controls */}
@@ -1080,18 +1092,18 @@ export const ConfigSidebar: React.FC<ConfigSidebarProps> = ({
               <div className={theme.textMuted}>Font family</div>
               <div className="relative">
                 <select
-                  value={config.fontFamily || 'system-ui'}
+                  value={selectedFontFamily}
                   onChange={(e) => handleChange('fontFamily', e.target.value)}
                   className="opacity-0 absolute inset-0 w-full h-full cursor-pointer"
                 >
-                  {FONT_OPTIONS.map((f) => (
+                  {availableFontOptions.map((f) => (
                     <option key={f} value={f} className="text-black">{f}</option>
                   ))}
                   {config.useCustomFont && config.customFontName && (
                     <option value={config.customFontName} className="text-black">{config.customFontName} (Custom)</option>
                   )}
                 </select>
-                <SelectValue value={config.fontFamily || 'system-ui'} isDark={isDark} />
+                <SelectValue value={selectedFontFamily} isDark={isDark} />
               </div>
             </Row>
             <Row>
@@ -1226,7 +1238,7 @@ export const ConfigSidebar: React.FC<ConfigSidebarProps> = ({
               <div className="space-y-2 mt-2">
                 {(config.starterPrompts || []).map((prompt: StarterPrompt, index: number) => (
                   <div key={index} className="flex gap-2 animate-in slide-in-from-top-1 fade-in duration-200">
-                    <IconPicker value={prompt.icon} onChange={(val) => updatePrompt(index, 'icon', val)} isDark={isDark} provider={lockedProvider} />
+                    <IconPicker value={prompt.icon} onChange={(val) => updatePrompt(index, 'icon', val)} isDark={isDark} provider={resolvedProvider} />
                     <SidebarInput
                       type="text"
                       value={prompt.label}
@@ -1294,7 +1306,7 @@ export const ConfigSidebar: React.FC<ConfigSidebarProps> = ({
             <div className="space-y-2">
               {/* n8n Option */}
               {(() => {
-                const isN8nSelected = config.connection?.provider === 'n8n' || !config.connection?.provider;
+                const isN8nSelected = !CHATKIT_UI_ENABLED || config.connection?.provider === 'n8n' || !config.connection?.provider;
                 return (
                   <div
                     className={`p-3 rounded-lg border cursor-pointer transition-all ${isN8nSelected
@@ -1368,7 +1380,7 @@ export const ConfigSidebar: React.FC<ConfigSidebarProps> = ({
               })()}
 
               {/* ChatKit Option */}
-              {(() => {
+              {CHATKIT_UI_ENABLED && (() => {
                 const isChatKitSelected = config.connection?.provider === 'chatkit';
                 return (
                   <div
@@ -1482,7 +1494,7 @@ export const ConfigSidebar: React.FC<ConfigSidebarProps> = ({
               </div>
             )}
 
-            {lockedProvider === 'chatkit' && (
+            {CHATKIT_UI_ENABLED && lockedProvider === 'chatkit' && (
               <div className="space-y-3">
                 <div className="space-y-1">
                   <label className={`text-xs font-medium ${theme.textMuted}`}>Workflow ID</label>

@@ -4,6 +4,7 @@ import "./globals.css";
 import { Toaster } from "@/components/ui/sonner";
 
 import Script from "next/script";
+import { CHATKIT_UI_ENABLED } from "@/lib/feature-flags";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -38,10 +39,12 @@ export default function RootLayout({
       >
         {children}
         <Toaster />
-        <Script
-          src="https://cdn.platform.openai.com/deployments/chatkit/chatkit.js"
-          strategy="beforeInteractive"
-        />
+        {CHATKIT_UI_ENABLED && (
+          <Script
+            src="https://cdn.platform.openai.com/deployments/chatkit/chatkit.js"
+            strategy="beforeInteractive"
+          />
+        )}
       </body>
     </html>
   );

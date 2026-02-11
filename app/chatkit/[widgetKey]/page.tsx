@@ -13,6 +13,7 @@ import { notFound } from 'next/navigation';
 import { getWidgetByKeyWithUser } from '@/lib/db/queries';
 import { ChatKitEmbed } from '@/components/chatkit-embed';
 import { WidgetConfig } from '@/stores/widget-store';
+import { CHATKIT_SERVER_ENABLED } from '@/lib/feature-flags';
 
 interface PageProps {
   params: Promise<{
@@ -21,6 +22,10 @@ interface PageProps {
 }
 
 export default async function ChatKitWidgetPage({ params }: PageProps) {
+  if (!CHATKIT_SERVER_ENABLED) {
+    notFound();
+  }
+
   const { widgetKey } = await params;
 
   // Validate widgetKey format (16-char alphanumeric)

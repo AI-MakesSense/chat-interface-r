@@ -63,7 +63,7 @@ function ConfiguratorPage() {
   const searchParams = useSearchParams();
   const widgetId = searchParams?.get('widgetId');
 
-  const { user, isAuthenticated, isLoading: authLoading } = useAuthStore();
+  const { user, isAuthenticated, isLoading: authLoading, checkAuth } = useAuthStore();
   const {
     currentWidget,
     currentConfig,
@@ -79,6 +79,7 @@ function ConfiguratorPage() {
 
   const [widgetName, setWidgetName] = useState('Untitled Widget');
   const [isCodeModalOpen, setIsCodeModalOpen] = useState(false);
+  const [hasCheckedAuth, setHasCheckedAuth] = useState(false);
 
   // Get embed type from URL params (set in create-widget-modal)
   const embedType = (searchParams?.get('embedType') as EmbedType) || 'popup';
@@ -103,6 +104,33 @@ function ConfiguratorPage() {
       setWidgetName(currentWidget.name);
     }
   }, [currentWidget]);
+
+  // Ensure cookie-based session is restored before redirect checks.
+  useEffect(() => {
+    if (isAuthenticated || hasCheckedAuth) {
+      return;
+    }
+
+    let cancelled = false;
+
+    checkAuth()
+      .catch(console.error)
+      .finally(() => {
+        if (!cancelled) {
+          setHasCheckedAuth(true);
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [isAuthenticated, hasCheckedAuth, checkAuth]);
+
+  useEffect(() => {
+    if (isAuthenticated && !hasCheckedAuth) {
+      setHasCheckedAuth(true);
+    }
+  }, [isAuthenticated, hasCheckedAuth]);
 
   // Handle creating a new widget (Schema v2.0 - no license required)
   const handleCreateWidget = async () => {
@@ -168,13 +196,13 @@ function ConfiguratorPage() {
 
   // Redirect to login if not authenticated (must be in useEffect for client-side navigation)
   useEffect(() => {
-    if (!authLoading && !isAuthenticated) {
+    if (hasCheckedAuth && !authLoading && !isAuthenticated) {
       router.push('/auth/login');
     }
-  }, [authLoading, isAuthenticated, router]);
+  }, [hasCheckedAuth, authLoading, isAuthenticated, router]);
 
   // Loading state
-  if (authLoading || isLoading) {
+  if (authLoading || isLoading || !hasCheckedAuth) {
     return <ConfiguratorLoading />;
   }
 

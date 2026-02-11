@@ -14,6 +14,7 @@
 
 import { notFound } from 'next/navigation';
 import { getWidgetByKey, getWidgetByKeyWithUser } from '@/lib/db/queries';
+import { CHATKIT_SERVER_ENABLED } from '@/lib/feature-flags';
 import FullpageWidget from './fullpage-widget';
 
 interface PageProps {
@@ -53,6 +54,14 @@ export default async function FullpageChatPage({ params }: PageProps) {
 
   // Extract config from JSONB
   const config = widget.config as any;
+
+  // ChatKit fullpage is disabled when provider flag is off.
+  if (!CHATKIT_SERVER_ENABLED) {
+    const isChatKitWidget = widget.widgetType === 'chatkit' || config?.connection?.provider === 'chatkit';
+    if (isChatKitWidget) {
+      notFound();
+    }
+  }
 
   return (
     <div className="fullpage-container">

@@ -25,6 +25,7 @@ import { extractDomainFromReferer, createResponseHeaders } from '@/lib/widget/he
 import { createErrorScript, logWidgetError, ErrorType } from '@/lib/widget/error';
 import { checkRateLimit } from '@/lib/widget/rate-limit';
 import { serveWidgetBundle } from '@/lib/widget/serve';
+import { CHATKIT_SERVER_ENABLED } from '@/lib/feature-flags';
 
 /**
  * Extract IP address from request
@@ -205,6 +206,15 @@ export async function GET(
     // Step 11: Serve widget bundle
     // Check if it's a ChatKit widget
     if (widget.widgetType === 'chatkit') {
+      if (!CHATKIT_SERVER_ENABLED) {
+        return createErrorResponse('LICENSE_INVALID', {
+          widgetKey: cleanWidgetKey,
+          domain,
+          reason: 'provider_disabled',
+          ip: clientIP
+        });
+      }
+
       const host = request.headers.get('host') || 'localhost:3000';
       const protocol = host.includes('localhost') ? 'http' : 'https';
       // Use the new v2.0 ChatKit route that uses widgetKey

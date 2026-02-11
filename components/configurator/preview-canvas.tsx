@@ -5,6 +5,7 @@ import { WidgetConfig } from '@/stores/widget-store';
 import { ChatPreview } from './chat-preview';
 import { ChatKitPreview } from './chatkit-preview';
 import { ChevronDown, MessageCircle, X, AppWindow, LayoutTemplate } from 'lucide-react';
+import { CHATKIT_UI_ENABLED } from '@/lib/feature-flags';
 
 interface PreviewCanvasProps {
   config: WidgetConfig;
@@ -141,7 +142,7 @@ export const PreviewCanvas: React.FC<PreviewCanvasProps> = ({ config }) => {
   const deviceRing = isDark ? 'ring-white/10' : 'ring-black/5';
   const deviceBg = isDark ? 'bg-[#212121]' : 'bg-white';
 
-  const isChatKit = config.connection?.provider === 'chatkit';
+  const isChatKit = CHATKIT_UI_ENABLED && config.connection?.provider === 'chatkit';
 
   return (
     <main

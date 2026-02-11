@@ -1,8 +1,16 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getWidgetById } from '@/lib/db/queries';
+import { CHATKIT_SERVER_ENABLED } from '@/lib/feature-flags';
 
 export async function POST(req: NextRequest) {
     try {
+        if (!CHATKIT_SERVER_ENABLED) {
+            return NextResponse.json(
+                { error: 'ChatKit provider is disabled' },
+                { status: 404 }
+            );
+        }
+
         const body = await req.json();
         const { widgetId, previewMode, apiKey, workflowId } = body;
 

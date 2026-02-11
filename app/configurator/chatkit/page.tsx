@@ -20,6 +20,7 @@ import { PreviewCanvas } from '@/components/configurator/preview-canvas';
 import { CodeModal } from '@/components/configurator/code-modal';
 import { ArrowLeft, Save, Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
+import { CHATKIT_UI_ENABLED } from '@/lib/feature-flags';
 
 /**
  * Suspense wrapper for the configurator page
@@ -53,8 +54,9 @@ function ConfiguratorPage() {
     const router = useRouter();
     const searchParams = useSearchParams();
     const widgetId = searchParams?.get('widgetId');
+    const queryString = searchParams?.toString() || '';
 
-    const { user, isAuthenticated, isLoading: authLoading } = useAuthStore();
+    const { user, isAuthenticated, isLoading: authLoading, checkAuth } = useAuthStore();
     const {
         currentWidget,
         currentConfig,
@@ -70,9 +72,16 @@ function ConfiguratorPage() {
 
     const [widgetName, setWidgetName] = useState('Untitled Agent');
     const [isCodeModalOpen, setIsCodeModalOpen] = useState(false);
+    const [hasCheckedAuth, setHasCheckedAuth] = useState(false);
 
     // Get embed type from URL params (set in create-widget-modal)
     const embedType = (searchParams?.get('embedType') as EmbedType) || 'popup';
+
+    useEffect(() => {
+        if (!CHATKIT_UI_ENABLED) {
+            router.replace(`/configurator/n8n${queryString ? `?${queryString}` : ''}`);
+        }
+    }, [router, queryString]);
 
     // Load widget if widgetId is provided, otherwise reset for new widget
     useEffect(() => {
@@ -93,6 +102,33 @@ function ConfiguratorPage() {
             setWidgetName(currentWidget.name);
         }
     }, [currentWidget]);
+
+    // Ensure cookie-based session is restored before redirect checks.
+    useEffect(() => {
+        if (!CHATKIT_UI_ENABLED || isAuthenticated || hasCheckedAuth) {
+            return;
+        }
+
+        let cancelled = false;
+
+        checkAuth()
+            .catch(console.error)
+            .finally(() => {
+                if (!cancelled) {
+                    setHasCheckedAuth(true);
+                }
+            });
+
+        return () => {
+            cancelled = true;
+        };
+    }, [isAuthenticated, hasCheckedAuth, checkAuth]);
+
+    useEffect(() => {
+        if ((isAuthenticated || !CHATKIT_UI_ENABLED) && !hasCheckedAuth) {
+            setHasCheckedAuth(true);
+        }
+    }, [isAuthenticated, hasCheckedAuth]);
 
     // Handle creating a new widget (Schema v2.0 - no license required)
     const handleCreateWidget = async () => {
@@ -164,13 +200,17 @@ function ConfiguratorPage() {
 
     // Redirect to login if not authenticated (must be in useEffect for client-side navigation)
     useEffect(() => {
-        if (!authLoading && !isAuthenticated) {
+        if (hasCheckedAuth && !authLoading && !isAuthenticated) {
             router.push('/auth/login');
         }
-    }, [authLoading, isAuthenticated, router]);
+    }, [hasCheckedAuth, authLoading, isAuthenticated, router]);
 
     // Loading state
-    if (authLoading || isLoading) {
+    if (authLoading || isLoading || !hasCheckedAuth) {
+        return <ConfiguratorLoading />;
+    }
+
+    if (!CHATKIT_UI_ENABLED) {
         return <ConfiguratorLoading />;
     }
 
