@@ -184,8 +184,7 @@ export async function POST(request: NextRequest) {
     }
 
     // 10. Generate embed codes for Schema v2.0 widgets
-    const requestOrigin = new URL(request.url).origin;
-    const baseUrl = process.env.NEXT_PUBLIC_APP_URL || requestOrigin;
+    const baseUrl = new URL(request.url).origin;
     const widgetKey = (widget as any).widgetKey;
     const embedCodes = widgetKey ? generateEmbedCodes(baseUrl, widgetKey, (widget as any).embedType || 'popup') : null;
 
@@ -268,8 +267,7 @@ export async function GET(request: NextRequest) {
     }
 
     // 4. Get paginated widgets for the user
-    const requestOrigin = new URL(request.url).origin;
-    const baseUrl = process.env.NEXT_PUBLIC_APP_URL || requestOrigin;
+    const baseUrl = new URL(request.url).origin;
 
     // Use legacy query if licenseId provided or legacy flag set
     if (licenseId || useLegacy) {
