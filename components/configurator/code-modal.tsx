@@ -56,6 +56,7 @@ export const CodeModal: React.FC<CodeModalProps> = ({
   embedType = 'popup',
 }) => {
   const [copied, setCopied] = useState(false);
+  const [selectedEmbedType, setSelectedEmbedType] = useState<EmbedType>(embedType);
 
   useEffect(() => {
     if (copied) {
@@ -63,6 +64,12 @@ export const CodeModal: React.FC<CodeModalProps> = ({
       return () => clearTimeout(timer);
     }
   }, [copied]);
+
+  useEffect(() => {
+    if (isOpen) {
+      setSelectedEmbedType(embedType);
+    }
+  }, [embedType, isOpen]);
 
   if (!isOpen) return null;
 
@@ -76,7 +83,7 @@ export const CodeModal: React.FC<CodeModalProps> = ({
 
   // Generate all embed codes and find the selected one
   const embedCodes = generateAllEmbedCodes({ widgetKey: key });
-  const currentEmbed = embedCodes.find(e => e.type === embedType) || embedCodes[0];
+  const currentEmbed = embedCodes.find(e => e.type === selectedEmbedType) || embedCodes[0];
 
   const handleCopy = (code: string) => {
     navigator.clipboard.writeText(code);
@@ -151,7 +158,7 @@ export const CodeModal: React.FC<CodeModalProps> = ({
         {/* Header */}
         <div className="flex items-center justify-between px-6 py-4 border-b border-neutral-100">
           <div>
-            <h3 className="text-lg font-semibold text-neutral-900">{embedTypeNames[embedType]} Embed Code</h3>
+            <h3 className="text-lg font-semibold text-neutral-900">{embedTypeNames[selectedEmbedType]} Embed Code</h3>
             <p className="text-sm text-neutral-500 mt-0.5">
               {widgetTypeName} • Copy the code below to embed your widget
             </p>
@@ -170,6 +177,23 @@ export const CodeModal: React.FC<CodeModalProps> = ({
           <div className="flex items-start gap-3 mb-4 p-3 bg-blue-50 rounded-lg border border-blue-100">
             <Icon size={20} className="text-blue-600 flex-shrink-0 mt-0.5" />
             <p className="text-sm text-blue-800">{currentEmbed.description}</p>
+          </div>
+
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-2 mb-4">
+            {(['popup', 'inline', 'fullpage', 'portal'] as EmbedType[]).map((type) => (
+              <button
+                key={type}
+                type="button"
+                onClick={() => setSelectedEmbedType(type)}
+                className={`rounded-md border px-3 py-2 text-sm text-left transition-colors ${
+                  selectedEmbedType === type
+                    ? 'border-blue-500 bg-blue-50 text-blue-900'
+                    : 'border-neutral-200 bg-white text-neutral-700 hover:bg-neutral-50'
+                }`}
+              >
+                {embedTypeNames[type].replace(' Widget', '').replace(' Link', '')}
+              </button>
+            ))}
           </div>
 
           {/* Code Block */}

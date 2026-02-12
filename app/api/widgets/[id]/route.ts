@@ -78,6 +78,8 @@ async function getWidgetWithOwnership(widgetId: string, userId: string): Promise
 const UpdateWidgetSchema = z.object({
   name: z.string().min(1).max(100).optional(),
   config: z.any().optional(),
+  embedType: z.enum(['popup', 'inline', 'fullpage', 'portal']).optional(),
+  allowedDomains: z.array(z.string().min(1)).optional(),
   status: z.enum(['active', 'paused']).optional(),
 });
 
@@ -183,6 +185,16 @@ export async function PATCH(
     // Update status if provided
     if (updates.status !== undefined) {
       updateData.status = updates.status;
+    }
+
+    // Update embed type if provided
+    if (updates.embedType !== undefined) {
+      updateData.embedType = updates.embedType;
+    }
+
+    // Update allowed domains if provided (empty array means allow all)
+    if (updates.allowedDomains !== undefined) {
+      updateData.allowedDomains = updates.allowedDomains;
     }
 
     // Handle config updates with deep merge and validation

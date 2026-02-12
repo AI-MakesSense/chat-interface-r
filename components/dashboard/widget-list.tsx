@@ -93,7 +93,7 @@ export function WidgetList({ widgets, onDelete }: WidgetListProps) {
      * Schema v2.0: Prefers widgetKey, falls back to licenseKey for backward compatibility
      */
     const handleCopyEmbed = (widget: Widget) => {
-        const baseUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://chat-interface-r.vercel.app';
+        const baseUrl = process.env.NEXT_PUBLIC_APP_URL || window.location.origin;
         const providerType = getWidgetType(widget);
         const widgetType = providerType === 'chatkit' ? 'ChatKit Agent' : 'N8n Workflow';
         const selectedEmbedType = (widget.embedType || 'popup') as EmbedType;

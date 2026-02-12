@@ -29,6 +29,13 @@ import { CodeModal } from '@/components/configurator/code-modal';
 import { ArrowLeft, Save, Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
 
+const EMBED_TYPE_OPTIONS: Array<{ value: EmbedType; label: string }> = [
+  { value: 'popup', label: 'Popup' },
+  { value: 'inline', label: 'Inline' },
+  { value: 'fullpage', label: 'Fullpage' },
+  { value: 'portal', label: 'Portal' },
+];
+
 /**
  * Suspense wrapper for the configurator page
  * Handles the useSearchParams() requirement for Next.js 16
@@ -73,6 +80,7 @@ function ConfiguratorPage() {
     getWidget,
     createWidget,
     updateConfig,
+    updateWidget,
     saveConfig,
     resetConfig
   } = useWidgetStore();
@@ -83,7 +91,7 @@ function ConfiguratorPage() {
 
   // For existing widgets, prefer stored embedType. For new widgets, use URL param.
   const urlEmbedType = (searchParams?.get('embedType') as EmbedType) || 'popup';
-  const embedType = (currentWidget?.embedType as EmbedType) || urlEmbedType;
+  const [selectedEmbedType, setSelectedEmbedType] = useState<EmbedType>(urlEmbedType);
 
   // Load widget if widgetId is provided
   // Load widget if widgetId is provided, otherwise reset for new widget
@@ -105,6 +113,15 @@ function ConfiguratorPage() {
       setWidgetName(currentWidget.name);
     }
   }, [currentWidget]);
+
+  // Sync selected embed type with loaded widget.
+  useEffect(() => {
+    if (currentWidget?.embedType) {
+      setSelectedEmbedType(currentWidget.embedType as EmbedType);
+      return;
+    }
+    setSelectedEmbedType(urlEmbedType);
+  }, [currentWidget?.id, currentWidget?.embedType, urlEmbedType]);
 
   // Ensure cookie-based session is restored before redirect checks.
   useEffect(() => {
@@ -143,12 +160,12 @@ function ConfiguratorPage() {
       const widget = await createWidget({
         name: widgetName,
         widgetType: 'n8n',
-        embedType, // Pass the embed type from URL params
+        embedType: selectedEmbedType,
         config: currentConfig
       });
 
       toast.success('Widget created successfully');
-      router.push(`/configurator/n8n?widgetId=${widget.id}&embedType=${embedType}`);
+      router.push(`/configurator/n8n?widgetId=${widget.id}&embedType=${selectedEmbedType}`);
     } catch (error) {
       console.error('Failed to create widget:', error);
       toast.error('Failed to create widget. Please try again.');
@@ -161,11 +178,26 @@ function ConfiguratorPage() {
       if (!currentWidget) {
         await handleCreateWidget();
       } else {
+        const widgetUpdates: Record<string, any> = {};
+
         // Update name if changed
         if (currentWidget.name !== widgetName) {
-          await useWidgetStore.getState().updateWidget(currentWidget.id, { name: widgetName });
+          widgetUpdates.name = widgetName;
         }
-        await saveConfig();
+
+        // Update embed type if changed
+        if ((currentWidget.embedType || 'popup') !== selectedEmbedType) {
+          widgetUpdates.embedType = selectedEmbedType;
+        }
+
+        if (Object.keys(widgetUpdates).length > 0) {
+          await updateWidget(currentWidget.id, widgetUpdates);
+        }
+
+        if (hasUnsavedChanges) {
+          await saveConfig();
+        }
+
         toast.success('Configuration saved successfully');
       }
     } catch (error) {
@@ -238,6 +270,23 @@ function ConfiguratorPage() {
           </div>
         </div>
         <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 mr-2">
+            <Label htmlFor="embed-type" className="text-xs text-muted-foreground">
+              Embed
+            </Label>
+            <select
+              id="embed-type"
+              value={selectedEmbedType}
+              onChange={(e) => setSelectedEmbedType(e.target.value as EmbedType)}
+              className="h-8 rounded-md border border-border bg-background px-2 text-sm"
+            >
+              {EMBED_TYPE_OPTIONS.map((option) => (
+                <option key={option.value} value={option.value}>
+                  {option.label}
+                </option>
+              ))}
+            </select>
+          </div>
           <Button
             onClick={handleSave}
             disabled={isSaving}
@@ -280,7 +329,7 @@ function ConfiguratorPage() {
         isOpen={isCodeModalOpen}
         onClose={() => setIsCodeModalOpen(false)}
         widgetKey={currentWidget?.widgetKey}
-        embedType={embedType}
+        embedType={selectedEmbedType}
       />
     </div>
   );

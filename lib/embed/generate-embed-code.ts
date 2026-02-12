@@ -31,10 +31,13 @@ export interface WidgetForEmbed {
 
 /**
  * Get the base URL for widget serving
- * Uses environment variable or defaults to production URL
+ * Priority: explicit override -> env -> current browser origin -> localhost fallback
  */
 function getBaseUrl(override?: string): string {
-  return override || process.env.NEXT_PUBLIC_APP_URL || 'https://chat-interface-r.vercel.app';
+  if (override) return override;
+  if (process.env.NEXT_PUBLIC_APP_URL) return process.env.NEXT_PUBLIC_APP_URL;
+  if (typeof window !== 'undefined' && window.location?.origin) return window.location.origin;
+  return 'http://localhost:3000';
 }
 
 /**
