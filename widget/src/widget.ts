@@ -366,6 +366,10 @@ export function createChatWidget(runtimeConfig: WidgetRuntimeConfig): void {
     });
   }
 
+  // Re-initialization safety: replace prior style/container before rendering.
+  document.getElementById('n8n-chat-widget-styles')?.remove();
+  document.getElementById('n8n-chat-widget-container')?.remove();
+
   // Inject CSS styles
   const styleEl = document.createElement('style');
   styleEl.id = 'n8n-chat-widget-styles';
@@ -472,21 +476,71 @@ export function createChatWidget(runtimeConfig: WidgetRuntimeConfig): void {
   `;
   document.head.appendChild(styleEl);
 
-  // Create container - using flexbox to stack chat window above button (matching preview)
+  // Determine display mode (popup default, inline/portal from embed attributes)
+  const displayMode = runtimeConfig.display?.mode || 'popup';
+  const isInlineEmbed = displayMode === 'inline';
+  const isPortalEmbed = displayMode === 'portal';
+  const isPopupEmbed = !isInlineEmbed && !isPortalEmbed;
+
+  let mountTarget: HTMLElement = document.body;
+  if (isInlineEmbed) {
+    const inlineContainerId = runtimeConfig.display?.containerId || 'chat-widget';
+    const inlineTarget = document.getElementById(inlineContainerId);
+    if (!inlineTarget) {
+      console.warn(`[N8n Chat Widget] Inline container not found: #${inlineContainerId}`);
+      return;
+    }
+    mountTarget = inlineTarget;
+    mountTarget.innerHTML = '';
+  } else if (isPortalEmbed) {
+    mountTarget = document.getElementById(runtimeConfig.display?.containerId || 'chat-portal') || document.body;
+  }
+
+  // Create container - popup stacks window above launcher, inline/portal fill target
   const container = document.createElement('div');
   container.id = 'n8n-chat-widget-container';
-  container.style.cssText = `
-    position: fixed;
-    ${mergedConfig.style.position === 'bottom-right' ? 'right: 24px;' : 'left: 24px;'}
-    bottom: 24px;
-    z-index: 999999;
-    font-family: ${mergedConfig.style.fontFamily};
-    font-size: ${mergedConfig.style.fontSize}px;
-    display: flex;
-    flex-direction: column;
-    align-items: flex-end;
-  `;
-  document.body.appendChild(container);
+
+  if (isPopupEmbed) {
+    container.style.cssText = `
+      position: fixed;
+      ${mergedConfig.style.position === 'bottom-right' ? 'right: 24px;' : 'left: 24px;'}
+      bottom: 24px;
+      z-index: 999999;
+      font-family: ${mergedConfig.style.fontFamily};
+      font-size: ${mergedConfig.style.fontSize}px;
+      display: flex;
+      flex-direction: column;
+      align-items: flex-end;
+    `;
+  } else if (isInlineEmbed) {
+    container.style.cssText = `
+      position: relative;
+      width: 100%;
+      height: 100%;
+      min-height: 420px;
+      z-index: 999999;
+      font-family: ${mergedConfig.style.fontFamily};
+      font-size: ${mergedConfig.style.fontSize}px;
+      display: flex;
+      flex-direction: column;
+      align-items: stretch;
+    `;
+  } else {
+    container.style.cssText = `
+      position: fixed;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      z-index: 999999;
+      font-family: ${mergedConfig.style.fontFamily};
+      font-size: ${mergedConfig.style.fontSize}px;
+      display: flex;
+      flex-direction: column;
+      align-items: stretch;
+    `;
+  }
+
+  mountTarget.appendChild(container);
 
   // Calculate launcher button colors (matching preview-canvas.tsx getLauncherStyle)
   let launcherBg: string, launcherColor: string;
@@ -501,84 +555,95 @@ export function createChatWidget(runtimeConfig: WidgetRuntimeConfig): void {
     launcherColor = isDark ? '#000000' : '#ffffff';
   }
 
-  // Create chat bubble button - matching preview exactly (56px, stroke icon)
-  const bubble = document.createElement('button');
-  bubble.id = 'n8n-chat-bubble';
-  bubble.setAttribute('aria-label', 'Open chat');
-  bubble.style.cssText = `
-    width: 56px;
-    height: 56px;
-    border-radius: 50%;
-    background: ${launcherBg};
-    border: none;
-    cursor: pointer;
-    box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -4px rgba(0, 0, 0, 0.1);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    transition: transform 0.3s, box-shadow 0.3s;
-    position: relative;
-  `;
+  let bubble: HTMLButtonElement | null = null;
+  let msgIconSvg: SVGElement | null = null;
+  let closeIconSvg: SVGElement | null = null;
 
-  // Icon container for animation
-  const iconContainer = document.createElement('div');
-  iconContainer.style.cssText = `position: relative; width: 24px; height: 24px;`;
+  // Create chat bubble launcher only for popup embeds
+  if (isPopupEmbed) {
+    bubble = document.createElement('button');
+    bubble.id = 'n8n-chat-bubble';
+    bubble.setAttribute('aria-label', 'Open chat');
+    bubble.style.cssText = `
+      width: 56px;
+      height: 56px;
+      border-radius: 50%;
+      background: ${launcherBg};
+      border: none;
+      cursor: pointer;
+      box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -4px rgba(0, 0, 0, 0.1);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: transform 0.3s, box-shadow 0.3s;
+      position: relative;
+    `;
 
-  // MessageCircle icon (stroke-based, matching Lucide)
-  const messageIcon = document.createElement('span');
-  messageIcon.id = 'n8n-bubble-message-icon';
-  messageIcon.innerHTML = `
-    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="${launcherColor}" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="position: absolute; inset: 0; transition: all 0.3s; opacity: 1; transform: rotate(0deg) scale(1);">
-      <path d="m3 21 1.9-5.7a8.5 8.5 0 1 1 3.8 3.8z"/>
-    </svg>
-  `;
+    const iconContainer = document.createElement('div');
+    iconContainer.style.cssText = `position: relative; width: 24px; height: 24px;`;
 
-  // X close icon
-  const closeIconEl = document.createElement('span');
-  closeIconEl.id = 'n8n-bubble-close-icon';
-  closeIconEl.innerHTML = `
-    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="${launcherColor}" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="position: absolute; inset: 0; transition: all 0.3s; opacity: 0; transform: rotate(-90deg) scale(0.5);">
-      <path d="M18 6 6 18"/>
-      <path d="m6 6 12 12"/>
-    </svg>
-  `;
+    // MessageCircle icon (stroke-based, matching Lucide)
+    const messageIcon = document.createElement('span');
+    messageIcon.id = 'n8n-bubble-message-icon';
+    messageIcon.innerHTML = `
+      <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="${launcherColor}" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="position: absolute; inset: 0; transition: all 0.3s; opacity: 1; transform: rotate(0deg) scale(1);">
+        <path d="m3 21 1.9-5.7a8.5 8.5 0 1 1 3.8 3.8z"/>
+      </svg>
+    `;
 
-  iconContainer.appendChild(messageIcon);
-  iconContainer.appendChild(closeIconEl);
-  bubble.appendChild(iconContainer);
+    // X close icon
+    const closeIconEl = document.createElement('span');
+    closeIconEl.id = 'n8n-bubble-close-icon';
+    closeIconEl.innerHTML = `
+      <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="${launcherColor}" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="position: absolute; inset: 0; transition: all 0.3s; opacity: 0; transform: rotate(-90deg) scale(0.5);">
+        <path d="M18 6 6 18"/>
+        <path d="m6 6 12 12"/>
+      </svg>
+    `;
 
-  // References for icon animation
-  const msgIconSvg = messageIcon.querySelector('svg') as SVGElement;
-  const closeIconSvg = closeIconEl.querySelector('svg') as SVGElement;
+    iconContainer.appendChild(messageIcon);
+    iconContainer.appendChild(closeIconEl);
+    bubble.appendChild(iconContainer);
 
-  bubble.addEventListener('mouseenter', () => { bubble.style.transform = 'scale(1.05)'; });
-  bubble.addEventListener('mouseleave', () => { bubble.style.transform = 'scale(1)'; });
-  bubble.addEventListener('click', toggleChat);
+    // References for icon animation
+    msgIconSvg = messageIcon.querySelector('svg');
+    closeIconSvg = closeIconEl.querySelector('svg');
+
+    bubble.addEventListener('mouseenter', () => {
+      if (bubble) bubble.style.transform = 'scale(1.05)';
+    });
+    bubble.addEventListener('mouseleave', () => {
+      if (bubble) bubble.style.transform = 'scale(1)';
+    });
+    bubble.addEventListener('click', toggleChat);
+  }
 
   // Create chat window - matches preview layout (380x600, 24px radius)
   // Added BEFORE bubble so it appears above in flexbox column layout
   const chatWindow = document.createElement('div');
   chatWindow.id = 'n8n-chat-window';
   chatWindow.style.cssText = `
-    display: none;
-    width: 380px;
-    height: 600px;
-    max-height: 80vh;
+    display: ${isPopupEmbed ? 'none' : 'flex'};
+    width: ${isPopupEmbed ? '380px' : '100%'};
+    height: ${isPopupEmbed ? '600px' : '100%'};
+    max-height: ${isPopupEmbed ? '80vh' : 'none'};
     background: ${bg};
     color: ${text};
-    border-radius: 24px;
+    border-radius: ${isPortalEmbed ? '0' : (isPopupEmbed ? '24px' : `${mergedConfig.style.cornerRadius || 12}px`)};
     box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
     flex-direction: column;
     overflow: hidden;
-    margin-bottom: 16px;
-    border: 1px solid ${border};
+    margin-bottom: ${isPopupEmbed ? '16px' : '0'};
+    border: ${isPortalEmbed ? 'none' : `1px solid ${border}`};
     position: relative;
-    transform-origin: bottom right;
+    transform-origin: ${isPopupEmbed ? 'bottom right' : 'center'};
   `;
   container.appendChild(chatWindow);
 
   // Add bubble AFTER chat window so it appears below in flexbox
-  container.appendChild(bubble);
+  if (bubble) {
+    container.appendChild(bubble);
+  }
 
   // Header icons (top right) - matching preview
   const headerIcons = document.createElement('div');
@@ -849,6 +914,10 @@ export function createChatWidget(runtimeConfig: WidgetRuntimeConfig): void {
 
   // Toggle chat window - with icon animation matching preview
   function toggleChat() {
+    if (!isPopupEmbed) {
+      return;
+    }
+
     isOpen = !isOpen;
     if (isOpen) {
       // Show chat window with animation
@@ -891,6 +960,15 @@ export function createChatWidget(runtimeConfig: WidgetRuntimeConfig): void {
         closeIconSvg.style.transform = 'rotate(-90deg) scale(0.5)';
       }
     }
+  }
+
+  // Inline and portal modes are always visible (no launcher/toggle).
+  if (!isPopupEmbed) {
+    isOpen = true;
+    chatWindow.style.display = 'flex';
+    chatWindow.style.opacity = '1';
+    chatWindow.style.transform = 'none';
+    input.focus();
   }
 
   // Show messages view (hide start screen)

@@ -68,7 +68,6 @@ export default async function FullpageChatPage({ params }: PageProps) {
       <FullpageWidget
         widgetKey={widgetKey}
         config={config}
-        embedType={(widget as any).embedType || 'fullpage'}
       />
     </div>
   );

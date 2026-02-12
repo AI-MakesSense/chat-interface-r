@@ -12,6 +12,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getWidgetByKeyWithUser } from '@/lib/db/queries';
 import { isValidWidgetKey } from '@/lib/embed';
 import { CHATKIT_SERVER_ENABLED } from '@/lib/feature-flags';
+import { normalizeDomain } from '@/lib/license/domain';
 import type { WidgetConfig } from '@/widget/src/types';
 
 /**
@@ -252,9 +253,17 @@ export async function GET(
     const origin = request.headers.get('origin');
     if (origin && widget.allowedDomains && widget.allowedDomains.length > 0) {
       const domain = new URL(origin).hostname;
-      const isAllowed = domain === 'localhost' || widget.allowedDomains.some((d: string) =>
-        domain === d || domain.endsWith('.' + d)
-      );
+      const normalizedDomain = normalizeDomain(domain);
+      const requestHost = normalizeDomain((request.headers.get('host') || '').split(':')[0] || '');
+      const isFirstPartyOrigin =
+        normalizedDomain !== 'unknown' &&
+        requestHost !== 'unknown' &&
+        normalizedDomain === requestHost;
+
+      const isAllowed = isFirstPartyOrigin || normalizedDomain === 'localhost' || widget.allowedDomains.some((d: string) => {
+        const normalizedAllowed = normalizeDomain(d);
+        return normalizedDomain === normalizedAllowed || normalizedDomain.endsWith('.' + normalizedAllowed);
+      });
 
       if (!isAllowed) {
         return new NextResponse(

@@ -33,15 +33,19 @@ export interface WidgetForEmbed {
  * Get the base URL for widget serving
  * Uses environment variable or defaults to production URL
  */
-function getBaseUrl(): string {
-  return process.env.NEXT_PUBLIC_APP_URL || 'https://chat-interface-r.vercel.app';
+function getBaseUrl(override?: string): string {
+  return override || process.env.NEXT_PUBLIC_APP_URL || 'https://chat-interface-r.vercel.app';
 }
 
 /**
  * Generate embed code for a specific embed type
  */
-export function generateEmbedCode(widget: WidgetForEmbed, type: EmbedType): EmbedCodeResult {
-  const baseUrl = getBaseUrl();
+export function generateEmbedCode(
+  widget: WidgetForEmbed,
+  type: EmbedType,
+  options?: { baseUrl?: string }
+): EmbedCodeResult {
+  const baseUrl = getBaseUrl(options?.baseUrl);
   const key = widget.widgetKey;
 
   switch (type) {
@@ -104,17 +108,23 @@ export function generateEmbedCode(widget: WidgetForEmbed, type: EmbedType): Embe
 /**
  * Generate all embed code variants for a widget
  */
-export function generateAllEmbedCodes(widget: WidgetForEmbed): EmbedCodeResult[] {
+export function generateAllEmbedCodes(
+  widget: WidgetForEmbed,
+  options?: { baseUrl?: string }
+): EmbedCodeResult[] {
   const types: EmbedType[] = ['popup', 'inline', 'fullpage', 'portal'];
-  return types.map(type => generateEmbedCode(widget, type));
+  return types.map(type => generateEmbedCode(widget, type, options));
 }
 
 /**
  * Get the primary embed code for a widget based on its configured embed type
  */
-export function getPrimaryEmbedCode(widget: WidgetForEmbed): EmbedCodeResult {
+export function getPrimaryEmbedCode(
+  widget: WidgetForEmbed,
+  options?: { baseUrl?: string }
+): EmbedCodeResult {
   const type = widget.embedType || 'popup';
-  return generateEmbedCode(widget, type);
+  return generateEmbedCode(widget, type, options);
 }
 
 /**

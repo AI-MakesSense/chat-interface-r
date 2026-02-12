@@ -8,7 +8,7 @@
  * Uses widgetKey instead of license for configuration
  */
 
-import { useEffect, useRef } from 'react';
+import { useEffect } from 'react';
 import Script from 'next/script';
 import { ChatKitEmbed } from '@/components/chatkit-embed';
 import { WidgetConfig } from '@/stores/widget-store';
@@ -17,66 +17,11 @@ import { CHATKIT_UI_ENABLED } from '@/lib/feature-flags';
 interface FullpageWidgetProps {
   widgetKey: string;
   config: WidgetConfig;
-  embedType: string;
 }
 
-export default function FullpageWidget({ widgetKey, config, embedType }: FullpageWidgetProps) {
-  const containerRef = useRef<HTMLDivElement>(null);
-  const widgetInitialized = useRef(false);
-
+export default function FullpageWidget({ widgetKey, config }: FullpageWidgetProps) {
   // Check if this is a ChatKit widget
   const isChatKit = CHATKIT_UI_ENABLED && config?.connection?.provider === 'chatkit';
-
-  useEffect(() => {
-    // Only initialize N8n widget script if not ChatKit
-    if (isChatKit) return;
-
-    // Initialize widget only once when script is loaded
-    const initializeWidget = () => {
-      if (widgetInitialized.current) return;
-      if (typeof window === 'undefined') return;
-      if (!(window as any).Widget) return;
-
-      widgetInitialized.current = true;
-
-      try {
-        const { Widget } = (window as any);
-
-        // Merge config with portal mode settings (portal = fullscreen chat)
-        const configAny = config as any;
-        const portalConfig = {
-          ...config,
-          mode: 'portal',  // Widget recognizes 'portal' mode for fullscreen
-          widgetKey: widgetKey,
-          embedType: embedType,
-          portal: {
-            showHeader: configAny?.portal?.showHeader ?? true,
-            headerTitle: configAny?.portal?.headerTitle || config?.branding?.companyName || 'Chat',
-          },
-        };
-
-        // Initialize widget in portal mode (fullscreen)
-        const widget = new Widget(portalConfig);
-        widget.render();
-
-        console.log('[Fullpage] N8n Widget initialized:', widgetKey);
-      } catch (error) {
-        console.error('[Fullpage] Widget initialization failed:', error);
-      }
-    };
-
-    // Check if script already loaded
-    if ((window as any).Widget) {
-      initializeWidget();
-    }
-
-    // Listen for script load event
-    window.addEventListener('widget-script-loaded', initializeWidget);
-
-    return () => {
-      window.removeEventListener('widget-script-loaded', initializeWidget);
-    };
-  }, [widgetKey, config, embedType, isChatKit]);
 
   // Apply global styles via useEffect
   useEffect(() => {
@@ -122,18 +67,16 @@ export default function FullpageWidget({ widgetKey, config, embedType }: Fullpag
     <>
       {/* Widget Script */}
       <Script
-        src="/widget/chat-widget.iife.js"
+        id={`n8n-fullpage-${widgetKey}`}
+        src={`/w/${widgetKey}.js`}
+        data-mode="portal"
+        data-container="chat-portal"
         strategy="afterInteractive"
-        onLoad={() => {
-          // Dispatch custom event when script loads
-          window.dispatchEvent(new Event('widget-script-loaded'));
-        }}
       />
 
       {/* Portal Container - widget looks for id="chat-portal" */}
       <div
         id="chat-portal"
-        ref={containerRef}
         style={{
           position: 'fixed',
           top: 0,

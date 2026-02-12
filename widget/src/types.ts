@@ -34,6 +34,12 @@ export interface PortalConfig {
 export interface WidgetRuntimeConfig {
   uiConfig: WidgetConfig;
   relay: RelayConfig;
+  display?: WidgetDisplayConfig;
+}
+
+export interface WidgetDisplayConfig {
+  mode?: 'popup' | 'inline' | 'portal';
+  containerId?: string;
 }
 
 export interface BrandingConfig {

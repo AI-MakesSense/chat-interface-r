@@ -30,6 +30,7 @@ import { createDefaultConfig } from '@/lib/config/defaults';
 import { createWidgetConfigSchema } from '@/lib/validation/widget-schema';
 import { deepMerge, forceN8nProviderConfig, stripLegacyConfigProperties } from '@/lib/utils/config-helpers';
 import { CHATKIT_SERVER_ENABLED } from '@/lib/feature-flags';
+import { generateEmbedCode, type EmbedType as GeneratedEmbedType } from '@/lib/embed';
 import { z } from 'zod';
 
 // =============================================================================
@@ -367,11 +368,21 @@ export async function GET(request: NextRequest) {
  * Returns an object with code snippets for each embed type
  */
 function generateEmbedCodes(baseUrl: string, widgetKey: string, primaryEmbedType: string) {
+  const widget = { widgetKey };
+  const validTypes: GeneratedEmbedType[] = ['popup', 'inline', 'fullpage', 'portal'];
+  const normalizedPrimary = validTypes.includes(primaryEmbedType as GeneratedEmbedType)
+    ? (primaryEmbedType as GeneratedEmbedType)
+    : 'popup';
+  const popup = generateEmbedCode(widget, 'popup', { baseUrl }).code;
+  const inline = generateEmbedCode(widget, 'inline', { baseUrl }).code;
+  const fullpage = generateEmbedCode(widget, 'fullpage', { baseUrl }).code;
+  const portal = generateEmbedCode(widget, 'portal', { baseUrl }).code;
+
   return {
-    primary: primaryEmbedType,
-    popup: `<script src="${baseUrl}/w/${widgetKey}.js" async></script>`,
-    inline: `<div id="chat-widget-${widgetKey}"></div>\n<script src="${baseUrl}/w/${widgetKey}.js" data-embed="inline" async></script>`,
-    fullpage: `${baseUrl}/chat/${widgetKey}`,
-    portal: `${baseUrl}/chat/portal/${widgetKey}`,
+    primary: normalizedPrimary,
+    popup,
+    inline,
+    fullpage,
+    portal,
   };
 }

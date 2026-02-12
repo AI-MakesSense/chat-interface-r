@@ -183,10 +183,21 @@ export async function GET(
     const normalizedRequestDomain = normalizeDomain(domain);
     const allowedDomains = (widget as any).allowedDomains || [];
     const userTier = user.tier || 'free';
+    const hostHeader = request.headers.get('host') || '';
+    const requestHostDomain = normalizeDomain(hostHeader.split(':')[0] || '');
+    const isFirstPartyRequest =
+      normalizedRequestDomain !== 'unknown' &&
+      requestHostDomain !== 'unknown' &&
+      normalizedRequestDomain === requestHostDomain;
 
     // Agency tier or empty allowedDomains allows any domain
     // Also skip validation if domain is 'unknown' (no referer/origin sent)
-    if (userTier !== 'agency' && allowedDomains.length > 0 && normalizedRequestDomain !== 'unknown') {
+    if (
+      userTier !== 'agency' &&
+      allowedDomains.length > 0 &&
+      normalizedRequestDomain !== 'unknown' &&
+      !isFirstPartyRequest
+    ) {
       const isAuthorized = normalizedRequestDomain === 'localhost' || allowedDomains.some((allowedDomain: string) => {
         const normalizedAllowed = normalizeDomain(allowedDomain);
         return normalizedAllowed === normalizedRequestDomain ||

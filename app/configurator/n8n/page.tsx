@@ -81,8 +81,9 @@ function ConfiguratorPage() {
   const [isCodeModalOpen, setIsCodeModalOpen] = useState(false);
   const [hasCheckedAuth, setHasCheckedAuth] = useState(false);
 
-  // Get embed type from URL params (set in create-widget-modal)
-  const embedType = (searchParams?.get('embedType') as EmbedType) || 'popup';
+  // For existing widgets, prefer stored embedType. For new widgets, use URL param.
+  const urlEmbedType = (searchParams?.get('embedType') as EmbedType) || 'popup';
+  const embedType = (currentWidget?.embedType as EmbedType) || urlEmbedType;
 
   // Load widget if widgetId is provided
   // Load widget if widgetId is provided, otherwise reset for new widget

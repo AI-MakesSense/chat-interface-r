@@ -271,7 +271,12 @@ export async function GET(
     if (origin && allowedDomains.length > 0 && userTier !== 'agency') {
       const domain = new URL(origin).hostname;
       const normalizedDomain = normalizeDomain(domain);
-      const isAllowed = normalizedDomain === 'localhost' || allowedDomains.some((d: string) => {
+      const requestHost = normalizeDomain((request.headers.get('host') || '').split(':')[0] || '');
+      const isFirstPartyOrigin =
+        normalizedDomain !== 'unknown' &&
+        requestHost !== 'unknown' &&
+        normalizedDomain === requestHost;
+      const isAllowed = isFirstPartyOrigin || normalizedDomain === 'localhost' || allowedDomains.some((d: string) => {
         const normalizedAllowed = normalizeDomain(d);
         return normalizedDomain === normalizedAllowed ||
           normalizedDomain.endsWith('.' + normalizedAllowed);

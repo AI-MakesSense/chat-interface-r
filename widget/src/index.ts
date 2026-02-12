@@ -33,13 +33,41 @@ if (typeof window !== 'undefined') {
     const injectedConfig = (window as any).ChatWidgetConfig || {};
     // Handle case where injectedConfig might be nested or flat
     const injectedRelay = injectedConfig.relay || (injectedConfig.uiConfig ? injectedConfig.uiConfig.relay : {});
+    const scriptCandidates = Array.from(
+      document.querySelectorAll('script[src*="/chat-widget.js"], script[src*="/bundle.js"], script[src*="/w/"]')
+    ) as HTMLScriptElement[];
+    const scriptTag = scriptCandidates[scriptCandidates.length - 1] || null;
+
+    const scriptModeAttr = (scriptTag?.getAttribute('data-mode') || scriptTag?.getAttribute('data-embed') || '')
+      .trim()
+      .toLowerCase();
+
+    let displayMode: 'popup' | 'inline' | 'portal' = 'popup';
+    if (scriptModeAttr === 'inline') {
+      displayMode = 'inline';
+    } else if (scriptModeAttr === 'portal' || scriptModeAttr === 'fullpage') {
+      displayMode = 'portal';
+    }
+
+    const injectedDisplayMode = injectedConfig?.display?.mode;
+    if (injectedDisplayMode === 'popup' || injectedDisplayMode === 'inline' || injectedDisplayMode === 'portal') {
+      displayMode = injectedDisplayMode;
+    }
+
+    const displayConfig = {
+      mode: displayMode,
+      containerId: injectedConfig?.display?.containerId || scriptTag?.getAttribute('data-container') || undefined,
+    };
 
     // Check if we have a FULL configuration (Legacy or fully injected mode)
     // We check both flat structure and nested uiConfig structure
     if (injectedRelay && injectedRelay.relayUrl && (injectedConfig.branding || (injectedConfig.uiConfig && injectedConfig.uiConfig.branding))) {
       console.log('[N8n Chat Widget] Using existing full configuration');
       try {
-        createChatWidget(injectedConfig as WidgetRuntimeConfig);
+        createChatWidget({
+          ...(injectedConfig as WidgetRuntimeConfig),
+          display: displayConfig,
+        });
         return;
       } catch (error) {
         console.error('[N8n Chat Widget] Initialization error:', error);
@@ -60,7 +88,6 @@ if (typeof window !== 'undefined') {
 
     // Strategy B: Check script tag (supports both legacy and v2.0 URL patterns)
     // IMPORTANT: Always check script URL to detect v2 pattern, even if we have a widgetKey
-    const scriptTag = document.querySelector('script[src*="/chat-widget.js"], script[src*="/bundle.js"], script[src*="/w/"]') as HTMLScriptElement;
     if (scriptTag && scriptTag.src) {
       const url = new URL(scriptTag.src);
       apiBaseUrl = url.origin;
@@ -112,7 +139,8 @@ if (typeof window !== 'undefined') {
           relayUrl: injectedRelay.relayUrl || remoteConfig.connection?.relayEndpoint || `${apiBaseUrl}/api/chat-relay`,
           widgetId: injectedRelay.widgetId || '', // Use injected ID if available
           licenseKey: widgetKey // Use widgetKey for v2.0 (licenseKey for backward compatibility)
-        }
+        },
+        display: displayConfig,
       } as unknown as WidgetRuntimeConfig;
 
       // Save config to window so the internal message handler can find it if needed

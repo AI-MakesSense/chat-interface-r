@@ -17,6 +17,7 @@ import { Edit, Trash2, Globe, Calendar, X, Check, Code, Bot, Webhook } from 'luc
 import { EmbedTypeBadge } from '@/components/configurator/embed-type-selector';
 import type { EmbedType } from '@/stores/widget-store';
 import { CHATKIT_UI_ENABLED } from '@/lib/feature-flags';
+import { generateEmbedCode } from '@/lib/embed';
 
 /**
  * Determine widget type from config
@@ -95,14 +96,17 @@ export function WidgetList({ widgets, onDelete }: WidgetListProps) {
         const baseUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://chat-interface-r.vercel.app';
         const providerType = getWidgetType(widget);
         const widgetType = providerType === 'chatkit' ? 'ChatKit Agent' : 'N8n Workflow';
+        const selectedEmbedType = (widget.embedType || 'popup') as EmbedType;
 
         let embedCode: string;
 
         // Schema v2.0: Use widgetKey if available, otherwise fall back to licenseKey
         if (widget.widgetKey) {
-            // New v2.0 embed code using widgetKey
-            embedCode = `<!-- ${widgetType} Widget -->
-<script src="${baseUrl}/w/${widget.widgetKey}.js" async></script>`;
+            embedCode = generateEmbedCode(
+                { widgetKey: widget.widgetKey },
+                selectedEmbedType,
+                { baseUrl }
+            ).code;
         } else if (widget.licenseKey) {
             // Legacy embed code using licenseKey
             embedCode = `<!-- ${widgetType} Widget -->
@@ -242,7 +246,8 @@ export function WidgetList({ widgets, onDelete }: WidgetListProps) {
                                         onClick={() => {
                                             const provider = getWidgetType(widget);
                                             const path = provider === 'chatkit' ? '/configurator/chatkit' : '/configurator/n8n';
-                                            router.push(`${path}?widgetId=${widget.id}`);
+                                            const currentEmbedType = widget.embedType || 'popup';
+                                            router.push(`${path}?widgetId=${widget.id}&embedType=${currentEmbedType}`);
                                         }}
                                     >
                                         <Edit className="h-4 w-4" />
