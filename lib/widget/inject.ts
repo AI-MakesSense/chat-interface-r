@@ -38,7 +38,8 @@ export function createFlagsJSON(license: License): string {
 export function injectLicenseFlags(
   bundleContent: string,
   license: License,
-  widgetId?: string
+  widgetId?: string,
+  baseUrlOverride?: string
 ): string {
   // 1. Generate the Flags configuration
   const flagsJSON = createFlagsJSON(license);
@@ -52,7 +53,10 @@ window.N8N_LICENSE_FLAGS = ${flagsJSON};`;
   // 3. Add relay configuration if widgetId is provided
   // Use production URL for relay endpoint to ensure cross-domain requests work
   // The widget may be embedded on any domain but must call back to our server
-  const baseUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://chat-interface-r.vercel.app';
+  const baseUrl =
+    baseUrlOverride ||
+    process.env.NEXT_PUBLIC_APP_URL ||
+    'https://chat-interface-r.vercel.app';
 
   if (widgetId) {
     const relayConfig = {

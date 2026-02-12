@@ -260,7 +260,8 @@ export async function GET(
       });
     }
 
-    const widgetBundle = await serveWidgetBundle(license, widgetId);
+    const requestOrigin = new URL(request.url).origin;
+    const widgetBundle = await serveWidgetBundle(license, widgetId, requestOrigin);
 
     // Step 12: Return successful response
     return new NextResponse(widgetBundle, {

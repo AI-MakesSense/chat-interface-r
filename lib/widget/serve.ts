@@ -39,19 +39,16 @@ async function readWidgetBundle(): Promise<string> {
 
 /**
  * Get cache key for an injected bundle
- * Includes license/widget identity so relay injection cannot bleed across widgets.
- *
- * @param license - License object
- * @param widgetId - Optional widget identity
- * @returns Cache key string
+ * Includes license/widget identity and serving origin to prevent cross-origin cache bleed.
  */
-function getCacheKey(license: License, widgetId?: string): string {
+function getCacheKey(license: License, widgetId?: string, baseUrl?: string): string {
   return [
     license.id,
     widgetId || 'no-widget',
     license.tier,
     String(license.brandingEnabled),
     String(license.domainLimit),
+    baseUrl || 'no-base-url',
   ].join(':');
 }
 
@@ -60,16 +57,16 @@ function getCacheKey(license: License, widgetId?: string): string {
  *
  * @param license - License object from database
  * @param widgetId - Optional widget ID for relay configuration
+ * @param baseUrl - Optional origin for relay URL injection
  * @returns Widget bundle JavaScript with injected flags
- *
- * Features:
- * - Caches bundles in memory for performance (60s TTL)
- * - Injects license-specific flags
- * - Injects relay configuration if widgetId is provided
- * - Different bundles for different license configurations
  */
-export async function serveWidgetBundle(license: License, widgetId?: string): Promise<string> {
-  const cacheKey = getCacheKey(license, widgetId);
+
+export async function serveWidgetBundle(
+  license: License,
+  widgetId?: string,
+  baseUrl?: string
+): Promise<string> {
+  const cacheKey = getCacheKey(license, widgetId, baseUrl);
   const now = Date.now();
 
   // Check cache
@@ -82,7 +79,7 @@ export async function serveWidgetBundle(license: License, widgetId?: string): Pr
   const rawBundle = await readWidgetBundle();
 
   // Inject license flags and relay config
-  const bundleWithFlags = injectLicenseFlags(rawBundle, license, widgetId);
+  const bundleWithFlags = injectLicenseFlags(rawBundle, license, widgetId, baseUrl);
 
   // Update cache
   bundleCache.set(cacheKey, {

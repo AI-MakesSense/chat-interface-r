@@ -323,7 +323,8 @@ export async function GET(
       brandingEnabled: userTier === 'free' || userTier === 'basic',
     };
 
-    const widgetBundle = await serveWidgetBundle(mockLicense as any, widget.id);
+    const requestOrigin = new URL(request.url).origin;
+    const widgetBundle = await serveWidgetBundle(mockLicense as any, widget.id, requestOrigin);
 
     // Step 12: Return successful response
     return new NextResponse(widgetBundle, {
