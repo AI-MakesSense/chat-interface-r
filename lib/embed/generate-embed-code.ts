@@ -35,8 +35,8 @@ export interface WidgetForEmbed {
  */
 function getBaseUrl(override?: string): string {
   if (override) return override;
-  if (typeof window !== 'undefined' && window.location?.origin) return window.location.origin;
   if (process.env.NEXT_PUBLIC_APP_URL) return process.env.NEXT_PUBLIC_APP_URL;
+  if (typeof window !== 'undefined' && window.location?.origin) return window.location.origin;
   return 'http://localhost:3000';
 }
 
