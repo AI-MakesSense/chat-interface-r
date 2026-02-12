@@ -5,7 +5,7 @@
  *
  * Purpose: Create a new user account
  * Body: { email, password, name? }
- * Returns: { user: { id, email, name }, token }
+ * Returns: { user: { id, email, name } }
  */
 
 import { NextRequest } from 'next/server';
@@ -15,6 +15,7 @@ import { hashPassword, validatePasswordStrength } from '@/lib/auth/password';
 import { signJWT } from '@/lib/auth/jwt';
 import { createAuthCookie } from '@/lib/auth/guard';
 import { handleAPIError, errorResponse } from '@/lib/utils/api-error';
+import { checkRateLimit } from '@/lib/security/rate-limit';
 
 // Validation schema
 const SignupSchema = z.object({
@@ -23,11 +24,51 @@ const SignupSchema = z.object({
   name: z.string().optional(),
 });
 
+const SIGNUP_IP_LIMIT = { limit: 20, windowMs: 60 * 60 * 1000 };
+const SIGNUP_EMAIL_LIMIT = { limit: 6, windowMs: 60 * 60 * 1000 };
+
+function getClientIP(request: NextRequest): string {
+  const forwarded = request.headers.get('x-forwarded-for');
+  if (forwarded) return forwarded.split(',')[0].trim();
+
+  const realIp = request.headers.get('x-real-ip');
+  if (realIp) return realIp;
+
+  return 'unknown';
+}
+
 export async function POST(request: NextRequest) {
   try {
+    const clientIP = getClientIP(request);
+    const ipRate = checkRateLimit('auth:signup:ip', clientIP, SIGNUP_IP_LIMIT);
+    if (!ipRate.allowed) {
+      return Response.json(
+        { error: 'Too many signup attempts. Please try again later.' },
+        {
+          status: 429,
+          headers: { 'Retry-After': String(ipRate.retryAfter || 60) },
+        }
+      );
+    }
+
     // Parse and validate body
     const body = await request.json();
     const { email, password, name } = SignupSchema.parse(body);
+
+    const emailRate = checkRateLimit(
+      'auth:signup:email',
+      email.toLowerCase(),
+      SIGNUP_EMAIL_LIMIT
+    );
+    if (!emailRate.allowed) {
+      return Response.json(
+        { error: 'Too many signup attempts. Please try again later.' },
+        {
+          status: 429,
+          headers: { 'Retry-After': String(emailRate.retryAfter || 60) },
+        }
+      );
+    }
 
     // Additional password validation
     const passwordError = validatePasswordStrength(password);
@@ -66,7 +107,6 @@ export async function POST(request: NextRequest) {
           email: user.email,
           name: user.name,
         },
-        token,
       },
       { status: 201 }
     );

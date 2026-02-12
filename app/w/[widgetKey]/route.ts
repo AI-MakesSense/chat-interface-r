@@ -90,8 +90,7 @@ export async function GET(
     }
 
     // Step 2: Extract domain from referer or origin header
-    // Some browsers/contexts don't send referer (privacy settings, HTTPS→HTTP, etc.)
-    // Fall back to origin header, or allow if neither present (initial script load)
+    // Fail closed when both are missing.
     const referer = request.headers.get('referer');
     const origin = request.headers.get('origin');
 
@@ -102,11 +101,11 @@ export async function GET(
       domain = extractDomainFromReferer(origin);
     }
 
-    // If no domain info available, log warning but allow (for script initial load)
-    // Domain validation will still happen if allowedDomains is configured
     if (!domain) {
-      console.warn(`[Widget] No referer/origin for ${cleanWidgetKey}, allowing initial load`);
-      domain = 'unknown';
+      return createErrorResponse('REFERER_MISSING', {
+        widgetKey: cleanWidgetKey,
+        reason: 'missing_origin_context',
+      });
     }
 
     // Step 4: Get client IP for rate limiting
@@ -190,12 +189,10 @@ export async function GET(
       requestHostDomain !== 'unknown' &&
       normalizedRequestDomain === requestHostDomain;
 
-    // Agency tier or empty allowedDomains allows any domain
-    // Also skip validation if domain is 'unknown' (no referer/origin sent)
+    // Agency tier or empty allowedDomains allows any domain.
     if (
       userTier !== 'agency' &&
       allowedDomains.length > 0 &&
-      normalizedRequestDomain !== 'unknown' &&
       !isFirstPartyRequest
     ) {
       const isAuthorized = normalizedRequestDomain === 'localhost' || allowedDomains.some((allowedDomain: string) => {

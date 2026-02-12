@@ -97,16 +97,18 @@ export async function GET(
     // Extract license key from route params (await for Next.js 16)
     const { license: licenseKey } = await params;
 
-    // Step 1: Extract and validate referer header
+    // Step 1: Extract and validate origin context (referer or origin)
     const referer = request.headers.get('referer');
-    if (!referer) {
+    const origin = request.headers.get('origin');
+    const originContext = referer || origin;
+    if (!originContext) {
       return createErrorResponse('REFERER_MISSING', { licenseKey });
     }
 
-    // Step 2: Extract domain from referer
-    const domain = extractDomainFromReferer(referer);
+    // Step 2: Extract domain from origin context
+    const domain = extractDomainFromReferer(originContext);
     if (!domain) {
-      return createErrorResponse('REFERER_MISSING', { licenseKey, referer });
+      return createErrorResponse('REFERER_MISSING', { licenseKey, referer, origin });
     }
 
     // Step 3: Get client IP for rate limiting

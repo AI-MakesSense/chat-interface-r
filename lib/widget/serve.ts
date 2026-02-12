@@ -38,14 +38,21 @@ async function readWidgetBundle(): Promise<string> {
 }
 
 /**
- * Get cache key for a license
- * Uses tier, branding, and domain limit to differentiate cached bundles
+ * Get cache key for an injected bundle
+ * Includes license/widget identity so relay injection cannot bleed across widgets.
  *
  * @param license - License object
+ * @param widgetId - Optional widget identity
  * @returns Cache key string
  */
-function getCacheKey(license: License): string {
-  return `${license.tier}-${license.brandingEnabled}-${license.domainLimit}`;
+function getCacheKey(license: License, widgetId?: string): string {
+  return [
+    license.id,
+    widgetId || 'no-widget',
+    license.tier,
+    String(license.brandingEnabled),
+    String(license.domainLimit),
+  ].join(':');
 }
 
 /**
@@ -62,7 +69,7 @@ function getCacheKey(license: License): string {
  * - Different bundles for different license configurations
  */
 export async function serveWidgetBundle(license: License, widgetId?: string): Promise<string> {
-  const cacheKey = getCacheKey(license);
+  const cacheKey = getCacheKey(license, widgetId);
   const now = Date.now();
 
   // Check cache

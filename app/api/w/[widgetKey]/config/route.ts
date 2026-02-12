@@ -61,9 +61,6 @@ function translateConfig(dbConfig: any, requestUrl: string, widgetKey: string, u
   };
   const cornerRadius = radiusMap[radius] || dbConfig.style?.cornerRadius || 12;
 
-  // Get webhook URL
-  const webhookUrl = dbConfig.n8nWebhookUrl || dbConfig.connection?.webhookUrl || '';
-
   // Build theme configuration
   const theme: WidgetConfig['theme'] = {
     colorScheme: themeMode as 'light' | 'dark',
@@ -174,7 +171,6 @@ function translateConfig(dbConfig: any, requestUrl: string, widgetKey: string, u
       maxFileSizeKB: dbConfig.features?.maxFileSize || 5120,
     },
     connection: {
-      webhookUrl: webhookUrl,
       relayEndpoint: `${new URL(requestUrl).origin}/api/chat-relay`,
     },
     agentKit: CHATKIT_SERVER_ENABLED && dbConfig.enableAgentKit ? {
@@ -263,13 +259,44 @@ export async function GET(
       }
     }
 
-    // Check domain restrictions
+    // Fail closed: require origin context for public config access.
     const origin = request.headers.get('origin');
+    const referer = request.headers.get('referer');
+    const originContext = origin || referer;
+    if (!originContext) {
+      return NextResponse.json(
+        { error: 'Origin or referer header is required' },
+        {
+          status: 403,
+          headers: {
+            'Content-Type': 'application/json',
+            'Access-Control-Allow-Origin': '*'
+          }
+        }
+      );
+    }
+
+    let domain = '';
+    try {
+      domain = new URL(originContext).hostname;
+    } catch {
+      return NextResponse.json(
+        { error: 'Invalid origin or referer header' },
+        {
+          status: 403,
+          headers: {
+            'Content-Type': 'application/json',
+            'Access-Control-Allow-Origin': '*'
+          }
+        }
+      );
+    }
+
+    // Check domain restrictions
     const allowedDomains = (widget as any).allowedDomains || [];
     const userTier = user.tier || 'free';
 
-    if (origin && allowedDomains.length > 0 && userTier !== 'agency') {
-      const domain = new URL(origin).hostname;
+    if (allowedDomains.length > 0 && userTier !== 'agency') {
       const normalizedDomain = normalizeDomain(domain);
       const requestHost = normalizeDomain((request.headers.get('host') || '').split(':')[0] || '');
       const isFirstPartyOrigin =

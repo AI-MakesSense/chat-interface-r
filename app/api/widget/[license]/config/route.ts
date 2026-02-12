@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getLicenseByKey, getWidgetsByLicenseId } from '@/lib/db/queries';
 import { CHATKIT_SERVER_ENABLED } from '@/lib/feature-flags';
+import { normalizeDomain } from '@/lib/license/domain';
 import type { WidgetConfig } from '@/widget/src/types';
 
 /**
@@ -67,11 +68,6 @@ function translateConfig(dbConfig: any, requestUrl: string): WidgetConfig {
     const cornerRadius = radiusMap[radius] ||
         dbConfig.style?.cornerRadius ||
         12;
-
-    // Get webhook URL - check multiple locations
-    const webhookUrl = dbConfig.n8nWebhookUrl ||
-        dbConfig.connection?.webhookUrl ||
-        '';
 
     // Build extended theme configuration
     const theme: WidgetConfig['theme'] = {
@@ -187,7 +183,6 @@ function translateConfig(dbConfig: any, requestUrl: string): WidgetConfig {
             maxFileSizeKB: dbConfig.features?.maxFileSize || 5120,
         },
         connection: {
-            webhookUrl: webhookUrl,
             relayEndpoint: `${new URL(requestUrl).origin}/api/chat-relay`,
         },
         // AgentKit / OpenAI configuration
@@ -261,13 +256,51 @@ export async function GET(
             );
         }
 
-        // Check domain restrictions if applicable
+        // Fail closed: require origin context for public config access.
         const origin = request.headers.get('origin');
-        if (origin && license!.domains.length > 0) {
-            const domain = new URL(origin!).hostname;
-            const isAllowed = license!.domains.some((d: string) =>
-                domain === d || domain.endsWith('.' + d)
+        const referer = request.headers.get('referer');
+        const originContext = origin || referer;
+        if (!originContext) {
+            return new NextResponse(
+                JSON.stringify({ error: 'Origin or referer header is required' }),
+                {
+                    status: 403,
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Access-Control-Allow-Origin': '*'
+                    }
+                }
             );
+        }
+
+        let domain = '';
+        try {
+            domain = new URL(originContext).hostname;
+        } catch {
+            return new NextResponse(
+                JSON.stringify({ error: 'Invalid origin or referer header' }),
+                {
+                    status: 403,
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Access-Control-Allow-Origin': '*'
+                    }
+                }
+            );
+        }
+
+        if (license!.domains.length > 0) {
+            const normalizedDomain = normalizeDomain(domain);
+            const requestHost = normalizeDomain((request.headers.get('host') || '').split(':')[0] || '');
+            const isFirstPartyOrigin =
+                normalizedDomain !== 'unknown' &&
+                requestHost !== 'unknown' &&
+                normalizedDomain === requestHost;
+
+            const isAllowed = isFirstPartyOrigin || normalizedDomain === 'localhost' || license!.domains.some((d: string) => {
+                const normalizedAllowed = normalizeDomain(d);
+                return normalizedDomain === normalizedAllowed || normalizedDomain.endsWith('.' + normalizedAllowed);
+            });
 
             if (!isAllowed) {
                 return new NextResponse(
