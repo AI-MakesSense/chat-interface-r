@@ -30,13 +30,58 @@ export interface WidgetForEmbed {
 }
 
 /**
- * Get the base URL for widget serving
- * Priority: explicit override -> env -> current browser origin -> localhost fallback
+ * Remove trailing slash to avoid accidental double slashes in generated snippets.
  */
-function getBaseUrl(override?: string): string {
-  if (override) return override;
-  if (typeof window !== 'undefined' && window.location?.origin) return window.location.origin;
-  if (process.env.NEXT_PUBLIC_APP_URL) return process.env.NEXT_PUBLIC_APP_URL;
+function normalizeBaseUrl(url: string): string {
+  return url.replace(/\/+$/, '');
+}
+
+/**
+ * Heuristic detection for Vercel preview hostnames.
+ * Example preview pattern: app-abcdef-team.vercel.app
+ */
+export function isLikelyVercelPreviewHostname(hostname: string): boolean {
+  if (!hostname || !hostname.endsWith('.vercel.app')) {
+    return false;
+  }
+
+  const subdomain = hostname.slice(0, -'.vercel.app'.length);
+  return subdomain.split('-').length >= 3;
+}
+
+/**
+ * Resolve the public base URL for embed snippets.
+ *
+ * Priority:
+ * 1) Explicit override
+ * 2) If running in browser:
+ *    - use configured public URL when current host is a Vercel preview hostname
+ *    - otherwise use current origin
+ * 3) Configured public URL (NEXT_PUBLIC_APP_URL or VERCEL_PROJECT_PRODUCTION_URL)
+ * 4) localhost fallback
+ */
+export function resolveEmbedBaseUrl(override?: string): string {
+  if (override) return normalizeBaseUrl(override);
+
+  const envPublic = process.env.NEXT_PUBLIC_APP_URL;
+  const vercelProd = process.env.VERCEL_PROJECT_PRODUCTION_URL
+    ? (process.env.VERCEL_PROJECT_PRODUCTION_URL.startsWith('http')
+      ? process.env.VERCEL_PROJECT_PRODUCTION_URL
+      : `https://${process.env.VERCEL_PROJECT_PRODUCTION_URL}`)
+    : undefined;
+  const configuredPublic = envPublic || vercelProd;
+
+  if (typeof window !== 'undefined' && window.location?.origin) {
+    if (configuredPublic && isLikelyVercelPreviewHostname(window.location.hostname)) {
+      return normalizeBaseUrl(configuredPublic);
+    }
+    return normalizeBaseUrl(window.location.origin);
+  }
+
+  if (configuredPublic) {
+    return normalizeBaseUrl(configuredPublic);
+  }
+
   return 'http://localhost:3000';
 }
 
@@ -48,7 +93,7 @@ export function generateEmbedCode(
   type: EmbedType,
   options?: { baseUrl?: string }
 ): EmbedCodeResult {
-  const baseUrl = getBaseUrl(options?.baseUrl);
+  const baseUrl = resolveEmbedBaseUrl(options?.baseUrl);
   const key = widget.widgetKey;
 
   switch (type) {

@@ -17,7 +17,7 @@ import { Edit, Trash2, Globe, Calendar, X, Check, Code, Bot, Webhook } from 'luc
 import { EmbedTypeBadge } from '@/components/configurator/embed-type-selector';
 import type { EmbedType } from '@/stores/widget-store';
 import { CHATKIT_UI_ENABLED } from '@/lib/feature-flags';
-import { generateEmbedCode } from '@/lib/embed';
+import { generateEmbedCode, resolveEmbedBaseUrl } from '@/lib/embed';
 
 /**
  * Determine widget type from config
@@ -93,7 +93,7 @@ export function WidgetList({ widgets, onDelete }: WidgetListProps) {
      * Schema v2.0: Prefers widgetKey, falls back to licenseKey for backward compatibility
      */
     const handleCopyEmbed = (widget: Widget) => {
-        const baseUrl = window.location.origin || process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
+        const baseUrl = resolveEmbedBaseUrl();
         const providerType = getWidgetType(widget);
         const widgetType = providerType === 'chatkit' ? 'ChatKit Agent' : 'N8n Workflow';
         const selectedEmbedType = (widget.embedType || 'popup') as EmbedType;

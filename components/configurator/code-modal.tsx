@@ -5,6 +5,8 @@ import { WidgetConfig } from '@/stores/widget-store';
 import { X, Copy, Check, MessageCircle, Layout, Maximize, Link } from 'lucide-react';
 import {
   generateAllEmbedCodes,
+  resolveEmbedBaseUrl,
+  isLikelyVercelPreviewHostname,
   type EmbedType,
   type EmbedCodeResult,
 } from '@/lib/embed';
@@ -84,6 +86,13 @@ export const CodeModal: React.FC<CodeModalProps> = ({
   // Generate all embed codes and find the selected one
   const embedCodes = generateAllEmbedCodes({ widgetKey: key });
   const currentEmbed = embedCodes.find(e => e.type === selectedEmbedType) || embedCodes[0];
+  const resolvedBaseUrl = resolveEmbedBaseUrl();
+  let isPreviewBaseUrl = false;
+  try {
+    isPreviewBaseUrl = isLikelyVercelPreviewHostname(new URL(resolvedBaseUrl).hostname);
+  } catch {
+    isPreviewBaseUrl = false;
+  }
 
   const handleCopy = (code: string) => {
     navigator.clipboard.writeText(code);
@@ -259,6 +268,15 @@ export const CodeModal: React.FC<CodeModalProps> = ({
           </div>
 
           {/* Domain Reminder */}
+          {isPreviewBaseUrl && (
+            <div className="mt-4 p-3 bg-red-50 rounded-lg border border-red-100">
+              <p className="text-sm text-red-800">
+                <strong>Warning:</strong> Embed code is currently using a Vercel preview URL.
+                Use your production domain before sharing.
+              </p>
+            </div>
+          )}
+
           {hasValidKey && (
             <div className="mt-4 p-3 bg-amber-50 rounded-lg border border-amber-100">
               <p className="text-sm text-amber-800">

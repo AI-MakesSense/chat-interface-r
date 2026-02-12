@@ -11,6 +11,8 @@ export {
   generateEmbedCode,
   generateAllEmbedCodes,
   getPrimaryEmbedCode,
+  resolveEmbedBaseUrl,
+  isLikelyVercelPreviewHostname,
   generateWidgetKey,
   isValidWidgetKey,
   getEmbedTypeInfo,
