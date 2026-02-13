@@ -18,6 +18,7 @@ import { getWidgetById, getWidgetWithLicense, updateWidget, deleteWidget, getUse
 import { createWidgetConfigSchema } from '@/lib/validation/widget-schema';
 import { deepMerge, stripLegacyConfigProperties, sanitizeConfig, forceN8nProviderConfig } from '@/lib/utils/config-helpers';
 import { CHATKIT_SERVER_ENABLED } from '@/lib/feature-flags';
+import { logActivity } from '@/lib/db/admin-queries';
 import { z } from 'zod';
 
 // =============================================================================
@@ -308,6 +309,9 @@ export async function DELETE(
 
     // 4. Soft delete widget (sets status='deleted')
     await deleteWidget(widgetId);
+
+    // Log activity
+    void logActivity(user.sub, 'widget_deleted', { widgetId });
 
     // 5. Return 204 No Content on success
     return new NextResponse(null, { status: 204 });

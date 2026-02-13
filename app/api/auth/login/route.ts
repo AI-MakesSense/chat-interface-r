@@ -16,6 +16,7 @@ import { signJWT } from '@/lib/auth/jwt';
 import { createAuthCookie } from '@/lib/auth/guard';
 import { handleAPIError, errorResponse } from '@/lib/utils/api-error';
 import { checkRateLimit } from '@/lib/security/rate-limit';
+import { logActivity } from '@/lib/db/admin-queries';
 
 // Validation schema
 const LoginSchema = z.object({
@@ -98,6 +99,9 @@ export async function POST(request: NextRequest) {
 
     // Set auth cookie
     response.headers.set('Set-Cookie', createAuthCookie(token));
+
+    // Log activity
+    void logActivity(user.id, 'user_login', { email: user.email });
 
     return response;
   } catch (error) {

@@ -27,6 +27,7 @@ export interface User {
   name: string | null;
   emailVerified: boolean;
   createdAt: string;
+  isAdmin?: boolean;
 }
 
 /**
@@ -36,6 +37,7 @@ export interface SignupData {
   email: string;
   password: string;
   name?: string;
+  inviteCode?: string;
 }
 
 /**

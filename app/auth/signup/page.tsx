@@ -1,24 +1,31 @@
-/**
- * Signup Page
- *
- * Public registration page for new users.
- * Split-screen layout with live widget showcase.
- */
+'use client';
 
-import { Metadata } from 'next';
+import { Suspense } from 'react';
+import { useSearchParams } from 'next/navigation';
 import { SignupForm } from '@/components/auth/signup-form';
 import { AuthLayout } from '@/components/auth/auth-layout';
-import { BRAND_NAME } from '@/lib/brand';
 
-export const metadata: Metadata = {
-  title: `Create Account | ${BRAND_NAME}`,
-  description: `Create your ${BRAND_NAME} account`,
-};
+function SignupContent() {
+  const searchParams = useSearchParams();
+  const inviteCode = searchParams.get('invite') || undefined;
+
+  return (
+    <AuthLayout>
+      <SignupForm inviteCode={inviteCode} />
+    </AuthLayout>
+  );
+}
 
 export default function SignupPage() {
   return (
-    <AuthLayout>
-      <SignupForm />
-    </AuthLayout>
+    <Suspense fallback={
+      <AuthLayout>
+        <div className="w-full max-w-md flex items-center justify-center py-12">
+          <p className="text-zinc-400">Loading...</p>
+        </div>
+      </AuthLayout>
+    }>
+      <SignupContent />
+    </Suspense>
   );
 }

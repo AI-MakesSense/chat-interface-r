@@ -1,22 +1,6 @@
 'use client';
 
-/**
- * Signup Form Component
- *
- * Client-side registration form with comprehensive validation.
- * Uses React Hook Form for validation and Zustand for state management.
- *
- * Features:
- * - Email, password, and name validation
- * - Password strength requirements (min 8 chars, uppercase, lowercase, number)
- * - Password confirmation matching
- * - Loading states during registration
- * - Error message display
- * - Redirect to dashboard on success
- * - Link to login form
- */
-
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -27,16 +11,8 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Alert, AlertDescription } from '@/components/ui/alert';
+import { Ticket } from 'lucide-react';
 
-/**
- * Signup form validation schema
- *
- * Password requirements:
- * - Minimum 8 characters
- * - At least one uppercase letter
- * - At least one lowercase letter
- * - At least one number
- */
 const signupSchema = z.object({
   name: z
     .string()
@@ -66,69 +42,83 @@ const signupSchema = z.object({
 type SignupFormData = z.infer<typeof signupSchema>;
 
 interface SignupFormProps {
-  /**
-   * Redirect path after successful signup
-   * @default '/dashboard'
-   */
   redirectTo?: string;
-  /**
-   * Show link to login form
-   * @default true
-   */
   showLoginLink?: boolean;
-  /**
-   * Callback after successful signup
-   */
   onSuccess?: () => void;
+  inviteCode?: string;
 }
 
-/**
- * Signup form component
- *
- * @example
- * <SignupForm redirectTo="/onboarding" />
- */
 export function SignupForm({
   redirectTo = '/dashboard',
   showLoginLink = true,
   onSuccess,
+  inviteCode,
 }: SignupFormProps) {
   const router = useRouter();
   const signup = useAuthStore((state) => state.signup);
   const [error, setError] = useState<string | null>(null);
+  const [invite, setInvite] = useState<{ valid: boolean; type?: string; email?: string } | null>(null);
+  const [inviteLoading, setInviteLoading] = useState(!!inviteCode);
 
   const {
     register,
     handleSubmit,
+    setValue,
     formState: { errors, isSubmitting },
   } = useForm<SignupFormData>({
     resolver: zodResolver(signupSchema),
-    mode: 'onChange', // Validate on change for immediate feedback
+    mode: 'onChange',
   });
 
-  /**
-   * Handle form submission
-   */
+  // Validate invite code on mount
+  useEffect(() => {
+    if (!inviteCode) return;
+    setInviteLoading(true);
+    fetch(`/api/auth/validate-invite?code=${encodeURIComponent(inviteCode)}`)
+      .then(res => res.json())
+      .then(data => {
+        if (data.valid) {
+          setInvite(data);
+          if (data.email) {
+            setValue('email', data.email);
+          }
+        } else {
+          setError('This invitation link is invalid or has expired.');
+        }
+      })
+      .catch(() => {
+        setError('Failed to validate invitation.');
+      })
+      .finally(() => setInviteLoading(false));
+  }, [inviteCode, setValue]);
+
   const onSubmit = async (data: SignupFormData) => {
     try {
       setError(null);
 
-      // Call signup with name, email, password (exclude confirmPassword)
       await signup({
         email: data.email,
         password: data.password,
         name: data.name,
+        inviteCode: inviteCode || undefined,
       });
 
-      // Success callback
       onSuccess?.();
-
-      // Redirect to dashboard
       router.push(redirectTo);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Signup failed');
     }
   };
+
+  if (inviteLoading) {
+    return (
+      <Card className="w-full max-w-md bg-zinc-900 border-zinc-800 text-white">
+        <CardContent className="flex items-center justify-center py-12">
+          <p className="text-zinc-400">Validating invitation...</p>
+        </CardContent>
+      </Card>
+    );
+  }
 
   return (
     <Card className="w-full max-w-md bg-zinc-900 border-zinc-800 text-white">
@@ -137,11 +127,16 @@ export function SignupForm({
         <CardDescription className="text-zinc-400">
           Get started with your free account today
         </CardDescription>
+        {invite?.valid && (
+          <div className="flex items-center gap-2 mt-3 px-3 py-2 rounded-lg bg-indigo-500/10 border border-indigo-500/20">
+            <Ticket className="h-4 w-4 text-indigo-400 shrink-0" />
+            <span className="text-sm text-indigo-300">You&apos;ve been invited!</span>
+          </div>
+        )}
       </CardHeader>
 
       <form onSubmit={handleSubmit(onSubmit)}>
         <CardContent className="space-y-4">
-          {/* Error Alert */}
           {error && (
             <Alert variant="destructive">
               <AlertDescription>{error}</AlertDescription>
@@ -175,8 +170,8 @@ export function SignupForm({
               type="email"
               placeholder="you@example.com"
               autoComplete="email"
-              disabled={isSubmitting}
-              className="bg-zinc-800 border-zinc-700 text-white placeholder:text-zinc-500"
+              disabled={isSubmitting || (invite?.type === 'email' && !!invite.email)}
+              className="bg-zinc-800 border-zinc-700 text-white placeholder:text-zinc-500 disabled:opacity-70"
               {...register('email')}
             />
             {errors.email && (
@@ -244,7 +239,6 @@ export function SignupForm({
         </CardContent>
 
         <CardFooter className="flex flex-col space-y-4">
-          {/* Submit Button */}
           <Button
             type="submit"
             className="w-full bg-indigo-600 hover:bg-indigo-700 text-white"
@@ -253,7 +247,6 @@ export function SignupForm({
             {isSubmitting ? 'Creating account...' : 'Create account'}
           </Button>
 
-          {/* Login Link */}
           {showLoginLink && (
             <p className="text-sm text-center text-zinc-400">
               Already have an account?{' '}

@@ -42,6 +42,7 @@ const PROTECTED_ROUTES = [
   '/dashboard',
   '/configurator',
   '/licenses',
+  '/admin',
 ];
 
 /**

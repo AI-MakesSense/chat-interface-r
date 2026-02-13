@@ -17,6 +17,7 @@ import { requireAuth } from '@/lib/auth/guard';
 import { db } from '@/lib/db/client';
 import { licenses, widgets, users } from '@/lib/db/schema';
 import { eq } from 'drizzle-orm';
+import { logActivity } from '@/lib/db/admin-queries';
 import {
   createWidget,
   createWidgetV2,
@@ -187,6 +188,9 @@ export async function POST(request: NextRequest) {
     const baseUrl = resolveEmbedBaseUrlFromRequest(request.url);
     const widgetKey = (widget as any).widgetKey;
     const embedCodes = widgetKey ? generateEmbedCodes(baseUrl, widgetKey, (widget as any).embedType || 'popup', (widget as any).config) : null;
+
+    // Log activity
+    void logActivity(authUser.sub, 'widget_created', { widgetId: widget.id, name: widget.name });
 
     // 11. Return 201 Created with widget data
     return NextResponse.json({

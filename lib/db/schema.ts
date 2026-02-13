@@ -170,11 +170,48 @@ export const passwordResetTokens = pgTable('password_reset_tokens', {
   createdAt: timestamp('created_at').defaultNow().notNull(),
 });
 
+/**
+ * Invitations Table
+ * Stores platform invitations (email-based or shareable codes)
+ */
+export const invitations = pgTable('invitations', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  email: varchar('email', { length: 255 }), // nullable: null for code-type invites
+  code: varchar('code', { length: 32 }).notNull().unique(), // 32-char hex, unique
+  type: varchar('type', { length: 10 }).notNull(), // 'email' | 'code'
+  status: varchar('status', { length: 20 }).default('pending').notNull(), // 'pending' | 'accepted' | 'expired'
+  invitedBy: uuid('invited_by').references(() => users.id, { onDelete: 'set null' }),
+  acceptedBy: uuid('accepted_by').references(() => users.id, { onDelete: 'set null' }),
+  expiresAt: timestamp('expires_at').notNull(),
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+}, (table) => ({
+  codeIdx: index('invitations_code_idx').on(table.code),
+  statusIdx: index('invitations_status_idx').on(table.status),
+}));
+
+/**
+ * Activity Log Table
+ * Platform-level activity tracking (signups, logins, widget operations, etc.)
+ */
+export const activityLog = pgTable('activity_log', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  userId: uuid('user_id').references(() => users.id, { onDelete: 'set null' }),
+  action: varchar('action', { length: 50 }).notNull(), // 'user_signup', 'user_login', 'widget_created', etc.
+  metadata: jsonb('metadata'), // { targetId, targetName, oldTier, newTier, etc. }
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+}, (table) => ({
+  userIdIdx: index('activity_log_user_id_idx').on(table.userId),
+  actionIdx: index('activity_log_action_idx').on(table.action),
+  createdAtIdx: index('activity_log_created_at_idx').on(table.createdAt),
+}));
+
 // Relations (for Drizzle query convenience)
 export const usersRelations = relations(users, ({ many }) => ({
   licenses: many(licenses),
   widgets: many(widgets), // Schema v2.0: Direct user → widgets relationship
   passwordResetTokens: many(passwordResetTokens),
+  activityLogs: many(activityLog),
+  sentInvitations: many(invitations),
 }));
 
 export const licensesRelations = relations(licenses, ({ one, many }) => ({
@@ -221,6 +258,20 @@ export const passwordResetTokensRelations = relations(passwordResetTokens, ({ on
   }),
 }));
 
+export const invitationsRelations = relations(invitations, ({ one }) => ({
+  inviter: one(users, {
+    fields: [invitations.invitedBy],
+    references: [users.id],
+  }),
+}));
+
+export const activityLogRelations = relations(activityLog, ({ one }) => ({
+  user: one(users, {
+    fields: [activityLog.userId],
+    references: [users.id],
+  }),
+}));
+
 // Type exports for use in application code
 export type User = typeof users.$inferSelect;
 export type NewUser = typeof users.$inferInsert;
@@ -239,3 +290,9 @@ export type NewAnalyticsEvent = typeof analyticsEvents.$inferInsert;
 
 export type PasswordResetToken = typeof passwordResetTokens.$inferSelect;
 export type NewPasswordResetToken = typeof passwordResetTokens.$inferInsert;
+
+export type Invitation = typeof invitations.$inferSelect;
+export type NewInvitation = typeof invitations.$inferInsert;
+
+export type ActivityLogEntry = typeof activityLog.$inferSelect;
+export type NewActivityLogEntry = typeof activityLog.$inferInsert;

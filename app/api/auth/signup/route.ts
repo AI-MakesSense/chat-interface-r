@@ -16,12 +16,14 @@ import { signJWT } from '@/lib/auth/jwt';
 import { createAuthCookie } from '@/lib/auth/guard';
 import { handleAPIError, errorResponse } from '@/lib/utils/api-error';
 import { checkRateLimit } from '@/lib/security/rate-limit';
+import { logActivity, getInvitationByCode, updateInvitationStatus } from '@/lib/db/admin-queries';
 
 // Validation schema
 const SignupSchema = z.object({
   email: z.string().email('Invalid email address'),
   password: z.string().min(8, 'Password must be at least 8 characters'),
   name: z.string().optional(),
+  inviteCode: z.string().optional(),
 });
 
 const SIGNUP_IP_LIMIT = { limit: 20, windowMs: 60 * 60 * 1000 };
@@ -53,7 +55,7 @@ export async function POST(request: NextRequest) {
 
     // Parse and validate body
     const body = await request.json();
-    const { email, password, name } = SignupSchema.parse(body);
+    const { email, password, name, inviteCode } = SignupSchema.parse(body);
 
     const emailRate = checkRateLimit(
       'auth:signup:email',
@@ -113,6 +115,21 @@ export async function POST(request: NextRequest) {
 
     // Set auth cookie
     response.headers.set('Set-Cookie', createAuthCookie(token));
+
+    // Handle invitation acceptance
+    if (inviteCode) {
+      try {
+        const invitation = await getInvitationByCode(inviteCode);
+        if (invitation && invitation.status === 'pending' && new Date(invitation.expiresAt) > new Date()) {
+          await updateInvitationStatus(invitation.id, 'accepted', user.id);
+        }
+      } catch {
+        // Don't block signup if invite processing fails
+      }
+    }
+
+    // Log activity
+    void logActivity(user.id, 'user_signup', { inviteCode: inviteCode || null });
 
     return response;
   } catch (error) {

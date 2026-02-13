@@ -18,9 +18,10 @@ import { Alert, AlertDescription } from '@/components/ui/alert';
 import { SubscriptionCard } from '@/components/dashboard/subscription-card';
 import { WidgetList } from '@/components/dashboard/widget-list';
 import { CreateWidgetModal } from '@/components/dashboard/create-widget-modal';
-import { Plus, LayoutGrid, CreditCard, LogOut, User, MessageSquare } from 'lucide-react';
+import { Plus, LayoutGrid, CreditCard, LogOut, User, MessageSquare, Shield } from 'lucide-react';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { BRAND_NAME } from '@/lib/brand';
+import Link from 'next/link';
 
 /**
  * Dashboard page component
@@ -131,6 +132,14 @@ export default function DashboardPage() {
           </div>
 
           <div className="flex items-center gap-4">
+            {user.isAdmin && (
+              <Link href="/admin">
+                <Button variant="ghost" size="sm" className="text-zinc-400 hover:text-white hover:bg-white/5 gap-1.5">
+                  <Shield className="h-4 w-4" />
+                  <span className="hidden sm:inline">Admin</span>
+                </Button>
+              </Link>
+            )}
             <div className="flex items-center gap-3 pl-4 border-l border-white/10">
               <div className="text-right hidden sm:block">
                 <p className="text-sm font-medium text-white">{user.name || 'User'}</p>
