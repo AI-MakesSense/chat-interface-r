@@ -126,7 +126,10 @@ if (typeof window !== 'undefined') {
       : `${apiBaseUrl}/api/widget/${widgetKey}/config`;
 
     try {
-      const response = await fetch(configUrl);
+      const fetchController = new AbortController();
+      const fetchTimeout = setTimeout(() => fetchController.abort(), 8000);
+      const response = await fetch(configUrl, { signal: fetchController.signal });
+      clearTimeout(fetchTimeout);
       if (!response.ok) throw new Error('Config fetch failed');
 
       const remoteConfig: WidgetConfig = await response.json();

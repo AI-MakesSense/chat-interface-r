@@ -61,10 +61,10 @@ export class Footer {
     // Create link
     const link = document.createElement('a');
     link.href = 'https://n8n-widget-designer.com';
-    link.textContent = 'N8n Widget Designer';
+    link.textContent = 'ChatKit';
     link.target = '_blank';
     link.rel = 'noopener noreferrer';
-    link.setAttribute('aria-label', 'Visit N8n Widget Designer website');
+    link.setAttribute('aria-label', 'Visit ChatKit website');
     link.setAttribute('style',
       'cursor: pointer; ' +
       'outline: 2px solid rgb(0, 191, 255); ' +

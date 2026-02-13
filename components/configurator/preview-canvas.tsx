@@ -265,6 +265,11 @@ export const PreviewCanvas: React.FC<PreviewCanvasProps> = ({ config, onDimensio
               className={`h-[4px] w-[40px] rounded-full opacity-0 group-hover:opacity-100 transition-opacity ${resizeHandle}`}
             />
           </div>
+
+          {/* Dimension label */}
+          <div className={`absolute -bottom-10 left-1/2 -translate-x-1/2 text-[11px] tabular-nums font-mono ${isDark ? 'text-white/40' : 'text-black/30'}`}>
+            {Math.round(size.width)} &times; {Math.round(size.height)}
+          </div>
         </div>
       )}
 

@@ -13,10 +13,22 @@
 
 import { WidgetRuntimeConfig, WidgetConfig, Message } from './types';
 import { renderMarkdown } from './markdown';
+import { MarkdownCache } from './utils/markdown-cache';
 import { buildRelayPayload } from './services/messaging/payload';
 import { SessionManager } from './services/messaging/session-manager';
 import { createCSSVariables, createFontFaceCSS } from './theming/css-variables';
 import type { FileAttachment } from './services/messaging/types';
+
+// Shared markdown cache instance (100 entries, 5MB, 5-minute TTL)
+const mdCache = new MarkdownCache({ maxEntries: 100, maxMemory: 5 * 1024 * 1024, ttl: 5 * 60 * 1000 });
+
+function cachedRenderMarkdown(content: string): string {
+  const cached = mdCache.get(content);
+  if (cached) return cached;
+  const html = renderMarkdown(content);
+  mdCache.set(content, html);
+  return html;
+}
 
 // Icon SVG paths mapping - matching Lucide icons from preview
 // Comprehensive icon set organized by category for starter prompts
@@ -165,12 +177,27 @@ function getIconSVG(iconName: string): string {
   return ICON_SVGS[iconName] || ICON_SVGS.message;
 }
 
-export function createChatWidget(runtimeConfig: WidgetRuntimeConfig): void {
+// Escape HTML to prevent XSS in user-provided strings
+function escapeHTML(str: string): string {
+  const div = document.createElement('div');
+  div.textContent = str;
+  return div.innerHTML;
+}
+
+export interface WidgetCleanup {
+  destroy: () => void;
+}
+
+export function createChatWidget(runtimeConfig: WidgetRuntimeConfig): WidgetCleanup {
   const messages: Message[] = [];
   let isOpen = false;
   let messageIdCounter = 0;
   let selectedFiles: File[] = [];
   const config = runtimeConfig.uiConfig || ({} as WidgetConfig);
+
+  // AbortController for all event listeners — call abort() to remove them all
+  const ac = new AbortController();
+  const signal = ac.signal;
 
   // Initialize SessionManager for session continuity
   const sessionManager = new SessionManager(runtimeConfig.relay.licenseKey || 'default');
@@ -223,6 +250,7 @@ export function createChatWidget(runtimeConfig: WidgetRuntimeConfig): void {
       cornerRadius: config.style?.cornerRadius || 12,
     },
     features: {
+      // Unified: new path (composer.attachments.enabled) + legacy (features.fileAttachmentsEnabled)
       fileAttachmentsEnabled: config.composer?.attachments?.enabled || config.features?.fileAttachmentsEnabled || false,
       allowedExtensions: config.composer?.attachments?.accept || config.features?.allowedExtensions || ['jpg', 'jpeg', 'png', 'gif', 'pdf', 'doc', 'docx'],
       maxFileSizeKB: config.composer?.attachments?.maxSize ? config.composer.attachments.maxSize / 1024 : config.features?.maxFileSizeKB || 5000,
@@ -338,6 +366,28 @@ export function createChatWidget(runtimeConfig: WidgetRuntimeConfig): void {
     }
   };
   const padding = getDensityPadding();
+
+  // Density-aware message bubble padding (matching preview getBubblePadding)
+  const getMessagePadding = () => {
+    const d = config.theme?.density || 'normal';
+    switch (d) {
+      case 'compact': return '8px 12px';
+      case 'spacious': return '14px 20px';
+      default: return '10px 16px';
+    }
+  };
+  const messagePadding = getMessagePadding();
+
+  // Density-aware message spacing (matching preview getMessageVerticalSpacing)
+  const getMessageGap = () => {
+    const d = config.theme?.density || 'normal';
+    switch (d) {
+      case 'compact': return '12px';
+      case 'spacious': return '32px';
+      default: return '24px';
+    }
+  };
+  const messageGap = getMessageGap();
 
   // Inject Google Fonts for known font families
   const googleFonts: Record<string, string> = {
@@ -506,8 +556,8 @@ export function createChatWidget(runtimeConfig: WidgetRuntimeConfig): void {
       font-size: 0.9em;
     }
     .n8n-message-content pre {
-      background: ${isDark ? '#0d0d0d' : '#1e293b'};
-      color: #e2e8f0;
+      background: ${isDark ? '#0d0d0d' : '#f1f5f9'};
+      color: ${isDark ? '#e2e8f0' : '#334155'};
       padding: 12px;
       border-radius: 8px;
       overflow-x: auto;
@@ -519,13 +569,18 @@ export function createChatWidget(runtimeConfig: WidgetRuntimeConfig): void {
       color: inherit;
     }
 
-    /* Animation */
-    @keyframes n8n-fade-in {
+    /* Composer focus ring — matching preview focus-within:ring-1 */
+    #n8n-composer-form:focus-within {
+      outline: 2px solid ${hasAccent ? accentColor : 'rgba(59, 130, 246, 0.5)'};
+    }
+
+    /* Animation — slide-in from bottom matching preview */
+    @keyframes n8n-slide-in {
       from { opacity: 0; transform: translateY(8px); }
       to { opacity: 1; transform: translateY(0); }
     }
     .n8n-animate-in {
-      animation: n8n-fade-in 0.3s ease-out;
+      animation: n8n-slide-in 0.3s ease-out;
     }
   `;
   document.head.appendChild(styleEl);
@@ -668,11 +723,11 @@ export function createChatWidget(runtimeConfig: WidgetRuntimeConfig): void {
 
     bubble.addEventListener('mouseenter', () => {
       if (bubble) bubble.style.transform = 'scale(1.05)';
-    });
+    }, { signal });
     bubble.addEventListener('mouseleave', () => {
       if (bubble) bubble.style.transform = 'scale(1)';
-    });
-    bubble.addEventListener('click', toggleChat);
+    }, { signal });
+    bubble.addEventListener('click', toggleChat, { signal });
   }
 
   // Create chat window - matches preview layout (380x600, 24px radius)
@@ -801,11 +856,11 @@ export function createChatWidget(runtimeConfig: WidgetRuntimeConfig): void {
             ${iconSvg}
           </svg>
         </span>
-        <span style="font-weight: 500;">${prompt.label}</span>
+        <span style="font-weight: 500;">${escapeHTML(prompt.label)}</span>
       `;
       promptBtn.addEventListener('click', () => {
         handleSendMessage(prompt.prompt || prompt.label);
-      });
+      }, { signal });
       promptsContainer.appendChild(promptBtn);
     });
 
@@ -816,6 +871,7 @@ export function createChatWidget(runtimeConfig: WidgetRuntimeConfig): void {
 
   // Responsive prompt layout: switch between narrow (list) and wide (card grid)
   // when the chat window width crosses the 500px breakpoint, matching the preview.
+  let resizeObserver: ResizeObserver | null = null;
   if (typeof ResizeObserver !== 'undefined') {
     let wasWide = false;
     const promptsEl = document.getElementById('n8n-prompts-container');
@@ -850,6 +906,7 @@ export function createChatWidget(runtimeConfig: WidgetRuntimeConfig): void {
       }
     });
     ro.observe(chatWindow);
+    resizeObserver = ro;
   }
 
   // Messages container (hidden initially, shown when messages exist)
@@ -860,7 +917,7 @@ export function createChatWidget(runtimeConfig: WidgetRuntimeConfig): void {
     flex: 1;
     flex-direction: column;
     padding-top: 48px;
-    gap: 16px;
+    gap: ${messageGap};
   `;
   mainContent.appendChild(messagesContainer);
 
@@ -884,7 +941,9 @@ export function createChatWidget(runtimeConfig: WidgetRuntimeConfig): void {
       border-radius: ${composerRadius};
       border: 1px solid ${border};
       box-shadow: ${isDark ? 'none' : '0 4px 12px rgba(0,0,0,0.05)'};
-      transition: box-shadow 0.15s;
+      transition: box-shadow 0.15s, outline 0.15s;
+      outline: 2px solid transparent;
+      outline-offset: 1px;
     ">
   `;
 
@@ -918,7 +977,7 @@ export function createChatWidget(runtimeConfig: WidgetRuntimeConfig): void {
 
   // Input
   composerHTML += `
-    <input type="text" id="n8n-chat-input" placeholder="${inputPlaceholder}" style="
+    <input type="text" id="n8n-chat-input" placeholder="${escapeHTML(inputPlaceholder)}" style="
       flex: 1;
       border: none;
       background: transparent;
@@ -939,12 +998,13 @@ export function createChatWidget(runtimeConfig: WidgetRuntimeConfig): void {
       align-items: center;
       justify-content: center;
       border-radius: 50%;
-      background: ${isDark ? '#404040' : '#f3f4f6'};
+      background: ${surface};
       border: none;
       cursor: pointer;
-      color: ${isDark ? '#737373' : '#a3a3a3'};
+      color: ${subText};
       transition: background 0.15s, color 0.15s;
       flex-shrink: 0;
+      opacity: 0.5;
     ">
       <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
         <line x1="12" y1="19" x2="12" y2="5"/>
@@ -981,38 +1041,40 @@ export function createChatWidget(runtimeConfig: WidgetRuntimeConfig): void {
   const fileInput = composerArea.querySelector('#n8n-file-input') as HTMLInputElement;
   const clearBtn = headerIcons.querySelector('#n8n-clear-history') as HTMLButtonElement;
 
-  // Update send button style based on input
+  // Update send button style based on input (theme-aware, matching preview)
   function updateSendButtonStyle() {
     const hasText = input.value.trim().length > 0;
     if (hasText) {
       sendBtn.style.background = hasAccent ? accentColor : (isDark ? '#e5e5e5' : '#171717');
       sendBtn.style.color = hasAccent ? '#ffffff' : (isDark ? '#171717' : '#ffffff');
+      sendBtn.style.opacity = '1';
     } else {
-      sendBtn.style.background = isDark ? '#404040' : '#f3f4f6';
-      sendBtn.style.color = isDark ? '#737373' : '#a3a3a3';
+      sendBtn.style.background = surface;
+      sendBtn.style.color = subText;
+      sendBtn.style.opacity = '0.5';
     }
   }
 
-  input.addEventListener('input', updateSendButtonStyle);
+  input.addEventListener('input', updateSendButtonStyle, { signal });
 
   form.addEventListener('submit', (e) => {
     e.preventDefault();
     handleSendMessage();
-  });
+  }, { signal });
 
   clearBtn.addEventListener('click', () => {
     messages.length = 0;
     messagesContainer.innerHTML = '';
     messagesContainer.style.display = 'none';
     startScreen.style.display = 'flex';
-  });
+  }, { signal });
 
   if (attachBtn && fileInput) {
-    attachBtn.addEventListener('click', () => fileInput.click());
+    attachBtn.addEventListener('click', () => fileInput.click(), { signal });
     fileInput.addEventListener('change', (e) => {
       const files = (e.target as HTMLInputElement).files;
       if (files) selectedFiles = Array.from(files);
-    });
+    }, { signal });
   }
 
   // Toggle chat window - with icon animation matching preview
@@ -1108,7 +1170,7 @@ export function createChatWidget(runtimeConfig: WidgetRuntimeConfig): void {
     bubbleEl.className = 'n8n-message-content';
     bubbleEl.style.cssText = `
       max-width: 85%;
-      padding: 10px 14px;
+      padding: ${messagePadding};
       border-radius: ${elementRadius};
       line-height: 1.5;
       box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
@@ -1127,7 +1189,7 @@ export function createChatWidget(runtimeConfig: WidgetRuntimeConfig): void {
           </div>
         `;
       } else {
-        bubbleEl.innerHTML = renderMarkdown(content);
+        bubbleEl.innerHTML = cachedRenderMarkdown(content);
       }
     } else {
       bubbleEl.textContent = content;
@@ -1147,7 +1209,7 @@ export function createChatWidget(runtimeConfig: WidgetRuntimeConfig): void {
 
     const bubbleEl = messageEl.querySelector('.n8n-message-content');
     if (bubbleEl) {
-      bubbleEl.innerHTML = renderMarkdown(content);
+      bubbleEl.innerHTML = cachedRenderMarkdown(content);
     }
 
     const message = messages.find(m => m.id === messageId);
@@ -1255,4 +1317,20 @@ export function createChatWidget(runtimeConfig: WidgetRuntimeConfig): void {
       throw error;
     }
   }
+
+  // Return cleanup handle for SPA environments
+  return {
+    destroy() {
+      // Remove all event listeners at once
+      ac.abort();
+      // Disconnect ResizeObserver
+      if (resizeObserver) {
+        resizeObserver.disconnect();
+        resizeObserver = null;
+      }
+      // Remove DOM elements
+      document.getElementById('n8n-chat-widget-styles')?.remove();
+      document.getElementById('n8n-chat-widget-container')?.remove();
+    },
+  };
 }

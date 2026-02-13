@@ -9,7 +9,8 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { Widget } from '@/stores/widget-store';
+import { Widget, WidgetConfig } from '@/stores/widget-store';
+import { ChatPreview } from '@/components/configurator/chat-preview';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -143,14 +144,14 @@ export function WidgetList({ widgets, onDelete }: WidgetListProps) {
     return (
         <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
             {widgets.map((widget) => (
-                <Card key={widget.id} className="flex flex-col">
+                <Card key={widget.id} className="flex flex-col bg-zinc-900 border-zinc-800 text-white">
                     <CardHeader>
                         <div className="flex items-start justify-between">
                             <div>
-                                <CardTitle className="text-lg truncate pr-2" title={widget.name}>
+                                <CardTitle className="text-lg truncate pr-2 text-white" title={widget.name}>
                                     {widget.name}
                                 </CardTitle>
-                                <CardDescription className="text-xs mt-1 flex items-center gap-2">
+                                <CardDescription className="text-xs mt-1 flex items-center gap-2 text-zinc-400">
                                     {widget.widgetKey ? (
                                         <span className="font-mono">{widget.widgetKey.slice(0, 8)}...</span>
                                     ) : (
@@ -166,8 +167,29 @@ export function WidgetList({ widgets, onDelete }: WidgetListProps) {
                             </Badge>
                         </div>
                     </CardHeader>
-                    <CardContent className="flex-1">
-                        <div className="space-y-2 text-sm text-muted-foreground">
+                    {/* Widget Thumbnail Preview */}
+                    <div className="mx-4 mb-2 h-[120px] rounded-lg overflow-hidden bg-zinc-800 relative">
+                        <div
+                            className="absolute top-0 left-1/2 origin-top-left"
+                            style={{
+                                width: 400,
+                                height: 600,
+                                transform: 'translateX(-50%) scale(0.3)',
+                                pointerEvents: 'none',
+                            }}
+                        >
+                            {widget.config ? (
+                                <ChatPreview config={widget.config as WidgetConfig} />
+                            ) : (
+                                <div className="w-full h-full flex items-center justify-center bg-zinc-800">
+                                    <Globe className="h-8 w-8 text-zinc-600" />
+                                </div>
+                            )}
+                        </div>
+                    </div>
+
+                    <CardContent className="flex-1 pt-0">
+                        <div className="space-y-2 text-sm text-zinc-400">
                             <div className="flex items-center gap-2">
                                 <Calendar className="h-4 w-4" />
                                 <span>Created {new Date(widget.createdAt).toLocaleDateString()}</span>
@@ -193,7 +215,7 @@ export function WidgetList({ widgets, onDelete }: WidgetListProps) {
                             })()}
                         </div>
                     </CardContent>
-                    <CardFooter className="flex flex-col gap-2 pt-4 border-t">
+                    <CardFooter className="flex flex-col gap-2 pt-4 border-t border-zinc-800">
                         <div className="flex w-full gap-2">
                             <Button
                                 variant="secondary"

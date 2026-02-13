@@ -21,15 +21,18 @@ import { CodeModal } from '@/components/configurator/code-modal';
 import { ArrowLeft, Save, Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { CHATKIT_UI_ENABLED } from '@/lib/feature-flags';
+import { ErrorBoundary } from '@/components/ui/error-boundary';
 
 /**
  * Suspense wrapper for the configurator page
  */
 function ConfiguratorPageWrapper() {
     return (
-        <Suspense fallback={<ConfiguratorLoading />}>
-            <ConfiguratorPage />
-        </Suspense>
+        <ErrorBoundary>
+            <Suspense fallback={<ConfiguratorLoading />}>
+                <ConfiguratorPage />
+            </Suspense>
+        </ErrorBoundary>
     );
 }
 
@@ -74,8 +77,16 @@ function ConfiguratorPage() {
     const [isCodeModalOpen, setIsCodeModalOpen] = useState(false);
     const [hasCheckedAuth, setHasCheckedAuth] = useState(false);
 
-    // Get embed type from URL params (set in create-widget-modal)
-    const embedType = (searchParams?.get('embedType') as EmbedType) || 'popup';
+    // Embed type selector — same as N8n configurator
+    const EMBED_TYPE_OPTIONS: Array<{ value: EmbedType; label: string }> = [
+        { value: 'popup', label: 'Popup' },
+        { value: 'inline', label: 'Inline' },
+        { value: 'fullpage', label: 'Fullpage' },
+        { value: 'portal', label: 'Portal' },
+    ];
+    const urlEmbedType = (searchParams?.get('embedType') as EmbedType) || 'popup';
+    const [selectedEmbedType, setSelectedEmbedType] = useState<EmbedType>(urlEmbedType);
+    const embedType = selectedEmbedType;
 
     useEffect(() => {
         if (!CHATKIT_UI_ENABLED) {
@@ -102,6 +113,16 @@ function ConfiguratorPage() {
             setWidgetName(currentWidget.name);
         }
     }, [currentWidget]);
+
+    // Warn user before navigating away with unsaved changes
+    useEffect(() => {
+        if (!hasUnsavedChanges) return;
+        const handler = (e: BeforeUnloadEvent) => {
+            e.preventDefault();
+        };
+        window.addEventListener('beforeunload', handler);
+        return () => window.removeEventListener('beforeunload', handler);
+    }, [hasUnsavedChanges]);
 
     // Ensure cookie-based session is restored before redirect checks.
     useEffect(() => {
@@ -178,24 +199,9 @@ function ConfiguratorPage() {
     };
 
     // Handle config changes from sidebar
+    // updateConfig already deep-merges all nested objects (branding, style, connection, etc.)
     const handleConfigChange = (newConfig: WidgetConfig) => {
-        // Deep merge with current config to preserve nested objects
-        updateConfig({
-            ...currentConfig,
-            ...newConfig,
-            branding: {
-                ...currentConfig.branding,
-                ...newConfig.branding
-            },
-            style: {
-                ...currentConfig.style,
-                ...newConfig.style
-            },
-            connection: {
-                ...currentConfig.connection,
-                ...newConfig.connection
-            }
-        });
+        updateConfig(newConfig);
     };
 
     // Redirect to login if not authenticated (must be in useEffect for client-side navigation)
@@ -245,6 +251,24 @@ function ConfiguratorPage() {
                     </div>
                 </div>
                 <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-2 mr-2">
+                        <Label htmlFor="embed-type-ck" className="text-xs text-muted-foreground">
+                            Embed
+                        </Label>
+                        <select
+                            id="embed-type-ck"
+                            value={selectedEmbedType}
+                            onChange={(e) => setSelectedEmbedType(e.target.value as EmbedType)}
+                            className="h-8 rounded-lg border border-border bg-background px-3 pr-8 text-sm font-medium appearance-none cursor-pointer hover:border-primary/50 focus:outline-none focus:ring-1 focus:ring-primary/50 transition-colors"
+                            style={{ backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%23888' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E")`, backgroundRepeat: 'no-repeat', backgroundPosition: 'right 8px center' }}
+                        >
+                            {EMBED_TYPE_OPTIONS.map((option) => (
+                                <option key={option.value} value={option.value}>
+                                    {option.label}
+                                </option>
+                            ))}
+                        </select>
+                    </div>
                     <Button
                         onClick={handleSave}
                         disabled={isSaving}

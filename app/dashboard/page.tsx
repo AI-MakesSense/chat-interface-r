@@ -18,8 +18,9 @@ import { Alert, AlertDescription } from '@/components/ui/alert';
 import { SubscriptionCard } from '@/components/dashboard/subscription-card';
 import { WidgetList } from '@/components/dashboard/widget-list';
 import { CreateWidgetModal } from '@/components/dashboard/create-widget-modal';
-import { Plus, LayoutGrid, CreditCard, LogOut, User } from 'lucide-react';
+import { Plus, LayoutGrid, CreditCard, LogOut, User, MessageSquare } from 'lucide-react';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
+import { BRAND_NAME } from '@/lib/brand';
 
 /**
  * Dashboard page component
@@ -124,9 +125,9 @@ export default function DashboardPage() {
         <div className="container mx-auto px-4 h-16 flex items-center justify-between">
           <div className="flex items-center gap-2">
             <div className="h-8 w-8 rounded-lg bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center">
-              <LayoutGrid className="h-5 w-5 text-white" />
+              <MessageSquare className="h-5 w-5 text-white" />
             </div>
-            <span className="font-bold text-lg tracking-tight">Chat Interfacer</span>
+            <span className="font-bold text-lg tracking-tight">{BRAND_NAME}</span>
           </div>
 
           <div className="flex items-center gap-4">
@@ -187,7 +188,7 @@ export default function DashboardPage() {
         <section className="space-y-6">
           <div className="flex items-center justify-between">
             <h2 className="text-xl font-semibold flex items-center gap-2">
-              <LayoutGrid className="h-5 w-5 text-indigo-400" />
+              <MessageSquare className="h-5 w-5 text-indigo-400" />
               Your Interfaces
             </h2>
           </div>
@@ -201,12 +202,12 @@ export default function DashboardPage() {
           ) : widgets.length === 0 ? (
             <Card className="bg-white/5 border-white/10 border-dashed">
               <CardContent className="flex flex-col items-center justify-center py-16 text-center">
-                <div className="h-16 w-16 rounded-full bg-white/5 flex items-center justify-center mb-6">
-                  <LayoutGrid className="h-8 w-8 text-zinc-500" />
+                <div className="h-16 w-16 rounded-2xl bg-gradient-to-br from-indigo-500/20 to-purple-500/20 flex items-center justify-center mb-6 ring-1 ring-white/10">
+                  <MessageSquare className="h-8 w-8 text-indigo-400" />
                 </div>
                 <h3 className="text-xl font-semibold mb-2 text-white">No interfaces yet</h3>
                 <p className="text-zinc-400 max-w-sm mb-8">
-                  Create your first n8n chat interface to start engaging with your users.
+                  Create your first chat interface to start engaging with your users.
                 </p>
                 <CreateWidgetModal>
                   <Button className="bg-indigo-600 hover:bg-indigo-700 text-white gap-2">

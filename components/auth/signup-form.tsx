@@ -131,10 +131,10 @@ export function SignupForm({
   };
 
   return (
-    <Card className="w-full max-w-md">
+    <Card className="w-full max-w-md bg-zinc-900 border-zinc-800 text-white">
       <CardHeader>
-        <CardTitle>Create an account</CardTitle>
-        <CardDescription>
+        <CardTitle className="text-white">Create an account</CardTitle>
+        <CardDescription className="text-zinc-400">
           Get started with your free account today
         </CardDescription>
       </CardHeader>
@@ -150,8 +150,8 @@ export function SignupForm({
 
           {/* Name Field */}
           <div className="space-y-2">
-            <Label htmlFor="name">
-              Name <span className="text-muted-foreground text-sm">(optional)</span>
+            <Label htmlFor="name" className="text-zinc-300">
+              Name <span className="text-zinc-500 text-sm">(optional)</span>
             </Label>
             <Input
               id="name"
@@ -159,6 +159,7 @@ export function SignupForm({
               placeholder="John Doe"
               autoComplete="name"
               disabled={isSubmitting}
+              className="bg-zinc-800 border-zinc-700 text-white placeholder:text-zinc-500"
               {...register('name')}
             />
             {errors.name && (
@@ -168,13 +169,14 @@ export function SignupForm({
 
           {/* Email Field */}
           <div className="space-y-2">
-            <Label htmlFor="email">Email</Label>
+            <Label htmlFor="email" className="text-zinc-300">Email</Label>
             <Input
               id="email"
               type="email"
               placeholder="you@example.com"
               autoComplete="email"
               disabled={isSubmitting}
+              className="bg-zinc-800 border-zinc-700 text-white placeholder:text-zinc-500"
               {...register('email')}
             />
             {errors.email && (
@@ -184,32 +186,34 @@ export function SignupForm({
 
           {/* Password Field */}
           <div className="space-y-2">
-            <Label htmlFor="password">Password</Label>
+            <Label htmlFor="password" className="text-zinc-300">Password</Label>
             <Input
               id="password"
               type="password"
               placeholder="Create a strong password"
               autoComplete="new-password"
               disabled={isSubmitting}
+              className="bg-zinc-800 border-zinc-700 text-white placeholder:text-zinc-500"
               {...register('password')}
             />
             {errors.password && (
               <p className="text-sm text-red-500">{errors.password.message}</p>
             )}
-            <p className="text-xs text-muted-foreground">
+            <p className="text-xs text-zinc-500">
               Must be at least 8 characters with uppercase, lowercase, and number
             </p>
           </div>
 
           {/* Confirm Password Field */}
           <div className="space-y-2">
-            <Label htmlFor="confirmPassword">Confirm Password</Label>
+            <Label htmlFor="confirmPassword" className="text-zinc-300">Confirm Password</Label>
             <Input
               id="confirmPassword"
               type="password"
               placeholder="Re-enter your password"
               autoComplete="new-password"
               disabled={isSubmitting}
+              className="bg-zinc-800 border-zinc-700 text-white placeholder:text-zinc-500"
               {...register('confirmPassword')}
             />
             {errors.confirmPassword && (
@@ -218,12 +222,12 @@ export function SignupForm({
           </div>
 
           {/* Terms of Service */}
-          <p className="text-xs text-muted-foreground">
+          <p className="text-xs text-zinc-500">
             By signing up, you agree to our{' '}
             <a
               href="/legal/terms"
               target="_blank"
-              className="text-primary hover:underline"
+              className="text-indigo-400 hover:underline"
             >
               Terms of Service
             </a>{' '}
@@ -231,7 +235,7 @@ export function SignupForm({
             <a
               href="/legal/privacy"
               target="_blank"
-              className="text-primary hover:underline"
+              className="text-indigo-400 hover:underline"
             >
               Privacy Policy
             </a>
@@ -243,7 +247,7 @@ export function SignupForm({
           {/* Submit Button */}
           <Button
             type="submit"
-            className="w-full"
+            className="w-full bg-indigo-600 hover:bg-indigo-700 text-white"
             disabled={isSubmitting}
           >
             {isSubmitting ? 'Creating account...' : 'Create account'}
@@ -251,11 +255,11 @@ export function SignupForm({
 
           {/* Login Link */}
           {showLoginLink && (
-            <p className="text-sm text-center text-muted-foreground">
+            <p className="text-sm text-center text-zinc-400">
               Already have an account?{' '}
               <a
                 href="/auth/login"
-                className="text-primary hover:underline font-medium"
+                className="text-indigo-400 hover:underline font-medium"
               >
                 Sign in
               </a>

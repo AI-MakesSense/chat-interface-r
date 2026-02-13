@@ -1,6 +1,7 @@
 import Link from 'next/link';
 import { Button } from '@/components/ui/button';
 import { MessageSquare } from 'lucide-react';
+import { BRAND_NAME } from '@/lib/brand';
 
 export function Navbar() {
     return (
@@ -11,7 +12,7 @@ export function Navbar() {
                         <MessageSquare className="h-5 w-5 text-white" />
                     </div>
                     <span className="text-lg font-bold tracking-tight text-white">
-                        Chat Interfacer
+                        {BRAND_NAME}
                     </span>
                 </div>
                 <div className="flex items-center gap-4">

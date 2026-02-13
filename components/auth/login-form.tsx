@@ -104,10 +104,10 @@ export function LoginForm({
   };
 
   return (
-    <Card className="w-full max-w-md">
+    <Card className="w-full max-w-md bg-zinc-900 border-zinc-800 text-white">
       <CardHeader>
-        <CardTitle>Welcome back</CardTitle>
-        <CardDescription>
+        <CardTitle className="text-white">Welcome back</CardTitle>
+        <CardDescription className="text-zinc-400">
           Sign in to your account to continue
         </CardDescription>
       </CardHeader>
@@ -123,13 +123,14 @@ export function LoginForm({
 
           {/* Email Field */}
           <div className="space-y-2">
-            <Label htmlFor="email">Email</Label>
+            <Label htmlFor="email" className="text-zinc-300">Email</Label>
             <Input
               id="email"
               type="email"
               placeholder="you@example.com"
               autoComplete="email"
               disabled={isSubmitting}
+              className="bg-zinc-800 border-zinc-700 text-white placeholder:text-zinc-500"
               {...register('email')}
             />
             {errors.email && (
@@ -140,10 +141,10 @@ export function LoginForm({
           {/* Password Field */}
           <div className="space-y-2">
             <div className="flex items-center justify-between">
-              <Label htmlFor="password">Password</Label>
+              <Label htmlFor="password" className="text-zinc-300">Password</Label>
               <a
                 href="/auth/forgot-password"
-                className="text-sm text-muted-foreground hover:text-primary"
+                className="text-sm text-zinc-400 hover:text-indigo-400"
               >
                 Forgot password?
               </a>
@@ -154,6 +155,7 @@ export function LoginForm({
               placeholder="Enter your password"
               autoComplete="current-password"
               disabled={isSubmitting}
+              className="bg-zinc-800 border-zinc-700 text-white placeholder:text-zinc-500"
               {...register('password')}
             />
             {errors.password && (
@@ -166,7 +168,7 @@ export function LoginForm({
           {/* Submit Button */}
           <Button
             type="submit"
-            className="w-full"
+            className="w-full bg-indigo-600 hover:bg-indigo-700 text-white"
             disabled={isSubmitting}
           >
             {isSubmitting ? 'Signing in...' : 'Sign in'}
@@ -174,11 +176,11 @@ export function LoginForm({
 
           {/* Signup Link */}
           {showSignupLink && (
-            <p className="text-sm text-center text-muted-foreground">
-              Don't have an account?{' '}
+            <p className="text-sm text-center text-zinc-400">
+              Don&apos;t have an account?{' '}
               <a
                 href="/auth/signup"
-                className="text-primary hover:underline font-medium"
+                className="text-indigo-400 hover:underline font-medium"
               >
                 Sign up
               </a>
