@@ -441,6 +441,60 @@ export function createChatWidget(runtimeConfig: WidgetRuntimeConfig): void {
       opacity: 1;
     }
 
+    /* Wide mode: card grid layout for starter prompts (≥500px) */
+    .n8n-prompts-wide {
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: center;
+      gap: 12px;
+    }
+    .n8n-prompts-wide .n8n-starter-prompt {
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      text-align: center;
+      width: 140px;
+      height: 120px;
+      padding: 16px;
+      border-radius: 12px;
+      border: 1px solid ${border};
+      background: ${surface};
+      box-shadow: 0 1px 2px rgba(0,0,0,0.05);
+      gap: 12px;
+    }
+    .n8n-prompts-wide .n8n-starter-prompt:hover {
+      transform: translateY(-2px);
+    }
+    .n8n-prompts-wide .n8n-starter-prompt-icon svg {
+      width: 24px;
+      height: 24px;
+    }
+    .n8n-prompts-wide .n8n-starter-prompt span:last-child {
+      font-size: 12px;
+      line-height: 1.4;
+      display: -webkit-box;
+      -webkit-line-clamp: 2;
+      -webkit-box-orient: vertical;
+      overflow: hidden;
+    }
+
+    /* Narrow mode greeting: left-aligned */
+    .n8n-greeting-narrow {
+      text-align: left;
+    }
+    /* Wide mode greeting: centered */
+    .n8n-greeting-wide {
+      text-align: center;
+    }
+    .n8n-start-screen-wide {
+      align-items: center;
+    }
+    .n8n-start-screen-wide .n8n-greeting-wrap {
+      width: 100%;
+      max-width: 32rem;
+      padding: 0 2rem;
+    }
+
     /* Markdown content styling */
     .n8n-message-content p { margin: 0 0 0.5em 0; }
     .n8n-message-content p:last-child { margin-bottom: 0; }
@@ -709,8 +763,13 @@ export function createChatWidget(runtimeConfig: WidgetRuntimeConfig): void {
     justify-content: center;
   `;
 
-  // Greeting
+  // Greeting wrapper (for responsive centering)
+  const greetingWrap = document.createElement('div');
+  greetingWrap.className = 'n8n-greeting-wrap';
+
   const greetingEl = document.createElement('h2');
+  greetingEl.id = 'n8n-greeting';
+  greetingEl.className = 'n8n-greeting-narrow';
   greetingEl.style.cssText = `
     font-size: 1.5rem;
     font-weight: 600;
@@ -720,12 +779,14 @@ export function createChatWidget(runtimeConfig: WidgetRuntimeConfig): void {
     color: ${text};
   `;
   greetingEl.textContent = greeting;
-  startScreen.appendChild(greetingEl);
+  greetingWrap.appendChild(greetingEl);
+  startScreen.appendChild(greetingWrap);
 
   // Starter prompts
   const starterPrompts = mergedConfig.startScreen?.prompts || [];
   if (starterPrompts.length > 0) {
     const promptsContainer = document.createElement('div');
+    promptsContainer.id = 'n8n-prompts-container';
     promptsContainer.style.cssText = `display: flex; flex-direction: column; gap: 4px;`;
 
     starterPrompts.forEach((prompt) => {
@@ -747,10 +808,48 @@ export function createChatWidget(runtimeConfig: WidgetRuntimeConfig): void {
       promptsContainer.appendChild(promptBtn);
     });
 
-    startScreen.appendChild(promptsContainer);
+    greetingWrap.appendChild(promptsContainer);
   }
 
   mainContent.appendChild(startScreen);
+
+  // Responsive prompt layout: switch between narrow (list) and wide (card grid)
+  // when the chat window width crosses the 500px breakpoint, matching the preview.
+  if (typeof ResizeObserver !== 'undefined') {
+    let wasWide = false;
+    const promptsEl = document.getElementById('n8n-prompts-container');
+    const greetingH2 = document.getElementById('n8n-greeting');
+
+    const ro = new ResizeObserver((entries) => {
+      const w = entries[0].contentRect.width;
+      const isWide = w >= 500;
+      if (isWide === wasWide) return;
+      wasWide = isWide;
+
+      if (isWide) {
+        startScreen.classList.add('n8n-start-screen-wide');
+        if (greetingH2) {
+          greetingH2.classList.remove('n8n-greeting-narrow');
+          greetingH2.classList.add('n8n-greeting-wide');
+        }
+        if (promptsEl) {
+          promptsEl.classList.add('n8n-prompts-wide');
+          promptsEl.style.cssText = '';
+        }
+      } else {
+        startScreen.classList.remove('n8n-start-screen-wide');
+        if (greetingH2) {
+          greetingH2.classList.remove('n8n-greeting-wide');
+          greetingH2.classList.add('n8n-greeting-narrow');
+        }
+        if (promptsEl) {
+          promptsEl.classList.remove('n8n-prompts-wide');
+          promptsEl.style.cssText = 'display: flex; flex-direction: column; gap: 4px;';
+        }
+      }
+    });
+    ro.observe(chatWindow);
+  }
 
   // Messages container (hidden initially, shown when messages exist)
   const messagesContainer = document.createElement('div');

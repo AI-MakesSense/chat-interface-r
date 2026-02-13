@@ -186,7 +186,7 @@ export async function POST(request: NextRequest) {
     // 10. Generate embed codes for Schema v2.0 widgets
     const baseUrl = resolveEmbedBaseUrlFromRequest(request.url);
     const widgetKey = (widget as any).widgetKey;
-    const embedCodes = widgetKey ? generateEmbedCodes(baseUrl, widgetKey, (widget as any).embedType || 'popup') : null;
+    const embedCodes = widgetKey ? generateEmbedCodes(baseUrl, widgetKey, (widget as any).embedType || 'popup', (widget as any).config) : null;
 
     // 11. Return 201 Created with widget data
     return NextResponse.json({
@@ -297,7 +297,7 @@ export async function GET(request: NextRequest) {
             // Compute isDeployed from deployedAt
             isDeployed: !!(w as any).deployedAt,
             // Schema v2.0: Add embed codes if widgetKey exists
-            ...(widgetKey && { embedCodes: generateEmbedCodes(baseUrl, widgetKey, widgetEmbedType) }),
+            ...(widgetKey && { embedCodes: generateEmbedCodes(baseUrl, widgetKey, widgetEmbedType, normalizedConfig) }),
           };
         }),
         pagination: {
@@ -334,7 +334,7 @@ export async function GET(request: NextRequest) {
             // Compute isDeployed from deployedAt
             isDeployed: !!(w as any).deployedAt,
             // Schema v2.0: Add embed codes if widgetKey exists
-            ...(widgetKey && { embedCodes: generateEmbedCodes(baseUrl, widgetKey, widgetEmbedType) }),
+            ...(widgetKey && { embedCodes: generateEmbedCodes(baseUrl, widgetKey, widgetEmbedType, normalizedConfig) }),
           };
         }),
         pagination: {
@@ -367,16 +367,17 @@ export async function GET(request: NextRequest) {
  * Generate embed codes for all embed types (Schema v2.0)
  * Returns an object with code snippets for each embed type
  */
-function generateEmbedCodes(baseUrl: string, widgetKey: string, primaryEmbedType: string) {
+function generateEmbedCodes(baseUrl: string, widgetKey: string, primaryEmbedType: string, config?: any) {
   const widget = { widgetKey };
   const validTypes: GeneratedEmbedType[] = ['popup', 'inline', 'fullpage', 'portal'];
   const normalizedPrimary = validTypes.includes(primaryEmbedType as GeneratedEmbedType)
     ? (primaryEmbedType as GeneratedEmbedType)
     : 'popup';
-  const popup = generateEmbedCode(widget, 'popup', { baseUrl }).code;
-  const inline = generateEmbedCode(widget, 'inline', { baseUrl }).code;
-  const fullpage = generateEmbedCode(widget, 'fullpage', { baseUrl }).code;
-  const portal = generateEmbedCode(widget, 'portal', { baseUrl }).code;
+  const opts = { baseUrl, inlineWidth: config?.inlineWidth, inlineHeight: config?.inlineHeight };
+  const popup = generateEmbedCode(widget, 'popup', opts).code;
+  const inline = generateEmbedCode(widget, 'inline', opts).code;
+  const fullpage = generateEmbedCode(widget, 'fullpage', opts).code;
+  const portal = generateEmbedCode(widget, 'portal', opts).code;
 
   return {
     primary: normalizedPrimary,

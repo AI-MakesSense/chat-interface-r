@@ -320,7 +320,10 @@ function ConfiguratorPage() {
         />
 
         {/* Preview Canvas */}
-        <PreviewCanvas config={currentConfig} />
+        <PreviewCanvas
+          config={currentConfig}
+          onDimensionsChange={(width, height) => updateConfig({ inlineWidth: width, inlineHeight: height })}
+        />
       </div>
 
       {/* Code Modal */}

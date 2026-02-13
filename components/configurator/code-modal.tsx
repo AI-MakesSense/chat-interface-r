@@ -84,7 +84,10 @@ export const CodeModal: React.FC<CodeModalProps> = ({
   const hasValidKey = !!widgetKey;
 
   // Generate all embed codes and find the selected one
-  const embedCodes = generateAllEmbedCodes({ widgetKey: key });
+  const embedCodes = generateAllEmbedCodes(
+    { widgetKey: key },
+    { inlineWidth: config.inlineWidth, inlineHeight: config.inlineHeight },
+  );
   const currentEmbed = embedCodes.find(e => e.type === selectedEmbedType) || embedCodes[0];
   const resolvedBaseUrl = resolveEmbedBaseUrl();
   let isPreviewBaseUrl = false;

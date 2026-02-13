@@ -9,6 +9,7 @@ import { CHATKIT_UI_ENABLED } from '@/lib/feature-flags';
 
 interface PreviewCanvasProps {
   config: WidgetConfig;
+  onDimensionsChange?: (width: number, height: number) => void;
 }
 
 type EmbedMode = 'inline' | 'full' | 'popup';
@@ -18,8 +19,11 @@ interface Dimensions {
   height: number;
 }
 
-export const PreviewCanvas: React.FC<PreviewCanvasProps> = ({ config }) => {
-  const [size, setSize] = useState<Dimensions>({ width: 380, height: 600 });
+export const PreviewCanvas: React.FC<PreviewCanvasProps> = ({ config, onDimensionsChange }) => {
+  const [size, setSize] = useState<Dimensions>({
+    width: config.inlineWidth || 400,
+    height: config.inlineHeight || 600,
+  });
   const [embedMode, setEmbedMode] = useState<EmbedMode>('inline');
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
   const [isPopupOpen, setIsPopupOpen] = useState(false);
@@ -39,6 +43,9 @@ export const PreviewCanvas: React.FC<PreviewCanvasProps> = ({ config }) => {
     startH: 0,
     dir: null
   });
+
+  // Keep a ref of the latest size so handleMouseUp can read it synchronously
+  const sizeRef = useRef<Dimensions>(size);
 
   const dropdownRef = useRef<HTMLDivElement>(null);
 
@@ -61,7 +68,11 @@ export const PreviewCanvas: React.FC<PreviewCanvasProps> = ({ config }) => {
     if (mode === 'full') {
       setSize({ width: 1000, height: 700 });
     } else if (mode === 'inline') {
-      setSize({ width: 380, height: 600 });
+      const w = config.inlineWidth || 400;
+      const h = config.inlineHeight || 600;
+      const next = { width: w, height: h };
+      sizeRef.current = next;
+      setSize(next);
     }
   };
 
@@ -95,12 +106,18 @@ export const PreviewCanvas: React.FC<PreviewCanvasProps> = ({ config }) => {
       newHeight = Math.max(400, Math.min(900, startH + (e.clientY - startY)));
     }
 
-    setSize({ width: newWidth, height: newHeight });
+    const next = { width: newWidth, height: newHeight };
+    sizeRef.current = next;
+    setSize(next);
   };
 
   const handleMouseUp = () => {
     document.removeEventListener('mousemove', handleMouseMove);
     document.removeEventListener('mouseup', handleMouseUp);
+    // Persist final dimensions to widget config on drag end
+    if (onDimensionsChange && (embedMode === 'inline' || embedMode === 'full')) {
+      onDimensionsChange(sizeRef.current.width, sizeRef.current.height);
+    }
   };
 
   // Cleanup event listeners on unmount

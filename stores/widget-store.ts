@@ -135,6 +135,10 @@ export interface WidgetConfig {
   disclaimer?: string;
   enableAttachments?: boolean;
   enableModelPicker?: boolean;
+
+  // Inline embed dimensions (pixels)
+  inlineWidth?: number;
+  inlineHeight?: number;
 }
 
 /**
@@ -319,6 +323,10 @@ const defaultConfig: WidgetConfig = {
   disclaimer: '',
   enableAttachments: false,
   enableModelPicker: false,
+
+  // Inline embed dimensions
+  inlineWidth: 400,
+  inlineHeight: 600,
 };
 
 /**

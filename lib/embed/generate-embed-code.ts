@@ -136,7 +136,7 @@ export function resolveEmbedBaseUrlFromRequest(requestUrl: string): string {
 export function generateEmbedCode(
   widget: WidgetForEmbed,
   type: EmbedType,
-  options?: { baseUrl?: string }
+  options?: { baseUrl?: string; inlineWidth?: number; inlineHeight?: number }
 ): EmbedCodeResult {
   const baseUrl = resolveEmbedBaseUrl(options?.baseUrl);
   const key = widget.widgetKey;
@@ -153,7 +153,9 @@ export function generateEmbedCode(
 <script src="${baseUrl}/w/${key}.js" crossorigin="anonymous" async></script>`,
       };
 
-    case 'inline':
+    case 'inline': {
+      const inlineW = options?.inlineWidth || 400;
+      const inlineH = options?.inlineHeight || 600;
       return {
         type: 'inline',
         title: 'Inline Widget',
@@ -161,7 +163,7 @@ export function generateEmbedCode(
         language: 'html',
         icon: 'layout',
         code: `<!-- Chat Widget (Inline) -->
-<div id="chat-widget" style="width: 400px; height: 600px;"></div>
+<div id="chat-widget" style="width: ${inlineW}px; height: ${inlineH}px;"></div>
 <script
   src="${baseUrl}/w/${key}.js"
   crossorigin="anonymous"
@@ -170,6 +172,7 @@ export function generateEmbedCode(
   async
 ></script>`,
       };
+    }
 
     case 'fullpage':
       return {
@@ -204,7 +207,7 @@ export function generateEmbedCode(
  */
 export function generateAllEmbedCodes(
   widget: WidgetForEmbed,
-  options?: { baseUrl?: string }
+  options?: { baseUrl?: string; inlineWidth?: number; inlineHeight?: number }
 ): EmbedCodeResult[] {
   const types: EmbedType[] = ['popup', 'inline', 'fullpage', 'portal'];
   return types.map(type => generateEmbedCode(widget, type, options));
@@ -215,7 +218,7 @@ export function generateAllEmbedCodes(
  */
 export function getPrimaryEmbedCode(
   widget: WidgetForEmbed,
-  options?: { baseUrl?: string }
+  options?: { baseUrl?: string; inlineWidth?: number; inlineHeight?: number }
 ): EmbedCodeResult {
   const type = widget.embedType || 'popup';
   return generateEmbedCode(widget, type, options);
