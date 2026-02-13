@@ -115,10 +115,9 @@ export class MessageList {
 
         this.renderMessages();
 
-        // Auto-scroll to bottom only if user was at bottom
-        // (Don't auto-scroll if user scrolled up, even for new messages)
+        // Scroll to the top of the last message so user can read from the start
         if (wasAtBottom) {
-          this.scrollToBottom();
+          this.scrollToLastMessage();
         }
 
         this.previousMessageCount = currentMessageCount;
@@ -236,16 +235,31 @@ export class MessageList {
   }
 
   /**
-   * Scrolls to the bottom of the message list
+   * Scrolls so the last message's top is visible (user reads from start).
+   * Falls back to scroll-to-bottom if no messages exist.
+   */
+  private scrollToLastMessage(): void {
+    if (!this.element) return;
+
+    const messages = this.element.querySelectorAll('.cw-message');
+    const lastMessage = messages[messages.length - 1] as HTMLElement | undefined;
+
+    if (lastMessage) {
+      lastMessage.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    } else {
+      // Fallback: scroll to bottom (empty/initial state)
+      this.element.scrollTop = this.element.scrollHeight;
+    }
+  }
+
+  /**
+   * Scrolls to the bottom of the message list (used for initial render)
    */
   private scrollToBottom(): void {
     if (!this.element) return;
 
-    // Scroll immediately (synchronous for tests)
-    // Set scrollTop directly - this will work once element has proper dimensions
     this.element.scrollTop = this.element.scrollHeight;
 
-    // Also call scrollTo for test compatibility
     if (this.element.scrollTo) {
       this.element.scrollTo({
         top: this.element.scrollHeight,
@@ -253,7 +267,6 @@ export class MessageList {
       });
     }
 
-    // Also try with setTimeout for real browser scenarios (handles async layout)
     setTimeout(() => {
       if (this.element) {
         this.element.scrollTop = this.element.scrollHeight;

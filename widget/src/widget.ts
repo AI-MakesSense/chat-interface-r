@@ -1197,12 +1197,14 @@ export function createChatWidget(runtimeConfig: WidgetRuntimeConfig): WidgetClea
 
     messageEl.appendChild(bubbleEl);
     messagesContainer.appendChild(messageEl);
-    mainContent.scrollTop = mainContent.scrollHeight;
+
+    // Scroll so the top of the new message is visible (not the bottom)
+    messageEl.scrollIntoView({ behavior: 'smooth', block: 'start' });
 
     return message;
   }
 
-  // Update message content
+  // Update message content (streaming) — don't auto-scroll; user reads from top
   function updateMessage(messageId: string, content: string) {
     const messageEl = messagesContainer.querySelector(`#${messageId}`) as HTMLElement;
     if (!messageEl) return;
@@ -1214,8 +1216,6 @@ export function createChatWidget(runtimeConfig: WidgetRuntimeConfig): WidgetClea
 
     const message = messages.find(m => m.id === messageId);
     if (message) message.content = content;
-
-    mainContent.scrollTop = mainContent.scrollHeight;
   }
 
   // Handle sending message

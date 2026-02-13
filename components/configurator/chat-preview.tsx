@@ -564,6 +564,18 @@ export const ChatPreview: React.FC<ChatPreviewProps> = ({ config }) => {
   };
 
   useEffect(() => {
+    if (messages.length === 0) return;
+    // Scroll to the top of the last message so the user can read from the start
+    const container = scrollContainerRef.current;
+    if (container) {
+      const messageEls = container.querySelectorAll('[data-chat-message]');
+      const lastMsg = messageEls[messageEls.length - 1] as HTMLElement | undefined;
+      if (lastMsg) {
+        lastMsg.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        return;
+      }
+    }
+    // Fallback to bottom sentinel
     if (messagesEndRef.current) {
       messagesEndRef.current.scrollIntoView({ behavior: 'smooth' });
     }
@@ -698,6 +710,7 @@ export const ChatPreview: React.FC<ChatPreviewProps> = ({ config }) => {
             {messages.map((msg) => (
               <div
                 key={msg.id}
+                data-chat-message
                 className={`flex flex-col ${msg.isUser ? 'items-end' : 'items-start'
                   } animate-in slide-in-from-bottom-2 duration-300`}
               >
