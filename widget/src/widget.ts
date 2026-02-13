@@ -1204,7 +1204,7 @@ export function createChatWidget(runtimeConfig: WidgetRuntimeConfig): WidgetClea
     return message;
   }
 
-  // Update message content (streaming) — don't auto-scroll; user reads from top
+  // Update message content — scroll to top of message so user reads from start
   function updateMessage(messageId: string, content: string) {
     const messageEl = messagesContainer.querySelector(`#${messageId}`) as HTMLElement;
     if (!messageEl) return;
@@ -1216,6 +1216,9 @@ export function createChatWidget(runtimeConfig: WidgetRuntimeConfig): WidgetClea
 
     const message = messages.find(m => m.id === messageId);
     if (message) message.content = content;
+
+    // Scroll to top of the updated message
+    messageEl.scrollIntoView({ behavior: 'smooth', block: 'start' });
   }
 
   // Handle sending message
