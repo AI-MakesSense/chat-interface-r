@@ -29,16 +29,49 @@ export interface WidgetForEmbed {
   embedType?: EmbedType;
 }
 
+// ---------------------------------------------------------------------------
+// Shared URL helpers (used by both client-side code-modal and server-side API)
+// ---------------------------------------------------------------------------
+
 /**
  * Remove trailing slash to avoid accidental double slashes in generated snippets.
  */
-function normalizeBaseUrl(url: string): string {
+export function normalizeBaseUrl(url: string): string {
   return url.replace(/\/+$/, '');
 }
 
 /**
+ * Ensure a URL has a protocol prefix.
+ * Vercel auto-sets VERCEL_PROJECT_PRODUCTION_URL *without* a protocol.
+ */
+export function ensureProtocol(url: string): string {
+  return url.startsWith('http') ? url : `https://${url}`;
+}
+
+/**
+ * Read the configured public URL from env vars.
+ *
+ * NEXT_PUBLIC_APP_URL is available both server- and client-side (embedded at
+ * build time by Next.js).  VERCEL_PROJECT_PRODUCTION_URL is server-only.
+ */
+export function getConfiguredPublicUrl(): string | undefined {
+  const envPublic = process.env.NEXT_PUBLIC_APP_URL;
+  if (envPublic) return normalizeBaseUrl(envPublic);
+
+  const vercelProd = process.env.VERCEL_PROJECT_PRODUCTION_URL;
+  if (vercelProd) return normalizeBaseUrl(ensureProtocol(vercelProd));
+
+  return undefined;
+}
+
+/**
  * Heuristic detection for Vercel preview hostnames.
- * Example preview pattern: app-abcdef-team.vercel.app
+ *
+ * Preview deployments follow the pattern:
+ *   <project>-<git-hash>-<team>.vercel.app
+ * where <git-hash> is a 7-9 char lowercase hex string.
+ *
+ * Production domains like "chat-interface-r.vercel.app" must NOT match.
  */
 export function isLikelyVercelPreviewHostname(hostname: string): boolean {
   if (!hostname || !hostname.endsWith('.vercel.app')) {
@@ -46,11 +79,14 @@ export function isLikelyVercelPreviewHostname(hostname: string): boolean {
   }
 
   const subdomain = hostname.slice(0, -'.vercel.app'.length);
-  return subdomain.split('-').length >= 3;
+
+  // Match the Vercel preview pattern: project-<hex7+>-team
+  // The hex segment distinguishes previews from normal multi-dash project names.
+  return /^.+-[a-f0-9]{7,9}-.+$/.test(subdomain);
 }
 
 /**
- * Resolve the public base URL for embed snippets.
+ * Resolve the public base URL for embed snippets (client-side).
  *
  * Priority:
  * 1) Explicit override
@@ -63,26 +99,27 @@ export function isLikelyVercelPreviewHostname(hostname: string): boolean {
 export function resolveEmbedBaseUrl(override?: string): string {
   if (override) return normalizeBaseUrl(override);
 
-  const envPublic = process.env.NEXT_PUBLIC_APP_URL;
-  const vercelProd = process.env.VERCEL_PROJECT_PRODUCTION_URL
-    ? (process.env.VERCEL_PROJECT_PRODUCTION_URL.startsWith('http')
-      ? process.env.VERCEL_PROJECT_PRODUCTION_URL
-      : `https://${process.env.VERCEL_PROJECT_PRODUCTION_URL}`)
-    : undefined;
-  const configuredPublic = envPublic || vercelProd;
+  const configuredPublic = getConfiguredPublicUrl();
 
   if (typeof window !== 'undefined' && window.location?.origin) {
     if (configuredPublic && isLikelyVercelPreviewHostname(window.location.hostname)) {
-      return normalizeBaseUrl(configuredPublic);
+      return configuredPublic;
     }
     return normalizeBaseUrl(window.location.origin);
   }
 
-  if (configuredPublic) {
-    return normalizeBaseUrl(configuredPublic);
-  }
+  if (configuredPublic) return configuredPublic;
 
   return 'http://localhost:3000';
+}
+
+/**
+ * Resolve the public base URL from a server-side request.
+ *
+ * Priority: NEXT_PUBLIC_APP_URL → VERCEL_PROJECT_PRODUCTION_URL → request origin
+ */
+export function resolveEmbedBaseUrlFromRequest(requestUrl: string): string {
+  return getConfiguredPublicUrl() || normalizeBaseUrl(new URL(requestUrl).origin);
 }
 
 /**
@@ -105,7 +142,7 @@ export function generateEmbedCode(
         language: 'html',
         icon: 'message-circle',
         code: `<!-- Chat Widget -->
-<script src="${baseUrl}/w/${key}.js" async></script>`,
+<script src="${baseUrl}/w/${key}.js" crossorigin="anonymous" async></script>`,
       };
 
     case 'inline':
@@ -119,6 +156,7 @@ export function generateEmbedCode(
 <div id="chat-widget" style="width: 400px; height: 600px;"></div>
 <script
   src="${baseUrl}/w/${key}.js"
+  crossorigin="anonymous"
   data-mode="inline"
   data-container="chat-widget"
   async

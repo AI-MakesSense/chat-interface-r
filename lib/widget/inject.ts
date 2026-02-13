@@ -6,6 +6,7 @@
  */
 
 import { License } from '@/lib/db/schema';
+import { getConfiguredPublicUrl, normalizeBaseUrl } from '@/lib/embed';
 
 /**
  * Create JSON string containing license flags
@@ -53,16 +54,9 @@ window.N8N_LICENSE_FLAGS = ${flagsJSON};`;
   // 3. Add relay configuration if widgetId is provided
   // Use production URL for relay endpoint to ensure cross-domain requests work
   // The widget may be embedded on any domain but must call back to our server
-  const vercelProdUrl = process.env.VERCEL_PROJECT_PRODUCTION_URL
-    ? (process.env.VERCEL_PROJECT_PRODUCTION_URL.startsWith('http')
-      ? process.env.VERCEL_PROJECT_PRODUCTION_URL
-      : `https://${process.env.VERCEL_PROJECT_PRODUCTION_URL}`)
-    : undefined;
-  const baseUrl =
-    baseUrlOverride ||
-    process.env.NEXT_PUBLIC_APP_URL ||
-    vercelProdUrl ||
-    'https://chat-interface-r.vercel.app';
+  const baseUrl = baseUrlOverride
+    ? normalizeBaseUrl(baseUrlOverride)
+    : (getConfiguredPublicUrl() || 'http://localhost:3000');
 
   if (widgetId) {
     const relayConfig = {

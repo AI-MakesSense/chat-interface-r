@@ -89,8 +89,12 @@ export async function GET(
       return createErrorResponse('LICENSE_INVALID', { widgetKey: cleanWidgetKey });
     }
 
-    // Step 2: Extract domain from referer or origin header
-    // Fail closed when both are missing.
+    // Step 2: Extract domain from referer or origin header.
+    // With crossorigin="anonymous" on the script tag, browsers send the Origin
+    // header on cross-origin loads.  We still fall back to referer for legacy
+    // embeds and accept a null domain (skip domain authz) rather than blocking
+    // the widget entirely — the user experience of a silent failure is worse
+    // than serving the widget to an unknown origin.
     const referer = request.headers.get('referer');
     const origin = request.headers.get('origin');
 
@@ -101,12 +105,7 @@ export async function GET(
       domain = extractDomainFromReferer(origin);
     }
 
-    if (!domain) {
-      return createErrorResponse('REFERER_MISSING', {
-        widgetKey: cleanWidgetKey,
-        reason: 'missing_origin_context',
-      });
-    }
+    const domainUnknown = !domain;
 
     // Step 4: Get client IP for rate limiting
     const clientIP = getClientIP(request);
@@ -179,35 +178,45 @@ export async function GET(
     }
 
     // Step 10: Validate domain authorization
-    const normalizedRequestDomain = normalizeDomain(domain);
+    // When domain is unknown (no referer/origin), skip domain authz and log a
+    // warning.  This avoids silent widget failures caused by strict Referrer
+    // policies or privacy-focused browsers.
     const allowedDomains = (widget as any).allowedDomains || [];
     const userTier = user.tier || 'free';
-    const hostHeader = request.headers.get('host') || '';
-    const requestHostDomain = normalizeDomain(hostHeader.split(':')[0] || '');
-    const isFirstPartyRequest =
-      normalizedRequestDomain !== 'unknown' &&
-      requestHostDomain !== 'unknown' &&
-      normalizedRequestDomain === requestHostDomain;
 
-    // Agency tier or empty allowedDomains allows any domain.
-    if (
-      userTier !== 'agency' &&
-      allowedDomains.length > 0 &&
-      !isFirstPartyRequest
-    ) {
-      const isAuthorized = normalizedRequestDomain === 'localhost' || allowedDomains.some((allowedDomain: string) => {
-        const normalizedAllowed = normalizeDomain(allowedDomain);
-        return normalizedAllowed === normalizedRequestDomain ||
-          normalizedRequestDomain.endsWith('.' + normalizedAllowed);
-      });
+    if (domainUnknown) {
+      console.warn(
+        `[Widget] Serving widget without origin context (referer/origin missing): ${cleanWidgetKey}, ip=${clientIP}`
+      );
+    } else {
+      const normalizedRequestDomain = normalizeDomain(domain!);
+      const hostHeader = request.headers.get('host') || '';
+      const requestHostDomain = normalizeDomain(hostHeader.split(':')[0] || '');
+      const isFirstPartyRequest =
+        normalizedRequestDomain !== 'unknown' &&
+        requestHostDomain !== 'unknown' &&
+        normalizedRequestDomain === requestHostDomain;
 
-      if (!isAuthorized) {
-        return createErrorResponse('DOMAIN_UNAUTHORIZED', {
-          widgetKey: cleanWidgetKey,
-          domain: normalizedRequestDomain,
-          allowedDomains,
-          ip: clientIP
+      // Agency tier or empty allowedDomains allows any domain.
+      if (
+        userTier !== 'agency' &&
+        allowedDomains.length > 0 &&
+        !isFirstPartyRequest
+      ) {
+        const isAuthorized = normalizedRequestDomain === 'localhost' || allowedDomains.some((allowedDomain: string) => {
+          const normalizedAllowed = normalizeDomain(allowedDomain);
+          return normalizedAllowed === normalizedRequestDomain ||
+            normalizedRequestDomain.endsWith('.' + normalizedAllowed);
         });
+
+        if (!isAuthorized) {
+          return createErrorResponse('DOMAIN_UNAUTHORIZED', {
+            widgetKey: cleanWidgetKey,
+            domain: normalizedRequestDomain,
+            allowedDomains,
+            ip: clientIP
+          });
+        }
       }
     }
 

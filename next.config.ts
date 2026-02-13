@@ -15,19 +15,28 @@ const contentSecurityPolicy = [
   "frame-src 'self' https:",
 ].join("; ");
 
+/**
+ * Security headers for application pages.
+ * Widget-serving routes (/w/, /api/widget/, /api/embed/) are excluded because
+ * CSP/Referrer-Policy on JS bundle responses is meaningless and can confuse
+ * proxies or strict security scanners.
+ */
+const securityHeaders = [
+  { key: "Content-Security-Policy", value: contentSecurityPolicy },
+  { key: "Strict-Transport-Security", value: "max-age=31536000; includeSubDomains; preload" },
+  { key: "X-Content-Type-Options", value: "nosniff" },
+  { key: "Referrer-Policy", value: "strict-origin-when-cross-origin" },
+  { key: "Permissions-Policy", value: "camera=(), microphone=(), geolocation=()" },
+  { key: "X-DNS-Prefetch-Control", value: "off" },
+];
+
 const nextConfig: NextConfig = {
   async headers() {
     return [
       {
-        source: "/:path*",
-        headers: [
-          { key: "Content-Security-Policy", value: contentSecurityPolicy },
-          { key: "Strict-Transport-Security", value: "max-age=31536000; includeSubDomains; preload" },
-          { key: "X-Content-Type-Options", value: "nosniff" },
-          { key: "Referrer-Policy", value: "strict-origin-when-cross-origin" },
-          { key: "Permissions-Policy", value: "camera=(), microphone=(), geolocation=()" },
-          { key: "X-DNS-Prefetch-Control", value: "off" },
-        ],
+        // Apply security headers to all routes EXCEPT widget-serving paths
+        source: "/((?!w/|api/widget/|api/embed/).*)",
+        headers: securityHeaders,
       },
     ];
   },

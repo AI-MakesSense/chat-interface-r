@@ -30,7 +30,7 @@ import { createDefaultConfig } from '@/lib/config/defaults';
 import { createWidgetConfigSchema } from '@/lib/validation/widget-schema';
 import { deepMerge, forceN8nProviderConfig, stripLegacyConfigProperties } from '@/lib/utils/config-helpers';
 import { CHATKIT_SERVER_ENABLED } from '@/lib/feature-flags';
-import { generateEmbedCode, type EmbedType as GeneratedEmbedType } from '@/lib/embed';
+import { generateEmbedCode, resolveEmbedBaseUrlFromRequest, type EmbedType as GeneratedEmbedType } from '@/lib/embed';
 import { z } from 'zod';
 
 // =============================================================================
@@ -60,20 +60,6 @@ const CreateWidgetSchema = z.object({
   allowedDomains: z.array(z.string()).optional(),
   widgetType: z.enum(['n8n', 'chatkit']).optional(),
 });
-
-function resolveEmbedBaseUrlFromRequest(request: NextRequest): string {
-  if (process.env.NEXT_PUBLIC_APP_URL) {
-    return process.env.NEXT_PUBLIC_APP_URL.replace(/\/+$/, '');
-  }
-
-  if (process.env.VERCEL_PROJECT_PRODUCTION_URL) {
-    const raw = process.env.VERCEL_PROJECT_PRODUCTION_URL;
-    const withProtocol = raw.startsWith('http') ? raw : `https://${raw}`;
-    return withProtocol.replace(/\/+$/, '');
-  }
-
-  return new URL(request.url).origin;
-}
 
 // =============================================================================
 // POST /api/widgets - Create Widget
@@ -198,7 +184,7 @@ export async function POST(request: NextRequest) {
     }
 
     // 10. Generate embed codes for Schema v2.0 widgets
-    const baseUrl = resolveEmbedBaseUrlFromRequest(request);
+    const baseUrl = resolveEmbedBaseUrlFromRequest(request.url);
     const widgetKey = (widget as any).widgetKey;
     const embedCodes = widgetKey ? generateEmbedCodes(baseUrl, widgetKey, (widget as any).embedType || 'popup') : null;
 
@@ -281,7 +267,7 @@ export async function GET(request: NextRequest) {
     }
 
     // 4. Get paginated widgets for the user
-    const baseUrl = resolveEmbedBaseUrlFromRequest(request);
+    const baseUrl = resolveEmbedBaseUrlFromRequest(request.url);
 
     // Use legacy query if licenseId provided or legacy flag set
     if (licenseId || useLegacy) {

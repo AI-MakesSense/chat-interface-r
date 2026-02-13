@@ -245,41 +245,24 @@ export async function GET(
       }
     }
 
-    // Fail closed: require origin context for public config access.
+    // Extract origin context — skip domain authz when missing rather than
+    // hard-failing, so the widget still loads for strict-referrer-policy sites.
     const origin = request.headers.get('origin');
     const referer = request.headers.get('referer');
     const originContext = origin || referer;
-    if (!originContext) {
-      return new NextResponse(
-        JSON.stringify({ error: 'Origin or referer header is required' }),
-        {
-          status: 403,
-          headers: {
-            'Content-Type': 'application/json',
-            'Access-Control-Allow-Origin': '*'
-          }
-        }
-      );
-    }
 
     let domain = '';
-    try {
-      domain = new URL(originContext).hostname;
-    } catch {
-      return new NextResponse(
-        JSON.stringify({ error: 'Invalid origin or referer header' }),
-        {
-          status: 403,
-          headers: {
-            'Content-Type': 'application/json',
-            'Access-Control-Allow-Origin': '*'
-          }
-        }
-      );
+    if (originContext) {
+      try {
+        domain = new URL(originContext).hostname;
+      } catch {
+        // Malformed header — treat as unknown, skip domain authz below
+        domain = '';
+      }
     }
 
     const userTier = widget.user.tier || 'free';
-    if (widget.allowedDomains && widget.allowedDomains.length > 0 && userTier !== 'agency') {
+    if (domain && widget.allowedDomains && widget.allowedDomains.length > 0 && userTier !== 'agency') {
       const normalizedDomain = normalizeDomain(domain);
       const requestHost = normalizeDomain((request.headers.get('host') || '').split(':')[0] || '');
       const isFirstPartyOrigin =
@@ -304,6 +287,8 @@ export async function GET(
           }
         );
       }
+    } else if (!domain) {
+      console.warn(`[Widget Config] Serving config without origin context: ${widgetKey}`);
     }
 
     const dbConfig = widget.config as any;
