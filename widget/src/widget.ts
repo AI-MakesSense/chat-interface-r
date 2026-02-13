@@ -680,6 +680,7 @@ export function createChatWidget(runtimeConfig: WidgetRuntimeConfig): void {
   const chatWindow = document.createElement('div');
   chatWindow.id = 'n8n-chat-window';
   chatWindow.style.cssText = `
+    box-sizing: border-box;
     display: ${isPopupEmbed ? 'none' : 'flex'};
     width: ${isPopupEmbed ? '380px' : '100%'};
     height: ${isPopupEmbed ? '600px' : '100%'};
