@@ -68,10 +68,17 @@ export function getConfiguredPublicUrl(): string | undefined {
  * Heuristic detection for Vercel preview hostnames.
  *
  * Preview deployments follow the pattern:
- *   <project>-<git-hash>-<team>.vercel.app
- * where <git-hash> is a 7-9 char lowercase hex string.
+ *   <project>-<hash>-<team>.vercel.app
+ * where <hash> is a 7-12 char lowercase alphanumeric string that contains
+ * at least one digit (to distinguish from normal project-name dashes).
  *
- * Production domains like "chat-interface-r.vercel.app" must NOT match.
+ * Examples that SHOULD match (preview):
+ *   chat-interface-fk7f9c83w-polingerai.vercel.app
+ *   myapp-abc1234f-team.vercel.app
+ *
+ * Examples that should NOT match (production):
+ *   chat-interface-r.vercel.app
+ *   my-cool-app.vercel.app
  */
 export function isLikelyVercelPreviewHostname(hostname: string): boolean {
   if (!hostname || !hostname.endsWith('.vercel.app')) {
@@ -80,9 +87,10 @@ export function isLikelyVercelPreviewHostname(hostname: string): boolean {
 
   const subdomain = hostname.slice(0, -'.vercel.app'.length);
 
-  // Match the Vercel preview pattern: project-<hex7+>-team
-  // The hex segment distinguishes previews from normal multi-dash project names.
-  return /^.+-[a-f0-9]{7,9}-.+$/.test(subdomain);
+  // Match: project-<alphanumeric hash with at least one digit>-team
+  // The hash segment is 7-12 lowercase alphanumeric chars containing ≥1 digit.
+  // The digit requirement prevents false positives on names like "my-cool-app".
+  return /^.+-(?=[a-z0-9]*[0-9])[a-z0-9]{7,12}-.+$/.test(subdomain);
 }
 
 /**
