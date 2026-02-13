@@ -25,19 +25,21 @@ export default function FullpageWidget({ widgetKey, config }: FullpageWidgetProp
 
   // Apply global styles via useEffect
   useEffect(() => {
-    // Set html/body styles for fullpage
+    // Set html/body styles for fullpage — override the app's dark-mode
+    // background so the page is white (not black) while the widget loads.
     document.body.style.margin = '0';
     document.body.style.padding = '0';
     document.body.style.overflow = 'hidden';
+    document.body.style.background = '#ffffff';
     document.documentElement.style.margin = '0';
     document.documentElement.style.padding = '0';
     document.documentElement.style.overflow = 'hidden';
 
     return () => {
-      // Cleanup styles on unmount
       document.body.style.margin = '';
       document.body.style.padding = '';
       document.body.style.overflow = '';
+      document.body.style.background = '';
       document.documentElement.style.margin = '';
       document.documentElement.style.padding = '';
       document.documentElement.style.overflow = '';

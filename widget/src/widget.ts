@@ -526,6 +526,8 @@ export function createChatWidget(runtimeConfig: WidgetRuntimeConfig): void {
       align-items: stretch;
     `;
   } else {
+    // Portal / fullpage mode — fill the viewport with the widget background
+    // so the host page's own background (e.g. dark-mode body) never bleeds through.
     container.style.cssText = `
       position: fixed;
       inset: 0;
@@ -537,6 +539,7 @@ export function createChatWidget(runtimeConfig: WidgetRuntimeConfig): void {
       display: flex;
       flex-direction: column;
       align-items: stretch;
+      background: ${bg};
     `;
   }
 
