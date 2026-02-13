@@ -17,9 +17,13 @@ const contentSecurityPolicy = [
 
 /**
  * Security headers for application pages.
- * Widget-serving routes (/w/, /api/widget/, /api/embed/) are excluded because
- * CSP/Referrer-Policy on JS bundle responses is meaningless and can confuse
- * proxies or strict security scanners.
+ *
+ * Excluded paths (no CSP / Referrer-Policy applied):
+ *   /w/          – widget JS bundle serving
+ *   /api/widget/ – legacy widget API
+ *   /api/embed/  – embed bundle serving
+ *   /chat/       – fullpage widget iframe page (must be embeddable cross-origin)
+ *   /chatkit/    – ChatKit widget iframe page
  */
 const securityHeaders = [
   { key: "Content-Security-Policy", value: contentSecurityPolicy },
@@ -34,8 +38,8 @@ const nextConfig: NextConfig = {
   async headers() {
     return [
       {
-        // Apply security headers to all routes EXCEPT widget-serving paths
-        source: "/((?!w/|api/widget/|api/embed/).*)",
+        // Apply security headers to all routes EXCEPT widget-serving and embeddable paths
+        source: "/((?!w/|api/widget/|api/embed/|chat/|chatkit/).*)",
         headers: securityHeaders,
       },
     ];

@@ -64,12 +64,20 @@ export default async function FullpageChatPage({ params }: PageProps) {
   }
 
   return (
-    <div className="fullpage-container">
-      <FullpageWidget
-        widgetKey={widgetKey}
-        config={config}
-      />
-    </div>
+    <>
+      {/* Server-rendered override: neutralise globals.css dark-mode background
+          so the page is white (not black) before React hydrates and the widget
+          script sets its own colours. */}
+      <style dangerouslySetInnerHTML={{ __html:
+        'html,body{background:#fff!important;margin:0;padding:0;overflow:hidden}'
+      }} />
+      <div className="fullpage-container">
+        <FullpageWidget
+          widgetKey={widgetKey}
+          config={config}
+        />
+      </div>
+    </>
   );
 }
 
