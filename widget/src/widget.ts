@@ -541,7 +541,7 @@ export function createChatWidget(runtimeConfig: WidgetRuntimeConfig): WidgetClea
     }
     .n8n-start-screen-wide .n8n-greeting-wrap {
       width: 100%;
-      max-width: 32rem;
+      max-width: 42rem;
       padding: 0 2rem;
     }
 
