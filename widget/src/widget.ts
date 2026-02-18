@@ -17,6 +17,8 @@ import { MarkdownCache } from './utils/markdown-cache';
 import { buildRelayPayload } from './services/messaging/payload';
 import { SessionManager } from './services/messaging/session-manager';
 import { createCSSVariables, createFontFaceCSS } from './theming/css-variables';
+import { isPdfUrl } from './utils/link-detector';
+import { PdfLightbox } from './ui/pdf-lightbox';
 import type { FileAttachment } from './services/messaging/types';
 
 // Shared markdown cache instance (100 entries, 5MB, 5-minute TTL)
@@ -920,6 +922,18 @@ export function createChatWidget(runtimeConfig: WidgetRuntimeConfig): WidgetClea
     gap: ${messageGap};
   `;
   mainContent.appendChild(messagesContainer);
+
+  // PDF Lightbox: intercept clicks on PDF links in assistant messages
+  const pdfLightbox = new PdfLightbox();
+  messagesContainer.addEventListener('click', (e) => {
+    const target = e.target as HTMLElement;
+    const link = target.closest('a') as HTMLAnchorElement | null;
+    if (link && isPdfUrl(link.href)) {
+      e.preventDefault();
+      e.stopPropagation();
+      pdfLightbox.open(link.href);
+    }
+  });
 
   // Composer area - matching preview
   const composerArea = document.createElement('div');
