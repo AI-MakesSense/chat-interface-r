@@ -112,7 +112,8 @@ export class PdfLightbox {
       border: none;
     `;
     iframe.setAttribute('title', 'PDF Viewer');
-    iframe.setAttribute('sandbox', 'allow-scripts allow-same-origin');
+    // Note: no sandbox attribute - Chrome's PDF viewer doesn't work inside sandboxed iframes.
+    // This is safe because the iframe src is always a URL (not inline HTML content).
 
     // Fallback: if iframe fails to load, show fallback UI
     const fallbackTimeout = setTimeout(() => {

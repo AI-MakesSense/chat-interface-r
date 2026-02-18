@@ -63,12 +63,11 @@ describe('PdfLightbox', () => {
       expect(iframe.src).toBe(testPdfUrl);
     });
 
-    it('should set iframe sandbox attribute for security', () => {
+    it('should not sandbox iframe (Chrome PDF viewer requires it)', () => {
       lightbox.open(testPdfUrl);
 
       const iframe = document.querySelector('.cw-pdf-iframe') as HTMLIFrameElement;
-      expect(iframe.getAttribute('sandbox')).toContain('allow-scripts');
-      expect(iframe.getAttribute('sandbox')).toContain('allow-same-origin');
+      expect(iframe.getAttribute('sandbox')).toBeNull();
     });
 
     it('should set iframe title for accessibility', () => {
