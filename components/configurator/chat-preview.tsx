@@ -581,6 +581,26 @@ export const ChatPreview: React.FC<ChatPreviewProps> = ({ config }) => {
     }
   }, [messages]);
 
+  // PDF Lightbox demo: inject/remove a demo PDF message when toggle changes
+  useEffect(() => {
+    const DEMO_PDF_MSG_ID = -999;
+    if (config.enablePdfLightbox) {
+      setMessages((prev) => {
+        if (prev.some((m) => m.id === DEMO_PDF_MSG_ID)) return prev;
+        return [
+          ...prev,
+          {
+            id: DEMO_PDF_MSG_ID,
+            text: "Here's a document for you to review:\n\n[📄 View Demo PDF](/widget/demo-document.pdf)",
+            isUser: false,
+          },
+        ];
+      });
+    } else {
+      setMessages((prev) => prev.filter((m) => m.id !== DEMO_PDF_MSG_ID));
+    }
+  }, [config.enablePdfLightbox]);
+
   return (
     <div
       ref={rootRef}

@@ -144,6 +144,7 @@ export interface WidgetConfig {
   disclaimer?: string;
   enableAttachments?: boolean;
   enableModelPicker?: boolean;
+  enablePdfLightbox?: boolean;
 
   // Inline embed dimensions (pixels)
   inlineWidth?: number;
@@ -330,6 +331,7 @@ const defaultConfig: WidgetConfig = {
   disclaimer: '',
   enableAttachments: false,
   enableModelPicker: false,
+  enablePdfLightbox: false,
 
   // Inline embed dimensions
   inlineWidth: 400,

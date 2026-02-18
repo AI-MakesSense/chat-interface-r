@@ -1288,6 +1288,10 @@ export const ConfigSidebar: React.FC<ConfigSidebarProps> = ({
               <div className={`${theme.textMuted} font-medium`}>Attachments</div>
               <Toggle checked={config.enableAttachments || false} onChange={(v) => handleChange('enableAttachments', v)} isDark={isDark} />
             </Row>
+            <Row>
+              <div className={`${theme.textMuted} font-medium`}>PDF Lightbox</div>
+              <Toggle checked={config.enablePdfLightbox || false} onChange={(v) => handleChange('enablePdfLightbox', v)} isDark={isDark} />
+            </Row>
           </div>
         </Section>
 

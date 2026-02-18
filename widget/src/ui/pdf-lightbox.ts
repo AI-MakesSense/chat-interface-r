@@ -325,9 +325,11 @@ export class PdfLightbox {
   }
 
   /**
-   * Full cleanup - alias for close
+   * Full cleanup - close and remove injected styles
    */
   destroy(): void {
     this.close();
+    const styleEl = document.getElementById('cw-pdf-lightbox-styles');
+    if (styleEl) styleEl.remove();
   }
 }
