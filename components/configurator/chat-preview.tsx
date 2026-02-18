@@ -1,7 +1,9 @@
 'use client';
 
-import React, { useState, useRef, useEffect, useMemo } from 'react';
+import React, { useState, useRef, useEffect, useMemo, useCallback } from 'react';
 import { WidgetConfig, StarterPrompt } from '@/stores/widget-store';
+import { PdfLightbox } from '@/widget/src/ui/pdf-lightbox';
+import { isPdfUrl } from '@/widget/src/utils/link-detector';
 import { History, Plus, ArrowUp, ChevronDown } from 'lucide-react';
 import {
   HelpCircle,
@@ -300,6 +302,23 @@ export const ChatPreview: React.FC<ChatPreviewProps> = ({ config }) => {
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const rootRef = useRef<HTMLDivElement>(null);
+  const pdfLightboxRef = useRef<PdfLightbox | null>(null);
+
+  // Initialize PDF lightbox once
+  if (!pdfLightboxRef.current) {
+    pdfLightboxRef.current = new PdfLightbox();
+  }
+
+  // Intercept PDF link clicks in message area
+  const handleMessageClick = useCallback((e: React.MouseEvent) => {
+    const target = e.target as HTMLElement;
+    const link = target.closest('a') as HTMLAnchorElement | null;
+    if (link && isPdfUrl(link.href)) {
+      e.preventDefault();
+      e.stopPropagation();
+      pdfLightboxRef.current?.open(link.href);
+    }
+  }, []);
 
   // Generate session ID once per component mount
   const sessionId = useMemo(() => 'preview-' + Math.random().toString(36).substring(7), []);
@@ -316,7 +335,10 @@ export const ChatPreview: React.FC<ChatPreviewProps> = ({ config }) => {
       setWidth(entries[0].contentRect.width);
     });
     observer.observe(rootRef.current);
-    return () => observer.disconnect();
+    return () => {
+      observer.disconnect();
+      pdfLightboxRef.current?.destroy();
+    };
   }, []);
 
   // --- Typography Logic ---
@@ -726,7 +748,7 @@ export const ChatPreview: React.FC<ChatPreviewProps> = ({ config }) => {
           </div>
         ) : (
           // Message History
-          <div className={`flex-1 flex flex-col pt-12 pb-4 ${messageSpacing}`}>
+          <div className={`flex-1 flex flex-col pt-12 pb-4 ${messageSpacing}`} onClick={handleMessageClick}>
             {messages.map((msg) => (
               <div
                 key={msg.id}
