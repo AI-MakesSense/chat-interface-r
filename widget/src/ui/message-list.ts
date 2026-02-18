@@ -8,6 +8,9 @@
 
 import { WidgetConfig } from '../types';
 import { StateManager, Message } from '../core/state';
+import { MarkdownPipeline, STANDARD_MARKDOWN_CONFIG, STANDARD_CACHE_CONFIG } from '../utils/markdown-pipeline';
+import { isPdfUrl, findPdfLinks } from '../utils/link-detector';
+import { PdfLightbox } from './pdf-lightbox';
 
 /**
  * HTML escape helper to prevent XSS
@@ -43,6 +46,9 @@ export class MessageList {
   private scrollHandler: (() => void) | null = null;
   private userScrolledUp: boolean = false;
   private previousMessageCount: number = 0;
+  private markdownPipeline: MarkdownPipeline;
+  private pdfLightbox: PdfLightbox;
+  private clickHandler: ((e: MouseEvent) => void) | null = null;
 
   /**
    * Creates a new MessageList instance
@@ -59,6 +65,8 @@ export class MessageList {
     }
     this.config = config;
     this.stateManager = stateManager;
+    this.markdownPipeline = new MarkdownPipeline(STANDARD_MARKDOWN_CONFIG, STANDARD_CACHE_CONFIG);
+    this.pdfLightbox = new PdfLightbox();
   }
 
   /**
@@ -92,6 +100,18 @@ export class MessageList {
 
     // Render initial messages
     this.renderMessages();
+
+    // Setup PDF link click interception via event delegation
+    this.clickHandler = (e: MouseEvent) => {
+      const target = e.target as HTMLElement;
+      const link = target.closest('a') as HTMLAnchorElement | null;
+      if (link && isPdfUrl(link.href)) {
+        e.preventDefault();
+        e.stopPropagation();
+        this.pdfLightbox.open(link.href);
+      }
+    };
+    container.addEventListener('click', this.clickHandler);
 
     // Setup scroll handler to detect when user scrolls up
     this.scrollHandler = () => {
@@ -215,10 +235,24 @@ export class MessageList {
 
       messageElement.style.cssText = baseStyles.join('; ');
 
-      // Set message content (escaped for security)
+      // Set plain text initially, then upgrade to rendered markdown
       messageElement.textContent = message.content || '';
-
       this.element!.appendChild(messageElement);
+
+      // Async markdown rendering upgrade
+      if (message.content) {
+        this.markdownPipeline.renderAsync(message.content).then((html) => {
+          if (html && messageElement.isConnected) {
+            messageElement.innerHTML = html;
+            // Mark PDF links with visual indicator
+            const pdfLinks = findPdfLinks(messageElement);
+            pdfLinks.forEach((link) => {
+              link.classList.add('cw-pdf-link');
+              link.style.cssText += 'cursor: pointer; text-decoration: underline;';
+            });
+          }
+        });
+      }
     });
 
     this.previousMessageCount = messages.length;
@@ -289,6 +323,15 @@ export class MessageList {
       this.element.removeEventListener('scroll', this.scrollHandler);
       this.scrollHandler = null;
     }
+
+    // Remove click handler
+    if (this.element && this.clickHandler) {
+      this.element.removeEventListener('click', this.clickHandler);
+      this.clickHandler = null;
+    }
+
+    // Cleanup PDF lightbox
+    this.pdfLightbox.destroy();
 
     // Remove element from DOM if attached
     if (this.element?.parentNode) {
