@@ -570,6 +570,62 @@ export function createChatWidget(runtimeConfig: WidgetRuntimeConfig): WidgetClea
       padding: 0;
       color: inherit;
     }
+    .n8n-message-content h1,
+    .n8n-message-content h2,
+    .n8n-message-content h3,
+    .n8n-message-content h4,
+    .n8n-message-content h5,
+    .n8n-message-content h6 {
+      margin: 0.6em 0 0.3em 0;
+      font-weight: 600;
+      line-height: 1.3;
+    }
+    .n8n-message-content h1 { font-size: 1.4em; }
+    .n8n-message-content h2 { font-size: 1.25em; }
+    .n8n-message-content h3 { font-size: 1.1em; }
+    .n8n-message-content h4,
+    .n8n-message-content h5,
+    .n8n-message-content h6 { font-size: 1em; }
+    .n8n-message-content ul,
+    .n8n-message-content ol {
+      margin: 0.4em 0;
+      padding-left: 1.5em;
+    }
+    .n8n-message-content ul { list-style: disc; }
+    .n8n-message-content ol { list-style: decimal; }
+    .n8n-message-content li { margin: 0.15em 0; }
+    .n8n-message-content blockquote {
+      border-left: 3px solid ${isDark ? '#4b5563' : '#d1d5db'};
+      padding: 0.3em 0.8em;
+      margin: 0.4em 0;
+      color: ${isDark ? '#9ca3af' : '#6b7280'};
+      background: ${isDark ? 'rgba(255,255,255,0.03)' : 'rgba(0,0,0,0.02)'};
+      border-radius: 0 4px 4px 0;
+    }
+    .n8n-message-content hr {
+      border: none;
+      border-top: 1px solid ${isDark ? '#374151' : '#e5e7eb'};
+      margin: 0.6em 0;
+    }
+    .n8n-message-content table {
+      border-collapse: collapse;
+      width: 100%;
+      margin: 0.5em 0;
+      font-size: 0.9em;
+    }
+    .n8n-message-content th,
+    .n8n-message-content td {
+      border: 1px solid ${isDark ? '#374151' : '#d1d5db'};
+      padding: 6px 10px;
+      text-align: left;
+    }
+    .n8n-message-content th {
+      background: ${isDark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.04)'};
+      font-weight: 600;
+    }
+    .n8n-message-content tbody tr:nth-child(even) {
+      background: ${isDark ? 'rgba(255,255,255,0.02)' : 'rgba(0,0,0,0.015)'};
+    }
 
     /* Composer focus ring — matching preview focus-within:ring-1 */
     #n8n-composer-form:focus-within {

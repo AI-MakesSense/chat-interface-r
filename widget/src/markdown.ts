@@ -47,28 +47,69 @@ export function renderMarkdown(text: string): string {
 
     // 8. Blockquotes (>)
     html = html.replace(/^&gt;\s?(.+)$/gm, '<blockquote>$1</blockquote>');
+    // Merge adjacent blockquotes
+    html = html.replace(/<\/blockquote>\s*<blockquote>/g, '<br>');
 
-    // 9. Unordered lists (- or *)
+    // 9. Tables (| col | col | with header separator)
+    html = html.replace(
+      /(?:^\|.+\|[ \t]*\n)+/gm,
+      (block: string) => {
+        const rows = block.trim().split('\n');
+        if (rows.length < 2) return block;
+        // Check if second row is a separator (|---|---|)
+        const isSep = /^\|[\s\-:|]+\|$/.test(rows[1].trim());
+        if (!isSep) {
+          // No header separator — render all as body rows
+          const bodyRows = rows.map(r => {
+            const cells = r.replace(/^\||\|$/g, '').split('|').map(c => `<td>${c.trim()}</td>`).join('');
+            return `<tr>${cells}</tr>`;
+          }).join('');
+          return `<table><tbody>${bodyRows}</tbody></table>`;
+        }
+        // Parse alignment from separator row
+        const aligns = rows[1].replace(/^\||\|$/g, '').split('|').map(c => {
+          const t = c.trim();
+          if (t.startsWith(':') && t.endsWith(':')) return 'center';
+          if (t.endsWith(':')) return 'right';
+          return '';
+        });
+        const alignAttr = (i: number) => aligns[i] ? ` align="${aligns[i]}"` : '';
+        // Header
+        const hCells = rows[0].replace(/^\||\|$/g, '').split('|').map((c, i) => `<th${alignAttr(i)}>${c.trim()}</th>`).join('');
+        // Body (skip rows 0 and 1)
+        const bRows = rows.slice(2).map(r => {
+          const cells = r.replace(/^\||\|$/g, '').split('|').map((c, i) => `<td${alignAttr(i)}>${c.trim()}</td>`).join('');
+          return `<tr>${cells}</tr>`;
+        }).join('');
+        return `<table><thead><tr>${hCells}</tr></thead><tbody>${bRows}</tbody></table>`;
+      }
+    );
+
+    // 10. Unordered lists (- or *)
     html = html.replace(/^[-*]\s+(.+)$/gm, '<li>$1</li>');
     html = html.replace(/(<li>[\s\S]*?<\/li>)/g, '<ul>$1</ul>');
     // Merge adjacent <ul> tags
     html = html.replace(/<\/ul>\s*<ul>/g, '');
 
-    // 10. Ordered lists (1. 2. etc.)
-    html = html.replace(/^\d+\.\s+(.+)$/gm, '<li>$1</li>');
+    // 11. Ordered lists (1. 2. etc.)
+    html = html.replace(/^\d+\.\s+(.+)$/gm, '<oli>$1</oli>');
+    // Wrap adjacent ordered list items in <ol> and convert tags
+    html = html.replace(/(<oli>[\s\S]*?<\/oli>)/g, '<ol>$1</ol>');
+    html = html.replace(/<\/ol>\s*<ol>/g, '');
+    html = html.replace(/<\/?oli>/g, (m: string) => m.replace('oli', 'li'));
 
-    // 11. Links [text](url)
+    // 12. Links [text](url)
     html = html.replace(
       /\[([^\]]+)\]\((https?:\/\/[^\)]+)\)/g,
       '<a href="$2" target="_blank" rel="noopener noreferrer">$1</a>'
     );
 
-    // 12. Newlines to <br> (but not inside block elements)
+    // 13. Newlines to <br> (but not inside block elements)
     html = html.replace(/\n/g, '<br>');
 
     // Clean up <br> after block elements
-    html = html.replace(/<\/(h[1-6]|pre|blockquote|ul|ol|li|hr)><br>/g, '</$1>');
-    html = html.replace(/<br><(h[1-6]|pre|blockquote|ul|ol|hr)/g, '<$1');
+    html = html.replace(/<\/(h[1-6]|pre|blockquote|ul|ol|li|hr|table|thead|tbody|tr|th|td)><br>/g, '</$1>');
+    html = html.replace(/<br><(h[1-6]|pre|blockquote|ul|ol|hr|table|thead|tbody|tr)/g, '<$1');
 
     return html;
   } catch (error) {
