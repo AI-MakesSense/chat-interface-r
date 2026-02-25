@@ -256,33 +256,8 @@ const getIconByName = (iconName: string): LucideIcon => {
   return ICON_MAP[iconName] || MessageCircle;
 };
 
-// Simple markdown renderer
-function renderMarkdown(text: string): string {
-  if (!text) return '';
-  try {
-    let html = escapeHtml(text);
-    // Code Blocks
-    html = html.replace(/```([\s\S]*?)```/g, '<pre><code>$1</code></pre>');
-    // Inline Code
-    html = html.replace(/`([^`]+)`/g, '<code>$1</code>');
-    // Bold
-    html = html.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>');
-    // Italic
-    html = html.replace(/\*([^*]+)\*/g, '<em>$1</em>');
-    // Links (supports both absolute and relative URLs)
-    html = html.replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2" target="_blank" rel="noopener noreferrer" class="text-blue-500 underline">$1</a>');
-    // Newlines
-    html = html.replace(/\n/g, '<br>');
-    return html;
-  } catch {
-    return text;
-  }
-}
-
-function escapeHtml(unsafe: string): string {
-  const map: Record<string, string> = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#039;' };
-  return unsafe.replace(/[&<>"']/g, (char) => map[char] || char);
-}
+// Use the same markdown renderer as the production widget
+import { renderMarkdown } from '@/widget/src/markdown';
 
 // Typing indicator component
 const TypingIndicator = () => (
@@ -650,9 +625,36 @@ export const ChatPreview: React.FC<ChatPreviewProps> = ({ config }) => {
         .animate-bounce {
           animation: bounce 1.4s infinite ease-in-out both;
         }
-        pre { background: #f1f5f9; padding: 12px; border-radius: 8px; overflow-x: auto; margin: 8px 0; font-family: monospace; font-size: 13px; }
-        code { background: #f1f5f9; padding: 2px 4px; border-radius: 4px; font-family: monospace; font-size: 13px; }
-        pre code { background: transparent; padding: 0; }
+        /* Code */
+        pre { background: ${isDark ? '#0d0d0d' : '#f1f5f9'}; color: ${isDark ? '#e2e8f0' : '#334155'}; padding: 12px; border-radius: 8px; overflow-x: auto; margin: 8px 0; font-family: ui-monospace, monospace; font-size: 13px; }
+        code { background: ${isDark ? '#2d2d2d' : '#f1f5f9'}; padding: 2px 5px; border-radius: 4px; font-family: ui-monospace, monospace; font-size: 0.9em; }
+        pre code { background: transparent; padding: 0; color: inherit; }
+        /* Headings */
+        h1, h2, h3, h4, h5, h6 { margin: 0.6em 0 0.3em 0; font-weight: 600; line-height: 1.3; }
+        h1 { font-size: 1.4em; }
+        h2 { font-size: 1.25em; }
+        h3 { font-size: 1.1em; }
+        h4, h5, h6 { font-size: 1em; }
+        /* Lists */
+        ul, ol { margin: 0.4em 0; padding-left: 1.5em; }
+        ul { list-style: disc; }
+        ol { list-style: decimal; }
+        li { margin: 0.15em 0; }
+        /* Blockquotes */
+        blockquote { border-left: 3px solid ${isDark ? '#4b5563' : '#d1d5db'}; padding: 0.3em 0.8em; margin: 0.4em 0; color: ${isDark ? '#9ca3af' : '#6b7280'}; background: ${isDark ? 'rgba(255,255,255,0.03)' : 'rgba(0,0,0,0.02)'}; border-radius: 0 4px 4px 0; }
+        /* Horizontal rules */
+        hr { border: none; border-top: 1px solid ${isDark ? '#374151' : '#e5e7eb'}; margin: 0.6em 0; }
+        /* Tables */
+        table { border-collapse: collapse; width: 100%; margin: 0.5em 0; font-size: 0.9em; }
+        th, td { border: 1px solid ${isDark ? '#374151' : '#d1d5db'}; padding: 6px 10px; text-align: left; }
+        th { background: ${isDark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.04)'}; font-weight: 600; }
+        tbody tr:nth-child(even) { background: ${isDark ? 'rgba(255,255,255,0.02)' : 'rgba(0,0,0,0.015)'}; }
+        /* Links */
+        a { color: ${isDark ? '#60a5fa' : '#2563eb'}; text-decoration: underline; }
+        /* Paragraphs */
+        p { margin: 0 0 0.5em 0; }
+        p:last-child { margin-bottom: 0; }
+        strong { font-weight: 600; }
       `}} />
 
       {/* Header Icons */}
