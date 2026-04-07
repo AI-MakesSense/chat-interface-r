@@ -1,0 +1,208 @@
+================================================================================
+PERFORMANCE OPTIMIZATION PLAN - WEEK 4 DAY 7-8
+================================================================================
+
+Status: ✅ PLANNING COMPLETE
+Date: 2025-11-12
+Agent: Architect/Planner
+
+================================================================================
+CURRENT STATE (After Day 1-6)
+================================================================================
+
+Completed Modules: 3 (XSS, Markdown, Syntax)
+Test Coverage: 76/76 tests passing (100%)
+Bundle Size: 48.23 KB gzipped (within 50KB target)
+Performance: 25ms per render (no caching)
+
+Bundle Breakdown:
+├── Widget Core: ~17KB
+├── DOMPurify: ~18KB
+├── markdown-it: ~7KB
+└── Prism.js: ~6KB
+
+================================================================================
+TARGET STATE (After Day 7-8)
+================================================================================
+
+Optimized Architecture: Lazy loading + LRU caching + Code splitting
+Test Coverage: 110/110 tests passing (76 + 34 new)
+Initial Bundle: 17 KB (64% reduction! 🚀)
+Cache Performance: <1ms for hits (98% improvement! 🚀)
+
+Bundle Structure:
+├── main.js: 17KB (instant load)
+├── markdown.js: 25KB (lazy-loaded on first message)
+└── syntax.js: 6KB (lazy-loaded on first code block)
+
+Performance Improvements:
+├── Initial load: 48KB → 17KB (64% faster)
+├── Cache hit: N/A → <1ms (instant)
+├── Cache miss: 25ms → 25ms (unchanged)
+└── Memory: 5MB → <10MB (controlled)
+
+================================================================================
+OPTIMIZATION STRATEGY (5 Layers)
+================================================================================
+
+Layer 1: Lazy Loading
+- Dynamic imports for markdown modules
+- 64% reduction in initial bundle (48KB → 17KB)
+- Files: markdown-loader.ts (~150 lines)
+- Tests: 6 lazy loading tests
+
+Layer 2: LRU Caching
+- Cache parsed markdown with TTL (5 min)
+- 98% faster for cached content (<1ms vs 25ms)
+- Files: markdown-cache.ts (~200 lines)
+- Tests: 8 caching tests
+
+Layer 3: Performance Tracking
+- Measure bundle load, render time, cache hits
+- Export metrics for analysis
+- Files: performance-tracker.ts, performance-monitor.ts (~250 lines)
+- Tests: 6 benchmark tests
+
+Layer 4: Memory Management
+- Auto-evict on memory pressure
+- Enforce 10MB limit
+- Cleanup on widget destroy
+- Tests: 5 memory tests
+
+Layer 5: Bundle Optimization
+- Vite code splitting configuration
+- Manual chunks (main, markdown, syntax)
+- Tree-shaking verification
+- Tests: 5 bundle size tests
+
+================================================================================
+TEST PLAN (34 New Tests)
+================================================================================
+
+tests/widget/performance/
+├── lazy-loading.test.ts       (6 tests, ~200 lines)
+├── markdown-cache.test.ts     (8 tests, ~300 lines)
+├── memory-management.test.ts  (5 tests, ~200 lines)
+├── integration.test.ts        (4 tests, ~200 lines)
+├── benchmarks.test.ts         (6 tests, ~200 lines)
+└── bundle-size.test.ts        (5 tests, ~100 lines)
+
+Total: 34 tests, ~1200 lines
+
+================================================================================
+IMPLEMENTATION TIMELINE
+================================================================================
+
+Day 7 Morning (4h):
+- Create markdown-loader.ts + tests (6 tests)
+- Update vite.config.ts for code splitting
+- Verify bundle reduction (48KB → 17KB)
+
+Day 7 Afternoon (4h):
+- Create markdown-cache.ts + tests (8 tests)
+- Integrate cache with loader
+- Benchmark cache performance
+
+Day 8 Morning (3h):
+- Create performance-tracker.ts + tests
+- Create performance-monitor.ts
+- Integrate tracking + monitoring
+
+Day 8 Afternoon (3h):
+- Add memory management to cache
+- Write memory tests (5 tests)
+- Stress test with 1000 messages
+
+Day 8 Evening (2h):
+- Final bundle optimization
+- Write bundle size tests (5 tests)
+- Update documentation
+
+================================================================================
+DELIVERABLES CREATED
+================================================================================
+
+Planning Documents:
+✅ WEEK_4_DAY_7-8_PERFORMANCE_OPTIMIZATION_PLAN.md (620 lines)
+✅ PERFORMANCE_OPTIMIZATION_IMPLEMENTATION_BRIEF.md (550 lines)
+✅ decisions.md updated (+3 ADRs)
+✅ PERFORMANCE_OPTIMIZATION_PLANNING_COMPLETE.md (summary)
+
+Files to Create (Production - 600 lines):
+1. widget/src/utils/markdown-loader.ts (~150 lines)
+2. widget/src/utils/markdown-cache.ts (~200 lines)
+3. widget/src/utils/performance-tracker.ts (~150 lines)
+4. widget/src/utils/performance-monitor.ts (~100 lines)
+
+Files to Create (Tests - 1200 lines):
+5. tests/widget/performance/lazy-loading.test.ts (6 tests)
+6. tests/widget/performance/markdown-cache.test.ts (8 tests)
+7. tests/widget/performance/memory-management.test.ts (5 tests)
+8. tests/widget/performance/integration.test.ts (4 tests)
+9. tests/widget/performance/benchmarks.test.ts (6 tests)
+10. tests/widget/performance/bundle-size.test.ts (5 tests)
+
+Files to Modify:
+11. widget/vite.config.ts (add code splitting)
+12. widget/src/ui/message-list.ts (use MarkdownLoader)
+
+================================================================================
+SUCCESS CRITERIA
+================================================================================
+
+Must Have (P0):
+✅ Main bundle <35KB (target: 17KB)
+✅ Total bundle <50KB (target: 48KB)
+✅ All 76 existing tests GREEN
+✅ All 34 new performance tests GREEN
+✅ Cache hit time <1ms (p95)
+✅ Memory usage <10MB (p95)
+✅ No memory leaks (1000 messages)
+
+Should Have (P1):
+✅ Cache hit rate >60%
+✅ Lazy load success rate >99%
+✅ Performance tracking integrated
+✅ Memory monitoring integrated
+✅ Bundle analysis documented
+
+================================================================================
+KEY ARCHITECTURAL DECISIONS
+================================================================================
+
+ADR-012: Lazy Load Markdown Modules
+- Use dynamic imports to split markdown modules
+- Rationale: 64% reduction in initial load (48KB → 17KB)
+- Trade-off: Slight delay on first message (~100ms)
+
+ADR-013: LRU Cache with TTL
+- Implement LRU cache with 5-minute TTL and 10MB limit
+- Rationale: 98% faster for cached content (1ms vs 25ms)
+- Trade-off: 5-10MB memory overhead
+
+ADR-014: Split Prism.js Separately
+- Split Prism.js into separate chunk from markdown-it
+- Rationale: 6KB savings for users without code blocks
+- Trade-off: Two network requests if code present
+
+================================================================================
+NEXT STEPS
+================================================================================
+
+1. Handoff to TDD/QA Lead Agent
+   - Input: Implementation Brief
+   - Task: Write 34 RED tests
+   - Output: Failing test suite
+
+2. Handoff to Implementer Agent
+   - Input: RED tests + Implementation Brief
+   - Task: Implement all modules
+   - Output: 110 tests GREEN (76 + 34)
+
+================================================================================
+PLANNING COMPLETE ✅
+================================================================================
+
+Ready for: TDD/QA Lead (RED tests)
+Timeline: Day 7-8 (2 days)
+Expected Outcome: 64% faster initial load + 98% faster cached renders

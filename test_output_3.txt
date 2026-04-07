@@ -1,0 +1,235 @@
+
+> n8n-widget-designer@0.1.0 test /Users/polinger.ai/Desktop/Projects/Chat Interfacer
+> jest tests/integration/api/chat-relay.test.ts
+
+  console.error
+    DEBUG: Error in chat relay: Error: DATABASE_URL environment variable is not set
+        at getSql (/Users/polinger.ai/Desktop/Projects/Chat Interfacer/lib/db/client.ts:24:13)
+        at Object.getSql [as get] (/Users/polinger.ai/Desktop/Projects/Chat Interfacer/lib/db/client.ts:41:21)
+        at select (/Users/polinger.ai/Desktop/Projects/Chat Interfacer/lib/db/queries.ts:394:6)
+        at POST (/Users/polinger.ai/Desktop/Projects/Chat Interfacer/app/api/chat-relay/route.ts:33:46)
+        at Object.<anonymous> (/Users/polinger.ai/Desktop/Projects/Chat Interfacer/tests/integration/api/chat-relay.test.ts:90:21)
+
+      105 |
+      106 |   } catch (error) {
+    > 107 |     console.error('DEBUG: Error in chat relay:', error);
+          |             ^
+      108 |     return NextResponse.json(
+      109 |       { error: 'Internal server error', details: String(error) },
+      110 |       { status: 500 }
+
+      at error (app/api/chat-relay/route.ts:107:13)
+      at Object.<anonymous> (tests/integration/api/chat-relay.test.ts:90:21)
+
+  console.error
+    DEBUG: Error in chat relay: Error: DATABASE_URL environment variable is not set
+        at getSql (/Users/polinger.ai/Desktop/Projects/Chat Interfacer/lib/db/client.ts:24:13)
+        at Object.getSql [as get] (/Users/polinger.ai/Desktop/Projects/Chat Interfacer/lib/db/client.ts:41:21)
+        at select (/Users/polinger.ai/Desktop/Projects/Chat Interfacer/lib/db/queries.ts:394:6)
+        at POST (/Users/polinger.ai/Desktop/Projects/Chat Interfacer/app/api/chat-relay/route.ts:33:46)
+        at Object.<anonymous> (/Users/polinger.ai/Desktop/Projects/Chat Interfacer/tests/integration/api/chat-relay.test.ts:112:21)
+
+      105 |
+      106 |   } catch (error) {
+    > 107 |     console.error('DEBUG: Error in chat relay:', error);
+          |             ^
+      108 |     return NextResponse.json(
+      109 |       { error: 'Internal server error', details: String(error) },
+      110 |       { status: 500 }
+
+      at error (app/api/chat-relay/route.ts:107:13)
+      at Object.<anonymous> (tests/integration/api/chat-relay.test.ts:112:21)
+
+  console.error
+    DEBUG: Error in chat relay: Error: DATABASE_URL environment variable is not set
+        at getSql (/Users/polinger.ai/Desktop/Projects/Chat Interfacer/lib/db/client.ts:24:13)
+        at Object.getSql [as get] (/Users/polinger.ai/Desktop/Projects/Chat Interfacer/lib/db/client.ts:41:21)
+        at select (/Users/polinger.ai/Desktop/Projects/Chat Interfacer/lib/db/queries.ts:394:6)
+        at POST (/Users/polinger.ai/Desktop/Projects/Chat Interfacer/app/api/chat-relay/route.ts:33:46)
+        at Object.<anonymous> (/Users/polinger.ai/Desktop/Projects/Chat Interfacer/tests/integration/api/chat-relay.test.ts:122:21)
+
+      105 |
+      106 |   } catch (error) {
+    > 107 |     console.error('DEBUG: Error in chat relay:', error);
+          |             ^
+      108 |     return NextResponse.json(
+      109 |       { error: 'Internal server error', details: String(error) },
+      110 |       { status: 500 }
+
+      at error (app/api/chat-relay/route.ts:107:13)
+      at Object.<anonymous> (tests/integration/api/chat-relay.test.ts:122:21)
+
+  console.error
+    DEBUG: Error in chat relay: Error: DATABASE_URL environment variable is not set
+        at getSql (/Users/polinger.ai/Desktop/Projects/Chat Interfacer/lib/db/client.ts:24:13)
+        at Object.getSql [as get] (/Users/polinger.ai/Desktop/Projects/Chat Interfacer/lib/db/client.ts:41:21)
+        at select (/Users/polinger.ai/Desktop/Projects/Chat Interfacer/lib/db/queries.ts:394:6)
+        at POST (/Users/polinger.ai/Desktop/Projects/Chat Interfacer/app/api/chat-relay/route.ts:33:46)
+        at Object.<anonymous> (/Users/polinger.ai/Desktop/Projects/Chat Interfacer/tests/integration/api/chat-relay.test.ts:149:21)
+
+      105 |
+      106 |   } catch (error) {
+    > 107 |     console.error('DEBUG: Error in chat relay:', error);
+          |             ^
+      108 |     return NextResponse.json(
+      109 |       { error: 'Internal server error', details: String(error) },
+      110 |       { status: 500 }
+
+      at error (app/api/chat-relay/route.ts:107:13)
+      at Object.<anonymous> (tests/integration/api/chat-relay.test.ts:149:21)
+
+  console.error
+    DEBUG: Error in chat relay: Error: DATABASE_URL environment variable is not set
+        at getSql (/Users/polinger.ai/Desktop/Projects/Chat Interfacer/lib/db/client.ts:24:13)
+        at Object.getSql [as get] (/Users/polinger.ai/Desktop/Projects/Chat Interfacer/lib/db/client.ts:41:21)
+        at select (/Users/polinger.ai/Desktop/Projects/Chat Interfacer/lib/db/queries.ts:394:6)
+        at POST (/Users/polinger.ai/Desktop/Projects/Chat Interfacer/app/api/chat-relay/route.ts:33:46)
+        at Object.<anonymous> (/Users/polinger.ai/Desktop/Projects/Chat Interfacer/tests/integration/api/chat-relay.test.ts:174:21)
+
+      105 |
+      106 |   } catch (error) {
+    > 107 |     console.error('DEBUG: Error in chat relay:', error);
+          |             ^
+      108 |     return NextResponse.json(
+      109 |       { error: 'Internal server error', details: String(error) },
+      110 |       { status: 500 }
+
+      at error (app/api/chat-relay/route.ts:107:13)
+      at Object.<anonymous> (tests/integration/api/chat-relay.test.ts:174:21)
+
+  console.error
+    DEBUG: Error in chat relay: Error: DATABASE_URL environment variable is not set
+        at getSql (/Users/polinger.ai/Desktop/Projects/Chat Interfacer/lib/db/client.ts:24:13)
+        at Object.getSql [as get] (/Users/polinger.ai/Desktop/Projects/Chat Interfacer/lib/db/client.ts:41:21)
+        at select (/Users/polinger.ai/Desktop/Projects/Chat Interfacer/lib/db/queries.ts:394:6)
+        at POST (/Users/polinger.ai/Desktop/Projects/Chat Interfacer/app/api/chat-relay/route.ts:33:46)
+        at Object.<anonymous> (/Users/polinger.ai/Desktop/Projects/Chat Interfacer/tests/integration/api/chat-relay.test.ts:186:21)
+
+      105 |
+      106 |   } catch (error) {
+    > 107 |     console.error('DEBUG: Error in chat relay:', error);
+          |             ^
+      108 |     return NextResponse.json(
+      109 |       { error: 'Internal server error', details: String(error) },
+      110 |       { status: 500 }
+
+      at error (app/api/chat-relay/route.ts:107:13)
+      at Object.<anonymous> (tests/integration/api/chat-relay.test.ts:186:21)
+
+FAIL tests/integration/api/chat-relay.test.ts
+  Chat Relay API
+    ✕ should successfully relay message to N8n (15 ms)
+    ✕ should return 404 if widget not found (1 ms)
+    ✕ should return 401 if license key is invalid (1 ms)
+    ✕ should return 403 if license is not active (1 ms)
+    ✕ should return 400 if webhook URL is missing (1 ms)
+    ✕ should return 502 if N8n request fails (1 ms)
+
+  ● Chat Relay API › should successfully relay message to N8n
+
+    expect(received).toBe(expected) // Object.is equality
+
+    Expected: 200
+    Received: 500
+
+      91 |         const data = await res.json();
+      92 |
+    > 93 |         expect(res.status).toBe(200);
+         |                            ^
+      94 |         expect(data).toEqual({ response: 'Hello from N8n' });
+      95 |         expect(global.fetch).toHaveBeenCalledWith(mockWebhookUrl, expect.objectContaining({
+      96 |             method: 'POST',
+
+      at Object.toBe (tests/integration/api/chat-relay.test.ts:93:28)
+
+  ● Chat Relay API › should return 404 if widget not found
+
+    expect(received).toBe(expected) // Object.is equality
+
+    Expected: 404
+    Received: 500
+
+      111 |
+      112 |         const res = await POST(req);
+    > 113 |         expect(res.status).toBe(404);
+          |                            ^
+      114 |     });
+      115 |
+      116 |     it('should return 401 if license key is invalid', async () => {
+
+      at Object.toBe (tests/integration/api/chat-relay.test.ts:113:28)
+
+  ● Chat Relay API › should return 401 if license key is invalid
+
+    expect(received).toBe(expected) // Object.is equality
+
+    Expected: 401
+    Received: 500
+
+      121 |
+      122 |         const res = await POST(req);
+    > 123 |         expect(res.status).toBe(401);
+          |                            ^
+      124 |     });
+      125 |
+      126 |     it('should return 403 if license is not active', async () => {
+
+      at Object.toBe (tests/integration/api/chat-relay.test.ts:123:28)
+
+  ● Chat Relay API › should return 403 if license is not active
+
+    expect(received).toBe(expected) // Object.is equality
+
+    Expected: 403
+    Received: 500
+
+      148 |
+      149 |         const res = await POST(req);
+    > 150 |         expect(res.status).toBe(403);
+          |                            ^
+      151 |     });
+      152 |
+      153 |     it('should return 400 if webhook URL is missing', async () => {
+
+      at Object.toBe (tests/integration/api/chat-relay.test.ts:150:28)
+
+  ● Chat Relay API › should return 400 if webhook URL is missing
+
+    expect(received).toBe(expected) // Object.is equality
+
+    Expected: 400
+    Received: 500
+
+      173 |
+      174 |         const res = await POST(req);
+    > 175 |         expect(res.status).toBe(400);
+          |                            ^
+      176 |     });
+      177 |
+      178 |     it('should return 502 if N8n request fails', async () => {
+
+      at Object.toBe (tests/integration/api/chat-relay.test.ts:175:28)
+
+  ● Chat Relay API › should return 502 if N8n request fails
+
+    expect(received).toBe(expected) // Object.is equality
+
+    Expected: 502
+    Received: 500
+
+      185 |
+      186 |         const res = await POST(req);
+    > 187 |         expect(res.status).toBe(502);
+          |                            ^
+      188 |     });
+      189 | });
+      190 |
+
+      at Object.toBe (tests/integration/api/chat-relay.test.ts:187:28)
+
+Test Suites: 1 failed, 1 total
+Tests:       6 failed, 6 total
+Snapshots:   0 total
+Time:        0.18 s, estimated 1 s
+Ran all test suites matching /tests\/integration\/api\/chat-relay.test.ts/i.
+ ELIFECYCLE  Test failed. See above for more details.
