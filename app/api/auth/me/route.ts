@@ -9,6 +9,7 @@
 
 import { NextRequest } from 'next/server';
 import { requireAuth } from '@/lib/auth/guard';
+import { isAdminEmail } from '@/lib/auth/admin-guard';
 import { getUserById } from '@/lib/db/queries';
 import { handleAPIError, errorResponse } from '@/lib/utils/api-error';
 
@@ -31,6 +32,7 @@ export async function GET(request: NextRequest) {
         name: user.name,
         emailVerified: user.emailVerified,
         createdAt: user.createdAt,
+        isAdmin: isAdminEmail(user.email),
       },
     });
   } catch (error) {

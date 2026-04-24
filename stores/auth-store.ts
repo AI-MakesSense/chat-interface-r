@@ -27,6 +27,7 @@ export interface User {
   name: string | null;
   emailVerified: boolean;
   createdAt: string;
+  isAdmin?: boolean;
 }
 
 /**

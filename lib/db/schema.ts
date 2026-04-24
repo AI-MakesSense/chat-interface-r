@@ -170,6 +170,43 @@ export const passwordResetTokens = pgTable('password_reset_tokens', {
   createdAt: timestamp('created_at').defaultNow().notNull(),
 });
 
+/**
+ * Activity Log Table
+ * Records platform events (signups, logins, widget lifecycle, admin actions)
+ * Consumed by the admin activity feed.
+ */
+export const activityLog = pgTable('activity_log', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  userId: uuid('user_id').references(() => users.id, { onDelete: 'set null' }),
+  action: varchar('action', { length: 64 }).notNull(),
+  metadata: jsonb('metadata'),
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+}, (table) => ({
+  actionIdx: index('activity_log_action_idx').on(table.action),
+  createdAtIdx: index('activity_log_created_at_idx').on(table.createdAt),
+  userIdIdx: index('activity_log_user_id_idx').on(table.userId),
+}));
+
+/**
+ * Invitations Table
+ * Signup invitations issued by admins — either email-targeted or shareable code.
+ */
+export const invitations = pgTable('invitations', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  email: varchar('email', { length: 255 }),
+  code: varchar('code', { length: 64 }).notNull().unique(),
+  type: varchar('type', { length: 16 }).notNull(),
+  status: varchar('status', { length: 16 }).default('pending').notNull(),
+  invitedBy: uuid('invited_by').references(() => users.id, { onDelete: 'set null' }),
+  acceptedBy: uuid('accepted_by').references(() => users.id, { onDelete: 'set null' }),
+  expiresAt: timestamp('expires_at').notNull(),
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+}, (table) => ({
+  codeIdx: index('invitations_code_idx').on(table.code),
+  statusIdx: index('invitations_status_idx').on(table.status),
+  emailIdx: index('invitations_email_idx').on(table.email),
+}));
+
 // Relations (for Drizzle query convenience)
 export const usersRelations = relations(users, ({ many }) => ({
   licenses: many(licenses),
@@ -239,3 +276,9 @@ export type NewAnalyticsEvent = typeof analyticsEvents.$inferInsert;
 
 export type PasswordResetToken = typeof passwordResetTokens.$inferSelect;
 export type NewPasswordResetToken = typeof passwordResetTokens.$inferInsert;
+
+export type ActivityLogEntry = typeof activityLog.$inferSelect;
+export type NewActivityLogEntry = typeof activityLog.$inferInsert;
+
+export type Invitation = typeof invitations.$inferSelect;
+export type NewInvitation = typeof invitations.$inferInsert;

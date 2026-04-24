@@ -135,6 +135,10 @@ export interface WidgetConfig {
   disclaimer?: string;
   enableAttachments?: boolean;
   enableModelPicker?: boolean;
+
+  // Inline embed dimensions (for embedType === 'inline')
+  inlineWidth?: number;
+  inlineHeight?: number;
 }
 
 /**
