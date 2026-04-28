@@ -254,22 +254,23 @@ const getIconByName = (iconName: string): LucideIcon => {
   return ICON_MAP[iconName] || MessageCircle;
 };
 
-// Simple markdown renderer
+const LINK_ATTRS = 'target="_blank" rel="noopener noreferrer" class="cw-md-link"';
+const TRAILING_PUNCT = /[.,;:!?)\]'"]+$/;
+
+// Simple markdown renderer (mirrors widget/src/markdown.ts)
 function renderMarkdown(text: string): string {
   if (!text) return '';
   try {
     let html = escapeHtml(text);
-    // Code Blocks
     html = html.replace(/```([\s\S]*?)```/g, '<pre><code>$1</code></pre>');
-    // Inline Code
     html = html.replace(/`([^`]+)`/g, '<code>$1</code>');
-    // Bold
     html = html.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>');
-    // Italic
     html = html.replace(/\*([^*]+)\*/g, '<em>$1</em>');
-    // Links
-    html = html.replace(/\[([^\]]+)\]\((https?:\/\/[^)]+)\)/g, '<a href="$2" target="_blank" rel="noopener noreferrer" class="text-blue-500 underline">$1</a>');
-    // Newlines
+    html = html.replace(
+      /\[([^\]]+)\]\((https?:\/\/[^)]+)\)/g,
+      `<a href="$2" ${LINK_ATTRS}>$1</a>`
+    );
+    html = autoLinkify(html);
     html = html.replace(/\n/g, '<br>');
     return html;
   } catch {
@@ -277,9 +278,81 @@ function renderMarkdown(text: string): string {
   }
 }
 
+function autoLinkify(html: string): string {
+  const protectedRe = /<a [^>]*>[\s\S]*?<\/a>|<pre>[\s\S]*?<\/pre>|<code>[\s\S]*?<\/code>/g;
+  const placeholders: string[] = [];
+  const stashed = html.replace(protectedRe, (match) => {
+    const token = `\u0000LINKMD${placeholders.length}\u0000`;
+    placeholders.push(match);
+    return token;
+  });
+  const linkified = stashed.replace(/\bhttps?:\/\/[^\s<\u0000]+/g, (url) => {
+    const trailing = url.match(TRAILING_PUNCT);
+    let target = url;
+    let suffix = '';
+    if (trailing) {
+      target = url.slice(0, url.length - trailing[0].length);
+      suffix = trailing[0];
+    }
+    if (!target) return url;
+    return `<a href="${target}" ${LINK_ATTRS}>${target}</a>${suffix}`;
+  });
+  return linkified.replace(/\u0000LINKMD(\d+)\u0000/g, (_, i) => placeholders[Number(i)]);
+}
+
 function escapeHtml(unsafe: string): string {
   const map: Record<string, string> = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#039;' };
   return unsafe.replace(/[&<>"']/g, (char) => map[char] || char);
+}
+
+// Pure CSS-color parser (works in SSR — no DOM dependency).
+function parseColorToRgb(color: string): [number, number, number] | null {
+  if (!color) return null;
+  const c = color.trim();
+  const hex = c.match(/^#([\da-f]{3}|[\da-f]{6})$/i);
+  if (hex) {
+    let h = hex[1];
+    if (h.length === 3) h = h.split('').map((x) => x + x).join('');
+    return [parseInt(h.slice(0, 2), 16), parseInt(h.slice(2, 4), 16), parseInt(h.slice(4, 6), 16)];
+  }
+  const rgb = c.match(/^rgba?\(\s*([\d.]+)[\s,]+([\d.]+)[\s,]+([\d.]+)/i);
+  if (rgb) return [Math.round(+rgb[1]), Math.round(+rgb[2]), Math.round(+rgb[3])];
+  const hsl = c.match(/^hsla?\(\s*([\d.]+)[\s,]+([\d.]+)%[\s,]+([\d.]+)%/i);
+  if (hsl) {
+    const H = +hsl[1], S = +hsl[2] / 100, L = +hsl[3] / 100;
+    const k = (n: number) => (n + H / 30) % 12;
+    const a = S * Math.min(L, 1 - L);
+    const f = (n: number) => L - a * Math.max(-1, Math.min(k(n) - 3, Math.min(9 - k(n), 1)));
+    return [Math.round(f(0) * 255), Math.round(f(8) * 255), Math.round(f(4) * 255)];
+  }
+  return null;
+}
+
+function relLuminance(rgb: [number, number, number]): number {
+  const [r, g, b] = rgb.map((v) => {
+    const x = v / 255;
+    return x <= 0.03928 ? x / 12.92 : Math.pow((x + 0.055) / 1.055, 2.4);
+  });
+  return 0.2126 * r + 0.7152 * g + 0.0722 * b;
+}
+
+function contrastRatio(a: [number, number, number], b: [number, number, number]): number {
+  const la = relLuminance(a), lb = relLuminance(b);
+  return (Math.max(la, lb) + 0.05) / (Math.min(la, lb) + 0.05);
+}
+
+function resolveLinkColor(accent: string, bg: string): string {
+  const accentRgb = parseColorToRgb(accent);
+  const bgRgb = parseColorToRgb(bg);
+  if (!accentRgb || !bgRgb) return accent;
+  if (contrastRatio(accentRgb, bgRgb) >= 4.5) return accent;
+  return relLuminance(bgRgb) > 0.5 ? '#1d4ed8' : '#93c5fd';
+}
+
+function rgbaTint(color: string, alpha: number): string {
+  const rgb = parseColorToRgb(color);
+  if (!rgb) return color;
+  return `rgba(${rgb[0]}, ${rgb[1]}, ${rgb[2]}, ${alpha})`;
 }
 
 // Typing indicator component
@@ -483,6 +556,11 @@ export const ChatPreview: React.FC<ChatPreviewProps> = ({ config }) => {
     userMsgBorder = 'transparent';
   }
 
+  // Link colors: contrast-aware against the assistant bubble background (= chat bg).
+  const linkColor = resolveLinkColor(accentColor, bg);
+  const linkBgTint = rgbaTint(linkColor, 0.12);
+  const linkBgTintHover = rgbaTint(linkColor, 0.22);
+
   const handleSend = async (e?: React.FormEvent, textOverride?: string) => {
     e?.preventDefault();
     const txt = textOverride || inputValue;
@@ -599,6 +677,20 @@ export const ChatPreview: React.FC<ChatPreviewProps> = ({ config }) => {
         pre { background: #f1f5f9; padding: 12px; border-radius: 8px; overflow-x: auto; margin: 8px 0; font-family: monospace; font-size: 13px; }
         code { background: #f1f5f9; padding: 2px 4px; border-radius: 4px; font-family: monospace; font-size: 13px; }
         pre code { background: transparent; padding: 0; }
+        .cw-md-link {
+          color: ${linkColor};
+          background: ${linkBgTint};
+          padding: 1px 4px;
+          border-radius: 3px;
+          font-weight: 500;
+          text-decoration: underline;
+          text-decoration-thickness: 1.5px;
+          text-underline-offset: 2px;
+          transition: background 0.15s ease, color 0.15s ease;
+          word-break: break-word;
+        }
+        .cw-md-link:hover { background: ${linkBgTintHover}; }
+        .cw-md-link:focus-visible { outline: 2px solid ${linkColor}; outline-offset: 1px; }
       `}} />
 
       {/* Header Icons */}
