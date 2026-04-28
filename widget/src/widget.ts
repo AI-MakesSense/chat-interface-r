@@ -165,6 +165,65 @@ function getIconSVG(iconName: string): string {
   return ICON_SVGS[iconName] || ICON_SVGS.message;
 }
 
+// Parse a CSS color string (hex, rgb/rgba, hsl/hsla) into [r,g,b].
+// Returns null for unsupported formats; callers should fall back gracefully.
+function parseColorToRgb(color: string): [number, number, number] | null {
+  if (!color) return null;
+  const c = color.trim();
+
+  const hex = c.match(/^#([\da-f]{3}|[\da-f]{6})$/i);
+  if (hex) {
+    let h = hex[1];
+    if (h.length === 3) h = h.split('').map((x) => x + x).join('');
+    return [parseInt(h.slice(0, 2), 16), parseInt(h.slice(2, 4), 16), parseInt(h.slice(4, 6), 16)];
+  }
+
+  const rgb = c.match(/^rgba?\(\s*([\d.]+)[\s,]+([\d.]+)[\s,]+([\d.]+)/i);
+  if (rgb) return [Math.round(+rgb[1]), Math.round(+rgb[2]), Math.round(+rgb[3])];
+
+  const hsl = c.match(/^hsla?\(\s*([\d.]+)[\s,]+([\d.]+)%[\s,]+([\d.]+)%/i);
+  if (hsl) return hslToRgb(+hsl[1], +hsl[2] / 100, +hsl[3] / 100);
+
+  return null;
+}
+
+function hslToRgb(h: number, s: number, l: number): [number, number, number] {
+  const k = (n: number) => (n + h / 30) % 12;
+  const a = s * Math.min(l, 1 - l);
+  const f = (n: number) => l - a * Math.max(-1, Math.min(k(n) - 3, Math.min(9 - k(n), 1)));
+  return [Math.round(f(0) * 255), Math.round(f(8) * 255), Math.round(f(4) * 255)];
+}
+
+function relativeLuminance(rgb: [number, number, number]): number {
+  const [r, g, b] = rgb.map((c) => {
+    const v = c / 255;
+    return v <= 0.03928 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4);
+  });
+  return 0.2126 * r + 0.7152 * g + 0.0722 * b;
+}
+
+function contrastRatio(a: [number, number, number], b: [number, number, number]): number {
+  const la = relativeLuminance(a);
+  const lb = relativeLuminance(b);
+  return (Math.max(la, lb) + 0.05) / (Math.min(la, lb) + 0.05);
+}
+
+// Resolve a link color that has at least 4.5:1 contrast against the bubble background.
+// Falls back to a luminance-appropriate safe blue when the accent fails.
+function resolveLinkColor(accent: string, bg: string): string {
+  const accentRgb = parseColorToRgb(accent);
+  const bgRgb = parseColorToRgb(bg);
+  if (!accentRgb || !bgRgb) return accent;
+  if (contrastRatio(accentRgb, bgRgb) >= 4.5) return accent;
+  return relativeLuminance(bgRgb) > 0.5 ? '#1d4ed8' : '#93c5fd';
+}
+
+function rgbaTint(color: string, alpha: number): string {
+  const rgb = parseColorToRgb(color);
+  if (!rgb) return color;
+  return `rgba(${rgb[0]}, ${rgb[1]}, ${rgb[2]}, ${alpha})`;
+}
+
 export function createChatWidget(runtimeConfig: WidgetRuntimeConfig): void {
   const messages: Message[] = [];
   let isOpen = false;
@@ -314,6 +373,11 @@ export function createChatWidget(runtimeConfig: WidgetRuntimeConfig): void {
     userMsgText = config.theme.color.userMessage.text || userMsgText;
   }
 
+  // Link colors: contrast-aware against the assistant bubble background (= chat bg).
+  const linkColor = resolveLinkColor(accentColor, bg);
+  const linkBgTint = rgbaTint(linkColor, 0.12);
+  const linkBgTintHover = rgbaTint(linkColor, 0.22);
+
   // Radius
   const getRadius = () => {
     const r = config.theme?.radius || 'medium';
@@ -461,14 +525,23 @@ export function createChatWidget(runtimeConfig: WidgetRuntimeConfig): void {
       color: inherit;
     }
     .n8n-message-content a {
-      color: ${isDark ? '#60a5fa' : '#2563eb'};
+      color: ${linkColor};
+      background: ${linkBgTint};
+      padding: 1px 4px;
+      border-radius: 3px;
+      font-weight: 500;
       text-decoration: underline;
+      text-decoration-thickness: 1.5px;
       text-underline-offset: 2px;
-      cursor: pointer;
-      transition: opacity 0.15s;
+      transition: background 0.15s ease, color 0.15s ease;
+      word-break: break-word;
     }
     .n8n-message-content a:hover {
-      opacity: 0.8;
+      background: ${linkBgTintHover};
+    }
+    .n8n-message-content a:focus-visible {
+      outline: 2px solid ${linkColor};
+      outline-offset: 1px;
     }
 
     /* Animation */
