@@ -1,7 +1,31 @@
 import { build } from 'esbuild';
-import JavaScriptObfuscator from 'javascript-obfuscator';
 import { mkdirSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
+
+/**
+ * Widget Bundle Build
+ *
+ * Plain esbuild minify + legal notice comments at top/middle/end.
+ *
+ * History: a prior version of this script ran the bundle through
+ * javascript-obfuscator with `transformObjectKeys: true`, `stringArray: true`,
+ * etc. That broke the widget's public API:
+ *   - `window.ChatWidgetConfig` (set by host pages and by lib/widget/inject.ts)
+ *   - `window.Widget` / `window.N8nWidget` (read by app/chat/[widgetKey]/fullpage-widget.tsx
+ *     to instantiate portal mode)
+ *   - The IIFE `globalName: 'ChatWidget'` itself
+ * because the obfuscator renamed external identifiers and string-array-encoded
+ * literal property names that the runtime needed to match against host-page
+ * objects. Symptom: inline + fullpage embed modes silently fell back to the
+ * floating chat bubble. See review of commit 3f26e23 for the full diagnosis.
+ *
+ * Lesson learned: JavaScript obfuscation in client-shipped code is security
+ * theater — a determined attacker can deobfuscate trivially. The actual moat
+ * is the licensing system + domain validation + rate limiting, which all live
+ * server-side. We keep the legal notice comments because they're the part
+ * with real legal weight; we drop the runtime obfuscation because it's net
+ * negative (broke the widget, tripled bundle size, didn't stop anyone).
+ */
 
 const OUTPUT_PATH = path.resolve(process.cwd(), 'public/widget/chat-widget.iife.js');
 const ENTRY_POINT = path.resolve(process.cwd(), 'widget/src/index.ts');
@@ -12,10 +36,6 @@ const LEGAL_NOTICE =
 function createNoticeStatement(slot) {
   const text = `[${slot}] ${LEGAL_NOTICE}`;
   return `;(()=>{const __WIDGET_LEGAL_${slot}=${JSON.stringify(text)};void __WIDGET_LEGAL_${slot};if(0===1){console.info(__WIDGET_LEGAL_${slot});}})();`;
-}
-
-function createDeadCodeBlock(slot) {
-  return `;(()=>{if(0===1){const __dead_${slot}=['alpha','beta','gamma'].map((value)=>value.toUpperCase());console.debug(__dead_${slot}.join(':'));}})();`;
 }
 
 function injectMiddleMarker(bundle, middleStatement) {
@@ -43,6 +63,7 @@ async function buildWidgetBundle() {
     platform: 'browser',
     target: ['es2018'],
     write: false,
+    legalComments: 'none',
   });
 
   const sourceBundle = buildResult.outputFiles?.[0]?.text;
@@ -50,36 +71,17 @@ async function buildWidgetBundle() {
     throw new Error('Widget bundle build produced no output');
   }
 
-  const obfuscatedBundle = JavaScriptObfuscator.obfuscate(sourceBundle, {
-    compact: true,
-    simplify: true,
-    stringArray: true,
-    stringArrayThreshold: 0.75,
-    stringArrayEncoding: ['base64'],
-    rotateStringArray: true,
-    transformObjectKeys: true,
-    identifierNamesGenerator: 'hexadecimal',
-    renameGlobals: false,
-    deadCodeInjection: true,
-    deadCodeInjectionThreshold: 0.05,
-    controlFlowFlattening: false,
-    selfDefending: false,
-    debugProtection: false,
-  }).getObfuscatedCode();
-
   const topNoticeComment = `/* TOP NOTICE: ${LEGAL_NOTICE} */`;
-  const middleNoticeStatement = `${createNoticeStatement('MIDDLE')}\n${createDeadCodeBlock('MIDDLE')}`;
+  const middleNoticeStatement = createNoticeStatement('MIDDLE');
   const endNoticeComment = `/* END NOTICE: ${LEGAL_NOTICE} */`;
 
-  const withMiddleNotice = injectMiddleMarker(obfuscatedBundle, middleNoticeStatement);
+  const withMiddleNotice = injectMiddleMarker(sourceBundle, middleNoticeStatement);
 
   const finalBundle = [
     topNoticeComment,
     createNoticeStatement('TOP'),
-    createDeadCodeBlock('TOP'),
     withMiddleNotice,
     createNoticeStatement('END'),
-    createDeadCodeBlock('END'),
     endNoticeComment,
     '',
   ].join('\n');
@@ -88,7 +90,7 @@ async function buildWidgetBundle() {
   writeFileSync(OUTPUT_PATH, finalBundle, 'utf8');
 
   const sizeKb = (Buffer.byteLength(finalBundle, 'utf8') / 1024).toFixed(2);
-  console.log(`[build:widget] Wrote hardened bundle to ${OUTPUT_PATH} (${sizeKb} KB)`);
+  console.log(`[build:widget] Wrote bundle to ${OUTPUT_PATH} (${sizeKb} KB)`);
 }
 
 buildWidgetBundle().catch((error) => {
