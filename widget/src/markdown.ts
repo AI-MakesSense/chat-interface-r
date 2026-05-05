@@ -33,8 +33,26 @@ export function renderMarkdown(text: string): string {
       return `\x00CB${codeBlocks.length - 1}\x00`;
     });
 
-    // 3. Inline code
-    html = html.replace(/`([^`]+)`/g, '<code>$1</code>');
+    // 3. Inline code — extract to placeholders to protect contents from auto-linking
+    const inlineCodes: string[] = [];
+    html = html.replace(/`([^`]+)`/g, (_m, code: string) => {
+      inlineCodes.push(`<code>${code}</code>`);
+      return `\x00IC${inlineCodes.length - 1}\x00`;
+    });
+
+    // 3b. Auto-link raw URLs (https://, http://, www.)
+    // Code blocks and inline code are already extracted as placeholders,
+    // so URLs inside code won't be matched.
+    html = html.replace(
+      /(?<!\]\()(?<!=["'])(https?:\/\/[^\s<>)\]]+|www\.[^\s<>)\]]+)/g,
+      (url: string) => {
+        // Strip trailing punctuation that's likely sentence-ending, not part of URL
+        const cleaned = url.replace(/[.,;!?:]+$/, '');
+        const trailing = url.slice(cleaned.length);
+        const href = cleaned.startsWith('www.') ? `https://${cleaned}` : cleaned;
+        return `<a href="${href}" target="_blank" rel="noopener noreferrer">${cleaned}</a>${trailing}`;
+      }
+    );
 
     // 4. Tables — must run before line-level transforms
     // Match consecutive lines that start and end with |
@@ -123,7 +141,11 @@ export function renderMarkdown(text: string): string {
     // 12. Links [text](url)
     html = html.replace(
       /\[([^\]]+)\]\(([^)]+)\)/g,
-      '<a href="$2" target="_blank" rel="noopener noreferrer">$1</a>'
+      (_m, text: string, url: string) => {
+        // If text was auto-linked, strip the <a> tags to get clean text
+        const cleanText = text.replace(/<a [^>]*>([^<]*)<\/a>/g, '$1');
+        return `<a href="${url}" target="_blank" rel="noopener noreferrer">${cleanText}</a>`;
+      }
     );
 
     // 13. Newlines to <br> (but not inside block elements)
@@ -135,7 +157,8 @@ export function renderMarkdown(text: string): string {
     // Remove trailing <br> at end
     html = html.replace(/(<br>)+$/, '');
 
-    // 14. Restore code blocks
+    // 14. Restore inline code and code blocks
+    html = html.replace(/\x00IC(\d+)\x00/g, (_m, idx: string) => inlineCodes[parseInt(idx)]);
     html = html.replace(/\x00CB(\d+)\x00/g, (_m, idx: string) => codeBlocks[parseInt(idx)]);
 
     return html;
