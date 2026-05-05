@@ -258,6 +258,7 @@ const getIconByName = (iconName: string): LucideIcon => {
 
 // Use the same markdown renderer as the production widget
 import { renderMarkdown } from '@/widget/src/markdown';
+import { resolveLinkColor, rgbaTint } from '@/widget/src/link-color';
 
 // Typing indicator component
 const TypingIndicator = () => (
@@ -467,6 +468,9 @@ export const ChatPreview: React.FC<ChatPreviewProps> = ({ config }) => {
 
   // --- Accent & Message Logic ---
   const accentColor = config.accentColor || '#0ea5e9';
+  const linkColor = resolveLinkColor(accentColor, bg);
+  const linkBgTint = rgbaTint(linkColor, 0.12);
+  const linkBgTintHover = rgbaTint(linkColor, 0.22);
   const useAccent = config.useAccent || false;
 
   let userMsgBg = useAccent ? accentColor : surface;
@@ -650,7 +654,8 @@ export const ChatPreview: React.FC<ChatPreviewProps> = ({ config }) => {
         th { background: ${isDark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.04)'}; font-weight: 600; }
         tbody tr:nth-child(even) { background: ${isDark ? 'rgba(255,255,255,0.02)' : 'rgba(0,0,0,0.015)'}; }
         /* Links */
-        a { color: ${isDark ? '#60a5fa' : '#2563eb'}; text-decoration: underline; }
+        a { color: ${linkColor}; text-decoration: underline; background-color: ${linkBgTint}; padding: 0 2px; border-radius: 2px; cursor: pointer; transition: background-color 0.15s ease; }
+        a:hover { background-color: ${linkBgTintHover}; }
         /* Paragraphs */
         p { margin: 0 0 0.5em 0; }
         p:last-child { margin-bottom: 0; }
