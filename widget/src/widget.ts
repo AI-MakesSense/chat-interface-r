@@ -20,6 +20,7 @@ import { createCSSVariables, createFontFaceCSS } from './theming/css-variables';
 import { isPdfUrl } from './utils/link-detector';
 import { PdfLightbox } from './ui/pdf-lightbox';
 import type { FileAttachment } from './services/messaging/types';
+import { resolveLinkColor, rgbaTint } from './link-color';
 
 // Shared markdown cache instance (100 entries, 5MB, 5-minute TTL)
 const mdCache = new MarkdownCache({ maxEntries: 100, maxMemory: 5 * 1024 * 1024, ttl: 5 * 60 * 1000 });
@@ -344,6 +345,11 @@ export function createChatWidget(runtimeConfig: WidgetRuntimeConfig): WidgetClea
     userMsgText = config.theme.color.userMessage.text || userMsgText;
   }
 
+  // Link colors: contrast-aware against the assistant bubble background (= chat bg)
+  const linkColor = resolveLinkColor(accentColor, bg);
+  const linkBgTint = rgbaTint(linkColor, 0.12);
+  const linkBgTintHover = rgbaTint(linkColor, 0.22);
+
   // Radius
   const getRadius = () => {
     const r = config.theme?.radius || 'medium';
@@ -625,6 +631,20 @@ export function createChatWidget(runtimeConfig: WidgetRuntimeConfig): WidgetClea
     }
     .n8n-message-content tbody tr:nth-child(even) {
       background: ${isDark ? 'rgba(255,255,255,0.02)' : 'rgba(0,0,0,0.015)'};
+    }
+
+    /* Links — contrast-aware styling */
+    .n8n-message-content a {
+      color: ${linkColor};
+      text-decoration: underline;
+      background-color: ${linkBgTint};
+      padding: 0 2px;
+      border-radius: 2px;
+      cursor: pointer;
+      transition: background-color 0.15s ease;
+    }
+    .n8n-message-content a:hover {
+      background-color: ${linkBgTintHover};
     }
 
     /* Composer focus ring — matching preview focus-within:ring-1 */
