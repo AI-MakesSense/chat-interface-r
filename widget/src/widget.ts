@@ -20,6 +20,7 @@ import { createCSSVariables, createFontFaceCSS } from './theming/css-variables';
 import { isPdfUrl } from './utils/link-detector';
 import { PdfLightbox } from './ui/pdf-lightbox';
 import type { FileAttachment } from './services/messaging/types';
+import { createLinkPreviewCard, LinkPreviewTheme } from './ui/link-preview-card';
 import { resolveLinkColor, rgbaTint } from './link-color';
 
 // Shared markdown cache instance (100 entries, 5MB, 5-minute TTL)
@@ -999,17 +1000,48 @@ export function createChatWidget(runtimeConfig: WidgetRuntimeConfig): WidgetClea
   `;
   mainContent.appendChild(messagesContainer);
 
-  // PDF Lightbox: intercept clicks on PDF links in assistant messages
-  const pdfLightbox = new PdfLightbox();
-  messagesContainer.addEventListener('click', (e) => {
-    const target = e.target as HTMLElement;
-    const link = target.closest('a') as HTMLAnchorElement | null;
-    if (link && isPdfUrl(link.href)) {
-      e.preventDefault();
-      e.stopPropagation();
-      pdfLightbox.open(link.href);
-    }
-  });
+  // Lightbox: gated behind feature flag (disabled by default)
+  const lightboxEnabled = config.features?.lightboxEnabled === true;
+  if (lightboxEnabled) {
+    const pdfLightbox = new PdfLightbox();
+    messagesContainer.addEventListener('click', (e) => {
+      const target = e.target as HTMLElement;
+      const link = target.closest('a') as HTMLAnchorElement | null;
+      if (link && isPdfUrl(link.href)) {
+        e.preventDefault();
+        e.stopPropagation();
+        pdfLightbox.open(link.href);
+      }
+    });
+  }
+
+  // Link preview card theme — derived from existing widget theme colors
+  const previewCardTheme: LinkPreviewTheme = {
+    surface,
+    text,
+    subText,
+    border,
+    accentColor,
+    elementRadius,
+  };
+
+  // Inject preview cards for all external links in a message bubble
+  function injectLinkPreviewCards(bubbleEl: HTMLElement) {
+    if (lightboxEnabled) return;
+    const links = bubbleEl.querySelectorAll('a[href]');
+    links.forEach((linkEl) => {
+      const anchor = linkEl as HTMLAnchorElement;
+      const href = anchor.href;
+      if (!href || href.startsWith('#') || href.startsWith('mailto:') || href.startsWith('javascript:')) return;
+      if (anchor.closest('pre') || anchor.closest('code')) return;
+      const card = createLinkPreviewCard(href, previewCardTheme);
+      if (anchor.parentElement && anchor.parentElement !== bubbleEl) {
+        anchor.parentElement.after(card);
+      } else {
+        anchor.after(card);
+      }
+    });
+  }
 
   // Composer area - matching preview
   const composerArea = document.createElement('div');
@@ -1285,6 +1317,11 @@ export function createChatWidget(runtimeConfig: WidgetRuntimeConfig): WidgetClea
       bubbleEl.textContent = content;
     }
 
+    // Inject preview cards for external links in assistant messages
+    if (role === 'assistant' && !isLoading) {
+      injectLinkPreviewCards(bubbleEl);
+    }
+
     messageEl.appendChild(bubbleEl);
     messagesContainer.appendChild(messageEl);
 
@@ -1302,6 +1339,11 @@ export function createChatWidget(runtimeConfig: WidgetRuntimeConfig): WidgetClea
     const bubbleEl = messageEl.querySelector('.n8n-message-content');
     if (bubbleEl) {
       bubbleEl.innerHTML = cachedRenderMarkdown(content);
+    }
+
+    // Re-inject preview cards after content update
+    if (bubbleEl) {
+      injectLinkPreviewCards(bubbleEl as HTMLElement);
     }
 
     const message = messages.find(m => m.id === messageId);
