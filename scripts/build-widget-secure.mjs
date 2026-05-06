@@ -18,20 +18,9 @@ function createDeadCodeBlock(slot) {
   return `;(()=>{if(0===1){const __dead_${slot}=['alpha','beta','gamma'].map((value)=>value.toUpperCase());console.debug(__dead_${slot}.join(':'));}})();`;
 }
 
-function injectMiddleMarker(bundle, middleStatement) {
-  const midpoint = Math.floor(bundle.length / 2);
-
-  let insertAt = bundle.indexOf(';', midpoint);
-  if (insertAt === -1) {
-    insertAt = bundle.lastIndexOf(';', midpoint);
-  }
-
-  if (insertAt === -1) {
-    return `${bundle}\n${middleStatement}\n`;
-  }
-
-  return `${bundle.slice(0, insertAt + 1)}\n${middleStatement}\n${bundle.slice(insertAt + 1)}`;
-}
+// Middle marker is placed between wrapping blocks (see finalBundle array)
+// rather than injected into the obfuscated code, which risks splitting
+// mid-string on HTML entities like '&gt;' whose semicolons confuse naive splitters.
 
 async function buildWidgetBundle() {
   const buildResult = await build({
@@ -71,13 +60,12 @@ async function buildWidgetBundle() {
   const middleNoticeStatement = `${createNoticeStatement('MIDDLE')}\n${createDeadCodeBlock('MIDDLE')}`;
   const endNoticeComment = `/* END NOTICE: ${LEGAL_NOTICE} */`;
 
-  const withMiddleNotice = injectMiddleMarker(obfuscatedBundle, middleNoticeStatement);
-
   const finalBundle = [
     topNoticeComment,
     createNoticeStatement('TOP'),
     createDeadCodeBlock('TOP'),
-    withMiddleNotice,
+    obfuscatedBundle,
+    middleNoticeStatement,
     createNoticeStatement('END'),
     createDeadCodeBlock('END'),
     endNoticeComment,
