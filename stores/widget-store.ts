@@ -38,8 +38,10 @@ export interface WidgetConfig {
   // Branding
   branding: {
     companyName?: string;
+    /** @deprecated Not rendered in current widget — use greeting instead */
     logoUrl?: string;
     welcomeText?: string;
+    /** @deprecated Not used in current widget — use greeting instead */
     firstMessage?: string;
   };
 
@@ -47,9 +49,13 @@ export interface WidgetConfig {
   style: {
     theme: 'light' | 'dark' | 'auto';
     primaryColor: string;
+    /** @deprecated Superseded by playground color system */
     backgroundColor?: string;
+    /** @deprecated Superseded by playground color system */
     textColor?: string;
+    /** @deprecated No UI control — widget always uses bottom-right */
     position: 'bottom-right' | 'bottom-left' | 'top-right' | 'top-left';
+    /** @deprecated No UI control — use radius instead */
     cornerRadius?: number;
   };
 
@@ -72,13 +78,16 @@ export interface WidgetConfig {
   // Features (legacy)
   features?: {
     fileAttachments?: boolean;
+    /** @deprecated No UI control — hardcoded defaults only */
     allowedExtensions?: string[];
+    /** @deprecated No UI control — hardcoded to 5MB */
     maxFileSize?: number;
   };
 
   // Advanced (legacy)
   advanced?: {
     customCss?: string;
+    /** @deprecated Not exposed or executed */
     customJs?: string;
   };
 
@@ -135,6 +144,11 @@ export interface WidgetConfig {
   disclaimer?: string;
   enableAttachments?: boolean;
   enableModelPicker?: boolean;
+  enablePdfLightbox?: boolean;
+
+  // Inline embed dimensions (pixels)
+  inlineWidth?: number;
+  inlineHeight?: number;
 }
 
 /**
@@ -256,13 +270,11 @@ const defaultConfig: WidgetConfig = {
   branding: {
     companyName: 'My Company',
     welcomeText: 'How can we help you today?',
-    firstMessage: 'Hello! I\'m your AI assistant. Ask me anything!',
   },
   style: {
     theme: 'light',
     primaryColor: '#00bfff',
     position: 'bottom-right',
-    cornerRadius: 12,
   },
   connection: {
     provider: 'n8n',
@@ -319,6 +331,11 @@ const defaultConfig: WidgetConfig = {
   disclaimer: '',
   enableAttachments: false,
   enableModelPicker: false,
+  enablePdfLightbox: false,
+
+  // Inline embed dimensions
+  inlineWidth: 400,
+  inlineHeight: 600,
 };
 
 /**
@@ -396,7 +413,7 @@ export const useWidgetStore = create<WidgetState>((set, get) => ({
       set((state) => ({
         widgets: [...state.widgets, widget],
         currentWidget: widget,
-        currentConfig: widget.config,
+        currentConfig: JSON.parse(JSON.stringify(widget.config)),
         isSaving: false,
         error: null,
         hasUnsavedChanges: false,
@@ -435,7 +452,7 @@ export const useWidgetStore = create<WidgetState>((set, get) => ({
       set({
         currentWidget: widget,
         currentLicense: null, // Schema v2.0: No longer using licenses
-        currentConfig: widget.config,
+        currentConfig: JSON.parse(JSON.stringify(widget.config)),
         isLoading: false,
         error: null,
         hasUnsavedChanges: false,
@@ -476,7 +493,7 @@ export const useWidgetStore = create<WidgetState>((set, get) => ({
       set((state) => ({
         widgets: state.widgets.map((w) => (w.id === id ? widget : w)),
         currentWidget: widget,
-        currentConfig: widget.config,
+        currentConfig: JSON.parse(JSON.stringify(widget.config)),
         isSaving: false,
         error: null,
         hasUnsavedChanges: false,
@@ -569,12 +586,16 @@ export const useWidgetStore = create<WidgetState>((set, get) => ({
 
   /**
    * Set current widget for editing
+   * Deep-clone config so resetConfig can revert to the saved snapshot
    */
   setCurrentWidget: (widget: Widget | null) => {
+    const config = widget?.config
+      ? JSON.parse(JSON.stringify(widget.config))
+      : defaultConfig;
     set({
       currentWidget: widget,
       currentLicense: null, // Clear license when setting widget manually
-      currentConfig: widget?.config || defaultConfig,
+      currentConfig: config,
       hasUnsavedChanges: false,
     });
   },
@@ -632,12 +653,13 @@ export const useWidgetStore = create<WidgetState>((set, get) => ({
 
   /**
    * Reset configuration to last saved state
+   * Deep-clone to avoid shared references with currentWidget.config
    */
   resetConfig: () => {
     const { currentWidget } = get();
     if (currentWidget) {
       set({
-        currentConfig: currentWidget.config,
+        currentConfig: JSON.parse(JSON.stringify(currentWidget.config)),
         hasUnsavedChanges: false,
       });
     }

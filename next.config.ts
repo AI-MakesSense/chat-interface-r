@@ -1,8 +1,49 @@
 import {withSentryConfig} from "@sentry/nextjs";
 import type { NextConfig } from "next";
 
+const contentSecurityPolicy = [
+  "default-src 'self'",
+  "base-uri 'self'",
+  "object-src 'none'",
+  "form-action 'self'",
+  "frame-ancestors 'self' https: http://localhost:*",
+  "script-src 'self' 'unsafe-inline' https://cdn.platform.openai.com",
+  "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
+  "font-src 'self' data: https://fonts.gstatic.com",
+  "img-src 'self' data: blob: https:",
+  "connect-src 'self' https: wss:",
+  "frame-src 'self' https:",
+].join("; ");
+
+/**
+ * Security headers for application pages.
+ *
+ * Excluded paths (no CSP / Referrer-Policy applied):
+ *   /w/          – widget JS bundle serving
+ *   /api/widget/ – legacy widget API
+ *   /api/embed/  – embed bundle serving
+ *   /chat/       – fullpage widget iframe page (must be embeddable cross-origin)
+ *   /chatkit/    – ChatKit widget iframe page
+ */
+const securityHeaders = [
+  { key: "Content-Security-Policy", value: contentSecurityPolicy },
+  { key: "Strict-Transport-Security", value: "max-age=31536000; includeSubDomains; preload" },
+  { key: "X-Content-Type-Options", value: "nosniff" },
+  { key: "Referrer-Policy", value: "strict-origin-when-cross-origin" },
+  { key: "Permissions-Policy", value: "camera=(), microphone=(), geolocation=()" },
+  { key: "X-DNS-Prefetch-Control", value: "off" },
+];
+
 const nextConfig: NextConfig = {
-  /* config options here */
+  async headers() {
+    return [
+      {
+        // Apply security headers to all routes EXCEPT widget-serving and embeddable paths
+        source: "/((?!w/|api/widget/|api/embed/|chat/|chatkit/).*)",
+        headers: securityHeaders,
+      },
+    ];
+  },
 };
 
 export default withSentryConfig(nextConfig, {

@@ -66,10 +66,18 @@ describe('generateEmbedCode', () => {
       expect(result.language).toBe('html');
     });
 
-    it('should include container div', () => {
+    it('should include container div with default dimensions', () => {
       const result = generateEmbedCode(testWidget, 'inline');
       expect(result.code).toContain('<div id="chat-widget"');
       expect(result.code).toContain('style="width: 400px; height: 600px;"');
+    });
+
+    it('should use custom inline dimensions when provided', () => {
+      const result = generateEmbedCode(testWidget, 'inline', {
+        inlineWidth: 500,
+        inlineHeight: 700,
+      });
+      expect(result.code).toContain('style="width: 500px; height: 700px;"');
     });
 
     it('should include data-mode attribute', () => {

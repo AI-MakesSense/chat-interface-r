@@ -7,6 +7,7 @@
  */
 
 import { readFile } from 'fs/promises';
+import { createHash } from 'crypto';
 import { join } from 'path';
 import { License } from '@/lib/db/schema';
 import { injectLicenseFlags } from '@/lib/widget/inject';
@@ -16,6 +17,7 @@ import { injectLicenseFlags } from '@/lib/widget/inject';
  */
 interface BundleCache {
   bundle: string;
+  etag: string;
   timestamp: number;
 }
 
@@ -38,14 +40,18 @@ async function readWidgetBundle(): Promise<string> {
 }
 
 /**
- * Get cache key for a license
- * Uses tier, branding, and domain limit to differentiate cached bundles
- *
- * @param license - License object
- * @returns Cache key string
+ * Get cache key for an injected bundle
+ * Includes license/widget identity and serving origin to prevent cross-origin cache bleed.
  */
-function getCacheKey(license: License): string {
-  return `${license.tier}-${license.brandingEnabled}-${license.domainLimit}`;
+function getCacheKey(license: License, widgetId?: string, baseUrl?: string): string {
+  return [
+    license.id,
+    widgetId || 'no-widget',
+    license.tier,
+    String(license.brandingEnabled),
+    String(license.domainLimit),
+    baseUrl || 'no-base-url',
+  ].join(':');
 }
 
 /**
@@ -53,37 +59,41 @@ function getCacheKey(license: License): string {
  *
  * @param license - License object from database
  * @param widgetId - Optional widget ID for relay configuration
- * @returns Widget bundle JavaScript with injected flags
- *
- * Features:
- * - Caches bundles in memory for performance (60s TTL)
- * - Injects license-specific flags
- * - Injects relay configuration if widgetId is provided
- * - Different bundles for different license configurations
+ * @param baseUrl - Optional origin for relay URL injection
+ * @returns Object with bundle content and ETag for conditional responses
  */
-export async function serveWidgetBundle(license: License, widgetId?: string): Promise<string> {
-  const cacheKey = getCacheKey(license);
+
+export async function serveWidgetBundle(
+  license: License,
+  widgetId?: string,
+  baseUrl?: string
+): Promise<{ bundle: string; etag: string }> {
+  const cacheKey = getCacheKey(license, widgetId, baseUrl);
   const now = Date.now();
 
   // Check cache
   const cached = bundleCache.get(cacheKey);
   if (cached && (now - cached.timestamp) < CACHE_TTL) {
-    return cached.bundle;
+    return { bundle: cached.bundle, etag: cached.etag };
   }
 
   // Read bundle from filesystem
   const rawBundle = await readWidgetBundle();
 
   // Inject license flags and relay config
-  const bundleWithFlags = injectLicenseFlags(rawBundle, license, widgetId);
+  const bundleWithFlags = injectLicenseFlags(rawBundle, license, widgetId, baseUrl);
+
+  // Generate ETag from content hash
+  const etag = `"${createHash('md5').update(bundleWithFlags).digest('hex').slice(0, 16)}"`;
 
   // Update cache
   bundleCache.set(cacheKey, {
     bundle: bundleWithFlags,
+    etag,
     timestamp: now
   });
 
-  return bundleWithFlags;
+  return { bundle: bundleWithFlags, etag };
 }
 
 /**

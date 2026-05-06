@@ -89,9 +89,12 @@ export async function GET(
       return createErrorResponse('LICENSE_INVALID', { widgetKey: cleanWidgetKey });
     }
 
-    // Step 2: Extract domain from referer or origin header
-    // Some browsers/contexts don't send referer (privacy settings, HTTPS→HTTP, etc.)
-    // Fall back to origin header, or allow if neither present (initial script load)
+    // Step 2: Extract domain from referer or origin header.
+    // With crossorigin="anonymous" on the script tag, browsers send the Origin
+    // header on cross-origin loads.  We still fall back to referer for legacy
+    // embeds and accept a null domain (skip domain authz) rather than blocking
+    // the widget entirely — the user experience of a silent failure is worse
+    // than serving the widget to an unknown origin.
     const referer = request.headers.get('referer');
     const origin = request.headers.get('origin');
 
@@ -102,12 +105,7 @@ export async function GET(
       domain = extractDomainFromReferer(origin);
     }
 
-    // If no domain info available, log warning but allow (for script initial load)
-    // Domain validation will still happen if allowedDomains is configured
-    if (!domain) {
-      console.warn(`[Widget] No referer/origin for ${cleanWidgetKey}, allowing initial load`);
-      domain = 'unknown';
-    }
+    const domainUnknown = !domain;
 
     // Step 4: Get client IP for rate limiting
     const clientIP = getClientIP(request);
@@ -180,26 +178,45 @@ export async function GET(
     }
 
     // Step 10: Validate domain authorization
-    const normalizedRequestDomain = normalizeDomain(domain);
+    // When domain is unknown (no referer/origin), skip domain authz and log a
+    // warning.  This avoids silent widget failures caused by strict Referrer
+    // policies or privacy-focused browsers.
     const allowedDomains = (widget as any).allowedDomains || [];
     const userTier = user.tier || 'free';
 
-    // Agency tier or empty allowedDomains allows any domain
-    // Also skip validation if domain is 'unknown' (no referer/origin sent)
-    if (userTier !== 'agency' && allowedDomains.length > 0 && normalizedRequestDomain !== 'unknown') {
-      const isAuthorized = normalizedRequestDomain === 'localhost' || allowedDomains.some((allowedDomain: string) => {
-        const normalizedAllowed = normalizeDomain(allowedDomain);
-        return normalizedAllowed === normalizedRequestDomain ||
-          normalizedRequestDomain.endsWith('.' + normalizedAllowed);
-      });
+    if (domainUnknown) {
+      console.warn(
+        `[Widget] Serving widget without origin context (referer/origin missing): ${cleanWidgetKey}, ip=${clientIP}`
+      );
+    } else {
+      const normalizedRequestDomain = normalizeDomain(domain!);
+      const hostHeader = request.headers.get('host') || '';
+      const requestHostDomain = normalizeDomain(hostHeader.split(':')[0] || '');
+      const isFirstPartyRequest =
+        normalizedRequestDomain !== 'unknown' &&
+        requestHostDomain !== 'unknown' &&
+        normalizedRequestDomain === requestHostDomain;
 
-      if (!isAuthorized) {
-        return createErrorResponse('DOMAIN_UNAUTHORIZED', {
-          widgetKey: cleanWidgetKey,
-          domain: normalizedRequestDomain,
-          allowedDomains,
-          ip: clientIP
+      // Agency tier or empty allowedDomains allows any domain.
+      if (
+        userTier !== 'agency' &&
+        allowedDomains.length > 0 &&
+        !isFirstPartyRequest
+      ) {
+        const isAuthorized = normalizedRequestDomain === 'localhost' || allowedDomains.some((allowedDomain: string) => {
+          const normalizedAllowed = normalizeDomain(allowedDomain);
+          return normalizedAllowed === normalizedRequestDomain ||
+            normalizedRequestDomain.endsWith('.' + normalizedAllowed);
         });
+
+        if (!isAuthorized) {
+          return createErrorResponse('DOMAIN_UNAUTHORIZED', {
+            widgetKey: cleanWidgetKey,
+            domain: normalizedRequestDomain,
+            allowedDomains,
+            ip: clientIP
+          });
+        }
       }
     }
 
@@ -315,12 +332,21 @@ export async function GET(
       brandingEnabled: userTier === 'free' || userTier === 'basic',
     };
 
-    const widgetBundle = await serveWidgetBundle(mockLicense as any, widget.id);
+    const requestOrigin = new URL(request.url).origin;
+    const { bundle: widgetBundle, etag } = await serveWidgetBundle(mockLicense as any, widget.id, requestOrigin);
 
-    // Step 12: Return successful response
+    // Step 12: Conditional response — return 304 if browser has current version
+    const ifNoneMatch = request.headers.get('if-none-match');
+    if (ifNoneMatch && ifNoneMatch === etag) {
+      return new NextResponse(null, {
+        status: 304,
+        headers: createResponseHeaders(etag)
+      });
+    }
+
     return new NextResponse(widgetBundle, {
       status: 200,
-      headers: createResponseHeaders()
+      headers: createResponseHeaders(etag)
     });
 
   } catch (error) {

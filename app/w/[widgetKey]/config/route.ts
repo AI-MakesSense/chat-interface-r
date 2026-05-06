@@ -12,6 +12,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getWidgetByKeyWithUser } from '@/lib/db/queries';
 import { isValidWidgetKey } from '@/lib/embed';
 import { CHATKIT_SERVER_ENABLED } from '@/lib/feature-flags';
+import { normalizeDomain } from '@/lib/license/domain';
 import type { WidgetConfig } from '@/widget/src/types';
 
 /**
@@ -53,9 +54,6 @@ function translateConfig(dbConfig: any, requestUrl: string, userTier: string): W
     'pill': 24
   };
   const cornerRadius = radiusMap[radius] || dbConfig.style?.cornerRadius || 12;
-
-  // Get webhook URL
-  const webhookUrl = dbConfig.n8nWebhookUrl || dbConfig.connection?.webhookUrl || '';
 
   // Build extended theme configuration
   const theme: WidgetConfig['theme'] = {
@@ -174,7 +172,6 @@ function translateConfig(dbConfig: any, requestUrl: string, userTier: string): W
       maxFileSizeKB: dbConfig.features?.maxFileSize || 5120,
     },
     connection: {
-      webhookUrl: webhookUrl,
       relayEndpoint: `${new URL(requestUrl).origin}/api/chat-relay`,
     },
     agentKit: CHATKIT_SERVER_ENABLED && dbConfig.enableAgentKit ? {
@@ -248,13 +245,35 @@ export async function GET(
       }
     }
 
-    // Check domain restrictions if applicable
+    // Extract origin context — skip domain authz when missing rather than
+    // hard-failing, so the widget still loads for strict-referrer-policy sites.
     const origin = request.headers.get('origin');
-    if (origin && widget.allowedDomains && widget.allowedDomains.length > 0) {
-      const domain = new URL(origin).hostname;
-      const isAllowed = domain === 'localhost' || widget.allowedDomains.some((d: string) =>
-        domain === d || domain.endsWith('.' + d)
-      );
+    const referer = request.headers.get('referer');
+    const originContext = origin || referer;
+
+    let domain = '';
+    if (originContext) {
+      try {
+        domain = new URL(originContext).hostname;
+      } catch {
+        // Malformed header — treat as unknown, skip domain authz below
+        domain = '';
+      }
+    }
+
+    const userTier = widget.user.tier || 'free';
+    if (domain && widget.allowedDomains && widget.allowedDomains.length > 0 && userTier !== 'agency') {
+      const normalizedDomain = normalizeDomain(domain);
+      const requestHost = normalizeDomain((request.headers.get('host') || '').split(':')[0] || '');
+      const isFirstPartyOrigin =
+        normalizedDomain !== 'unknown' &&
+        requestHost !== 'unknown' &&
+        normalizedDomain === requestHost;
+
+      const isAllowed = isFirstPartyOrigin || normalizedDomain === 'localhost' || widget.allowedDomains.some((d: string) => {
+        const normalizedAllowed = normalizeDomain(d);
+        return normalizedDomain === normalizedAllowed || normalizedDomain.endsWith('.' + normalizedAllowed);
+      });
 
       if (!isAllowed) {
         return new NextResponse(
@@ -268,6 +287,8 @@ export async function GET(
           }
         );
       }
+    } else if (!domain) {
+      console.warn(`[Widget Config] Serving config without origin context: ${widgetKey}`);
     }
 
     const dbConfig = widget.config as any;

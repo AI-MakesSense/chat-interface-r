@@ -29,19 +29,116 @@ export interface WidgetForEmbed {
   embedType?: EmbedType;
 }
 
+// ---------------------------------------------------------------------------
+// Shared URL helpers (used by both client-side code-modal and server-side API)
+// ---------------------------------------------------------------------------
+
 /**
- * Get the base URL for widget serving
- * Uses environment variable or defaults to production URL
+ * Remove trailing slash to avoid accidental double slashes in generated snippets.
  */
-function getBaseUrl(): string {
-  return process.env.NEXT_PUBLIC_APP_URL || 'https://chat-interface-r.vercel.app';
+export function normalizeBaseUrl(url: string): string {
+  return url.replace(/\/+$/, '');
+}
+
+/**
+ * Ensure a URL has a protocol prefix.
+ * Vercel auto-sets VERCEL_PROJECT_PRODUCTION_URL *without* a protocol.
+ */
+export function ensureProtocol(url: string): string {
+  return url.startsWith('http') ? url : `https://${url}`;
+}
+
+/**
+ * Read the configured public URL from env vars.
+ *
+ * NEXT_PUBLIC_APP_URL is available both server- and client-side (embedded at
+ * build time by Next.js).  VERCEL_PROJECT_PRODUCTION_URL is server-only.
+ */
+export function getConfiguredPublicUrl(): string | undefined {
+  const envPublic = process.env.NEXT_PUBLIC_APP_URL;
+  if (envPublic) return normalizeBaseUrl(envPublic);
+
+  const vercelProd = process.env.VERCEL_PROJECT_PRODUCTION_URL;
+  if (vercelProd) return normalizeBaseUrl(ensureProtocol(vercelProd));
+
+  return undefined;
+}
+
+/**
+ * Heuristic detection for Vercel preview hostnames.
+ *
+ * Preview deployments follow the pattern:
+ *   <project>-<hash>-<team>.vercel.app
+ * where <hash> is a 7-12 char lowercase alphanumeric string that contains
+ * at least one digit (to distinguish from normal project-name dashes).
+ *
+ * Examples that SHOULD match (preview):
+ *   chat-interface-fk7f9c83w-polingerai.vercel.app
+ *   myapp-abc1234f-team.vercel.app
+ *
+ * Examples that should NOT match (production):
+ *   chat-interface-r.vercel.app
+ *   my-cool-app.vercel.app
+ */
+export function isLikelyVercelPreviewHostname(hostname: string): boolean {
+  if (!hostname || !hostname.endsWith('.vercel.app')) {
+    return false;
+  }
+
+  const subdomain = hostname.slice(0, -'.vercel.app'.length);
+
+  // Match: project-<alphanumeric hash with at least one digit>-team
+  // The hash segment is 7-12 lowercase alphanumeric chars containing ≥1 digit.
+  // The digit requirement prevents false positives on names like "my-cool-app".
+  return /^.+-(?=[a-z0-9]*[0-9])[a-z0-9]{7,12}-.+$/.test(subdomain);
+}
+
+/**
+ * Resolve the public base URL for embed snippets (client-side).
+ *
+ * Priority:
+ * 1) Explicit override
+ * 2) If running in browser:
+ *    - use configured public URL when current host is a Vercel preview hostname
+ *    - otherwise use current origin
+ * 3) Configured public URL (NEXT_PUBLIC_APP_URL or VERCEL_PROJECT_PRODUCTION_URL)
+ * 4) localhost fallback
+ */
+export function resolveEmbedBaseUrl(override?: string): string {
+  if (override) return normalizeBaseUrl(override);
+
+  const configuredPublic = getConfiguredPublicUrl();
+
+  if (typeof window !== 'undefined' && window.location?.origin) {
+    if (configuredPublic && isLikelyVercelPreviewHostname(window.location.hostname)) {
+      return configuredPublic;
+    }
+    return normalizeBaseUrl(window.location.origin);
+  }
+
+  if (configuredPublic) return configuredPublic;
+
+  return 'http://localhost:3000';
+}
+
+/**
+ * Resolve the public base URL from a server-side request.
+ *
+ * Priority: NEXT_PUBLIC_APP_URL → VERCEL_PROJECT_PRODUCTION_URL → request origin
+ */
+export function resolveEmbedBaseUrlFromRequest(requestUrl: string): string {
+  return getConfiguredPublicUrl() || normalizeBaseUrl(new URL(requestUrl).origin);
 }
 
 /**
  * Generate embed code for a specific embed type
  */
-export function generateEmbedCode(widget: WidgetForEmbed, type: EmbedType): EmbedCodeResult {
-  const baseUrl = getBaseUrl();
+export function generateEmbedCode(
+  widget: WidgetForEmbed,
+  type: EmbedType,
+  options?: { baseUrl?: string; inlineWidth?: number; inlineHeight?: number }
+): EmbedCodeResult {
+  const baseUrl = resolveEmbedBaseUrl(options?.baseUrl);
   const key = widget.widgetKey;
 
   switch (type) {
@@ -53,10 +150,12 @@ export function generateEmbedCode(widget: WidgetForEmbed, type: EmbedType): Embe
         language: 'html',
         icon: 'message-circle',
         code: `<!-- Chat Widget -->
-<script src="${baseUrl}/w/${key}.js" async></script>`,
+<script src="${baseUrl}/w/${key}.js" crossorigin="anonymous" async></script>`,
       };
 
-    case 'inline':
+    case 'inline': {
+      const inlineW = options?.inlineWidth || 400;
+      const inlineH = options?.inlineHeight || 600;
       return {
         type: 'inline',
         title: 'Inline Widget',
@@ -64,14 +163,16 @@ export function generateEmbedCode(widget: WidgetForEmbed, type: EmbedType): Embe
         language: 'html',
         icon: 'layout',
         code: `<!-- Chat Widget (Inline) -->
-<div id="chat-widget" style="width: 400px; height: 600px;"></div>
+<div id="chat-widget" style="width: ${inlineW}px; height: ${inlineH}px;"></div>
 <script
   src="${baseUrl}/w/${key}.js"
+  crossorigin="anonymous"
   data-mode="inline"
   data-container="chat-widget"
   async
 ></script>`,
       };
+    }
 
     case 'fullpage':
       return {
@@ -104,17 +205,23 @@ export function generateEmbedCode(widget: WidgetForEmbed, type: EmbedType): Embe
 /**
  * Generate all embed code variants for a widget
  */
-export function generateAllEmbedCodes(widget: WidgetForEmbed): EmbedCodeResult[] {
+export function generateAllEmbedCodes(
+  widget: WidgetForEmbed,
+  options?: { baseUrl?: string; inlineWidth?: number; inlineHeight?: number }
+): EmbedCodeResult[] {
   const types: EmbedType[] = ['popup', 'inline', 'fullpage', 'portal'];
-  return types.map(type => generateEmbedCode(widget, type));
+  return types.map(type => generateEmbedCode(widget, type, options));
 }
 
 /**
  * Get the primary embed code for a widget based on its configured embed type
  */
-export function getPrimaryEmbedCode(widget: WidgetForEmbed): EmbedCodeResult {
+export function getPrimaryEmbedCode(
+  widget: WidgetForEmbed,
+  options?: { baseUrl?: string; inlineWidth?: number; inlineHeight?: number }
+): EmbedCodeResult {
   const type = widget.embedType || 'popup';
-  return generateEmbedCode(widget, type);
+  return generateEmbedCode(widget, type, options);
 }
 
 /**

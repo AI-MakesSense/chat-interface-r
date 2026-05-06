@@ -13,10 +13,26 @@
 
 import { WidgetRuntimeConfig, WidgetConfig, Message } from './types';
 import { renderMarkdown } from './markdown';
+import { MarkdownCache } from './utils/markdown-cache';
 import { buildRelayPayload } from './services/messaging/payload';
 import { SessionManager } from './services/messaging/session-manager';
 import { createCSSVariables, createFontFaceCSS } from './theming/css-variables';
+import { isPdfUrl } from './utils/link-detector';
+import { PdfLightbox } from './ui/pdf-lightbox';
 import type { FileAttachment } from './services/messaging/types';
+import { createLinkPreviewCard, LinkPreviewTheme } from './ui/link-preview-card';
+import { resolveLinkColor, rgbaTint } from './link-color';
+
+// Shared markdown cache instance (100 entries, 5MB, 5-minute TTL)
+const mdCache = new MarkdownCache({ maxEntries: 100, maxMemory: 5 * 1024 * 1024, ttl: 5 * 60 * 1000 });
+
+function cachedRenderMarkdown(content: string): string {
+  const cached = mdCache.get(content);
+  if (cached) return cached;
+  const html = renderMarkdown(content);
+  mdCache.set(content, html);
+  return html;
+}
 
 // Icon SVG paths mapping - matching Lucide icons from preview
 // Comprehensive icon set organized by category for starter prompts
@@ -165,12 +181,27 @@ function getIconSVG(iconName: string): string {
   return ICON_SVGS[iconName] || ICON_SVGS.message;
 }
 
-export function createChatWidget(runtimeConfig: WidgetRuntimeConfig): void {
+// Escape HTML to prevent XSS in user-provided strings
+function escapeHTML(str: string): string {
+  const div = document.createElement('div');
+  div.textContent = str;
+  return div.innerHTML;
+}
+
+export interface WidgetCleanup {
+  destroy: () => void;
+}
+
+export function createChatWidget(runtimeConfig: WidgetRuntimeConfig): WidgetCleanup {
   const messages: Message[] = [];
   let isOpen = false;
   let messageIdCounter = 0;
   let selectedFiles: File[] = [];
   const config = runtimeConfig.uiConfig || ({} as WidgetConfig);
+
+  // AbortController for all event listeners — call abort() to remove them all
+  const ac = new AbortController();
+  const signal = ac.signal;
 
   // Initialize SessionManager for session continuity
   const sessionManager = new SessionManager(runtimeConfig.relay.licenseKey || 'default');
@@ -223,6 +254,7 @@ export function createChatWidget(runtimeConfig: WidgetRuntimeConfig): void {
       cornerRadius: config.style?.cornerRadius || 12,
     },
     features: {
+      // Unified: new path (composer.attachments.enabled) + legacy (features.fileAttachmentsEnabled)
       fileAttachmentsEnabled: config.composer?.attachments?.enabled || config.features?.fileAttachmentsEnabled || false,
       allowedExtensions: config.composer?.attachments?.accept || config.features?.allowedExtensions || ['jpg', 'jpeg', 'png', 'gif', 'pdf', 'doc', 'docx'],
       maxFileSizeKB: config.composer?.attachments?.maxSize ? config.composer.attachments.maxSize / 1024 : config.features?.maxFileSizeKB || 5000,
@@ -314,6 +346,11 @@ export function createChatWidget(runtimeConfig: WidgetRuntimeConfig): void {
     userMsgText = config.theme.color.userMessage.text || userMsgText;
   }
 
+  // Link colors: contrast-aware against the assistant bubble background (= chat bg)
+  const linkColor = resolveLinkColor(accentColor, bg);
+  const linkBgTint = rgbaTint(linkColor, 0.12);
+  const linkBgTintHover = rgbaTint(linkColor, 0.22);
+
   // Radius
   const getRadius = () => {
     const r = config.theme?.radius || 'medium';
@@ -338,6 +375,28 @@ export function createChatWidget(runtimeConfig: WidgetRuntimeConfig): void {
     }
   };
   const padding = getDensityPadding();
+
+  // Density-aware message bubble padding (matching preview getBubblePadding)
+  const getMessagePadding = () => {
+    const d = config.theme?.density || 'normal';
+    switch (d) {
+      case 'compact': return '8px 12px';
+      case 'spacious': return '14px 20px';
+      default: return '10px 16px';
+    }
+  };
+  const messagePadding = getMessagePadding();
+
+  // Density-aware message spacing (matching preview getMessageVerticalSpacing)
+  const getMessageGap = () => {
+    const d = config.theme?.density || 'normal';
+    switch (d) {
+      case 'compact': return '12px';
+      case 'spacious': return '32px';
+      default: return '24px';
+    }
+  };
+  const messageGap = getMessageGap();
 
   // Inject Google Fonts for known font families
   const googleFonts: Record<string, string> = {
@@ -365,6 +424,10 @@ export function createChatWidget(runtimeConfig: WidgetRuntimeConfig): void {
       }
     });
   }
+
+  // Re-initialization safety: replace prior style/container before rendering.
+  document.getElementById('n8n-chat-widget-styles')?.remove();
+  document.getElementById('n8n-chat-widget-container')?.remove();
 
   // Inject CSS styles
   const styleEl = document.createElement('style');
@@ -437,6 +500,60 @@ export function createChatWidget(runtimeConfig: WidgetRuntimeConfig): void {
       opacity: 1;
     }
 
+    /* Wide mode: card grid layout for starter prompts (≥500px) */
+    .n8n-prompts-wide {
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: center;
+      gap: 12px;
+    }
+    .n8n-prompts-wide .n8n-starter-prompt {
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      text-align: center;
+      width: 140px;
+      height: 120px;
+      padding: 16px;
+      border-radius: 12px;
+      border: 1px solid ${border};
+      background: ${surface};
+      box-shadow: 0 1px 2px rgba(0,0,0,0.05);
+      gap: 12px;
+    }
+    .n8n-prompts-wide .n8n-starter-prompt:hover {
+      transform: translateY(-2px);
+    }
+    .n8n-prompts-wide .n8n-starter-prompt-icon svg {
+      width: 24px;
+      height: 24px;
+    }
+    .n8n-prompts-wide .n8n-starter-prompt span:last-child {
+      font-size: 12px;
+      line-height: 1.4;
+      display: -webkit-box;
+      -webkit-line-clamp: 2;
+      -webkit-box-orient: vertical;
+      overflow: hidden;
+    }
+
+    /* Narrow mode greeting: left-aligned */
+    .n8n-greeting-narrow {
+      text-align: left;
+    }
+    /* Wide mode greeting: centered */
+    .n8n-greeting-wide {
+      text-align: center;
+    }
+    .n8n-start-screen-wide {
+      align-items: center;
+    }
+    .n8n-start-screen-wide .n8n-greeting-wrap {
+      width: 100%;
+      max-width: 42rem;
+      padding: 0 2rem;
+    }
+
     /* Markdown content styling */
     .n8n-message-content p { margin: 0 0 0.5em 0; }
     .n8n-message-content p:last-child { margin-bottom: 0; }
@@ -448,8 +565,8 @@ export function createChatWidget(runtimeConfig: WidgetRuntimeConfig): void {
       font-size: 0.9em;
     }
     .n8n-message-content pre {
-      background: ${isDark ? '#0d0d0d' : '#1e293b'};
-      color: #e2e8f0;
+      background: ${isDark ? '#0d0d0d' : '#f1f5f9'};
+      color: ${isDark ? '#e2e8f0' : '#334155'};
       padding: 12px;
       border-radius: 8px;
       overflow-x: auto;
@@ -460,33 +577,161 @@ export function createChatWidget(runtimeConfig: WidgetRuntimeConfig): void {
       padding: 0;
       color: inherit;
     }
+    .n8n-message-content h1,
+    .n8n-message-content h2,
+    .n8n-message-content h3,
+    .n8n-message-content h4,
+    .n8n-message-content h5,
+    .n8n-message-content h6 {
+      margin: 0.6em 0 0.3em 0;
+      font-weight: 600;
+      line-height: 1.3;
+    }
+    .n8n-message-content h1 { font-size: 1.4em; }
+    .n8n-message-content h2 { font-size: 1.25em; }
+    .n8n-message-content h3 { font-size: 1.1em; }
+    .n8n-message-content h4,
+    .n8n-message-content h5,
+    .n8n-message-content h6 { font-size: 1em; }
+    .n8n-message-content ul,
+    .n8n-message-content ol {
+      margin: 0.4em 0;
+      padding-left: 1.5em;
+    }
+    .n8n-message-content ul { list-style: disc; }
+    .n8n-message-content ol { list-style: decimal; }
+    .n8n-message-content li { margin: 0.15em 0; }
+    .n8n-message-content blockquote {
+      border-left: 3px solid ${isDark ? '#4b5563' : '#d1d5db'};
+      padding: 0.3em 0.8em;
+      margin: 0.4em 0;
+      color: ${isDark ? '#9ca3af' : '#6b7280'};
+      background: ${isDark ? 'rgba(255,255,255,0.03)' : 'rgba(0,0,0,0.02)'};
+      border-radius: 0 4px 4px 0;
+    }
+    .n8n-message-content hr {
+      border: none;
+      border-top: 1px solid ${isDark ? '#374151' : '#e5e7eb'};
+      margin: 0.6em 0;
+    }
+    .n8n-message-content table {
+      border-collapse: collapse;
+      width: 100%;
+      margin: 0.5em 0;
+      font-size: 0.9em;
+    }
+    .n8n-message-content th,
+    .n8n-message-content td {
+      border: 1px solid ${isDark ? '#374151' : '#d1d5db'};
+      padding: 6px 10px;
+      text-align: left;
+    }
+    .n8n-message-content th {
+      background: ${isDark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.04)'};
+      font-weight: 600;
+    }
+    .n8n-message-content tbody tr:nth-child(even) {
+      background: ${isDark ? 'rgba(255,255,255,0.02)' : 'rgba(0,0,0,0.015)'};
+    }
 
-    /* Animation */
-    @keyframes n8n-fade-in {
+    /* Links — contrast-aware styling */
+    .n8n-message-content a {
+      color: ${linkColor};
+      text-decoration: underline;
+      background-color: ${linkBgTint};
+      padding: 0 2px;
+      border-radius: 2px;
+      cursor: pointer;
+      transition: background-color 0.15s ease;
+    }
+    .n8n-message-content a:hover {
+      background-color: ${linkBgTintHover};
+    }
+
+    /* Composer focus ring — matching preview focus-within:ring-1 */
+    #n8n-composer-form:focus-within {
+      outline: 2px solid ${hasAccent ? accentColor : 'rgba(59, 130, 246, 0.5)'};
+    }
+
+    /* Animation — slide-in from bottom matching preview */
+    @keyframes n8n-slide-in {
       from { opacity: 0; transform: translateY(8px); }
       to { opacity: 1; transform: translateY(0); }
     }
     .n8n-animate-in {
-      animation: n8n-fade-in 0.3s ease-out;
+      animation: n8n-slide-in 0.3s ease-out;
     }
   `;
   document.head.appendChild(styleEl);
 
-  // Create container - using flexbox to stack chat window above button (matching preview)
+  // Determine display mode (popup default, inline/portal from embed attributes)
+  const displayMode = runtimeConfig.display?.mode || 'popup';
+  const isInlineEmbed = displayMode === 'inline';
+  const isPortalEmbed = displayMode === 'portal';
+  const isPopupEmbed = !isInlineEmbed && !isPortalEmbed;
+
+  let mountTarget: HTMLElement = document.body;
+  if (isInlineEmbed) {
+    const inlineContainerId = runtimeConfig.display?.containerId || 'chat-widget';
+    const inlineTarget = document.getElementById(inlineContainerId);
+    if (!inlineTarget) {
+      console.warn(`[N8n Chat Widget] Inline container not found: #${inlineContainerId}`);
+      return;
+    }
+    mountTarget = inlineTarget;
+    mountTarget.innerHTML = '';
+  } else if (isPortalEmbed) {
+    mountTarget = document.getElementById(runtimeConfig.display?.containerId || 'chat-portal') || document.body;
+  }
+
+  // Create container - popup stacks window above launcher, inline/portal fill target
   const container = document.createElement('div');
   container.id = 'n8n-chat-widget-container';
-  container.style.cssText = `
-    position: fixed;
-    ${mergedConfig.style.position === 'bottom-right' ? 'right: 24px;' : 'left: 24px;'}
-    bottom: 24px;
-    z-index: 999999;
-    font-family: ${mergedConfig.style.fontFamily};
-    font-size: ${mergedConfig.style.fontSize}px;
-    display: flex;
-    flex-direction: column;
-    align-items: flex-end;
-  `;
-  document.body.appendChild(container);
+
+  if (isPopupEmbed) {
+    container.style.cssText = `
+      position: fixed;
+      ${mergedConfig.style.position === 'bottom-right' ? 'right: 24px;' : 'left: 24px;'}
+      bottom: 24px;
+      z-index: 999999;
+      font-family: ${mergedConfig.style.fontFamily};
+      font-size: ${mergedConfig.style.fontSize}px;
+      display: flex;
+      flex-direction: column;
+      align-items: flex-end;
+    `;
+  } else if (isInlineEmbed) {
+    container.style.cssText = `
+      position: relative;
+      width: 100%;
+      height: 100%;
+      min-height: 420px;
+      z-index: 999999;
+      font-family: ${mergedConfig.style.fontFamily};
+      font-size: ${mergedConfig.style.fontSize}px;
+      display: flex;
+      flex-direction: column;
+      align-items: stretch;
+    `;
+  } else {
+    // Portal / fullpage mode — fill the viewport with the widget background
+    // so the host page's own background (e.g. dark-mode body) never bleeds through.
+    container.style.cssText = `
+      position: fixed;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      z-index: 999999;
+      font-family: ${mergedConfig.style.fontFamily};
+      font-size: ${mergedConfig.style.fontSize}px;
+      display: flex;
+      flex-direction: column;
+      align-items: stretch;
+      background: ${bg};
+    `;
+  }
+
+  mountTarget.appendChild(container);
 
   // Calculate launcher button colors (matching preview-canvas.tsx getLauncherStyle)
   let launcherBg: string, launcherColor: string;
@@ -501,84 +746,96 @@ export function createChatWidget(runtimeConfig: WidgetRuntimeConfig): void {
     launcherColor = isDark ? '#000000' : '#ffffff';
   }
 
-  // Create chat bubble button - matching preview exactly (56px, stroke icon)
-  const bubble = document.createElement('button');
-  bubble.id = 'n8n-chat-bubble';
-  bubble.setAttribute('aria-label', 'Open chat');
-  bubble.style.cssText = `
-    width: 56px;
-    height: 56px;
-    border-radius: 50%;
-    background: ${launcherBg};
-    border: none;
-    cursor: pointer;
-    box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -4px rgba(0, 0, 0, 0.1);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    transition: transform 0.3s, box-shadow 0.3s;
-    position: relative;
-  `;
+  let bubble: HTMLButtonElement | null = null;
+  let msgIconSvg: SVGElement | null = null;
+  let closeIconSvg: SVGElement | null = null;
 
-  // Icon container for animation
-  const iconContainer = document.createElement('div');
-  iconContainer.style.cssText = `position: relative; width: 24px; height: 24px;`;
+  // Create chat bubble launcher only for popup embeds
+  if (isPopupEmbed) {
+    bubble = document.createElement('button');
+    bubble.id = 'n8n-chat-bubble';
+    bubble.setAttribute('aria-label', 'Open chat');
+    bubble.style.cssText = `
+      width: 56px;
+      height: 56px;
+      border-radius: 50%;
+      background: ${launcherBg};
+      border: none;
+      cursor: pointer;
+      box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -4px rgba(0, 0, 0, 0.1);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: transform 0.3s, box-shadow 0.3s;
+      position: relative;
+    `;
 
-  // MessageCircle icon (stroke-based, matching Lucide)
-  const messageIcon = document.createElement('span');
-  messageIcon.id = 'n8n-bubble-message-icon';
-  messageIcon.innerHTML = `
-    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="${launcherColor}" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="position: absolute; inset: 0; transition: all 0.3s; opacity: 1; transform: rotate(0deg) scale(1);">
-      <path d="m3 21 1.9-5.7a8.5 8.5 0 1 1 3.8 3.8z"/>
-    </svg>
-  `;
+    const iconContainer = document.createElement('div');
+    iconContainer.style.cssText = `position: relative; width: 24px; height: 24px;`;
 
-  // X close icon
-  const closeIconEl = document.createElement('span');
-  closeIconEl.id = 'n8n-bubble-close-icon';
-  closeIconEl.innerHTML = `
-    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="${launcherColor}" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="position: absolute; inset: 0; transition: all 0.3s; opacity: 0; transform: rotate(-90deg) scale(0.5);">
-      <path d="M18 6 6 18"/>
-      <path d="m6 6 12 12"/>
-    </svg>
-  `;
+    // MessageCircle icon (stroke-based, matching Lucide)
+    const messageIcon = document.createElement('span');
+    messageIcon.id = 'n8n-bubble-message-icon';
+    messageIcon.innerHTML = `
+      <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="${launcherColor}" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="position: absolute; inset: 0; transition: all 0.3s; opacity: 1; transform: rotate(0deg) scale(1);">
+        <path d="m3 21 1.9-5.7a8.5 8.5 0 1 1 3.8 3.8z"/>
+      </svg>
+    `;
 
-  iconContainer.appendChild(messageIcon);
-  iconContainer.appendChild(closeIconEl);
-  bubble.appendChild(iconContainer);
+    // X close icon
+    const closeIconEl = document.createElement('span');
+    closeIconEl.id = 'n8n-bubble-close-icon';
+    closeIconEl.innerHTML = `
+      <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="${launcherColor}" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="position: absolute; inset: 0; transition: all 0.3s; opacity: 0; transform: rotate(-90deg) scale(0.5);">
+        <path d="M18 6 6 18"/>
+        <path d="m6 6 12 12"/>
+      </svg>
+    `;
 
-  // References for icon animation
-  const msgIconSvg = messageIcon.querySelector('svg') as SVGElement;
-  const closeIconSvg = closeIconEl.querySelector('svg') as SVGElement;
+    iconContainer.appendChild(messageIcon);
+    iconContainer.appendChild(closeIconEl);
+    bubble.appendChild(iconContainer);
 
-  bubble.addEventListener('mouseenter', () => { bubble.style.transform = 'scale(1.05)'; });
-  bubble.addEventListener('mouseleave', () => { bubble.style.transform = 'scale(1)'; });
-  bubble.addEventListener('click', toggleChat);
+    // References for icon animation
+    msgIconSvg = messageIcon.querySelector('svg');
+    closeIconSvg = closeIconEl.querySelector('svg');
+
+    bubble.addEventListener('mouseenter', () => {
+      if (bubble) bubble.style.transform = 'scale(1.05)';
+    }, { signal });
+    bubble.addEventListener('mouseleave', () => {
+      if (bubble) bubble.style.transform = 'scale(1)';
+    }, { signal });
+    bubble.addEventListener('click', toggleChat, { signal });
+  }
 
   // Create chat window - matches preview layout (380x600, 24px radius)
   // Added BEFORE bubble so it appears above in flexbox column layout
   const chatWindow = document.createElement('div');
   chatWindow.id = 'n8n-chat-window';
   chatWindow.style.cssText = `
-    display: none;
-    width: 380px;
-    height: 600px;
-    max-height: 80vh;
+    box-sizing: border-box;
+    display: ${isPopupEmbed ? 'none' : 'flex'};
+    width: ${isPopupEmbed ? '380px' : '100%'};
+    height: ${isPopupEmbed ? '600px' : '100%'};
+    max-height: ${isPopupEmbed ? '80vh' : 'none'};
     background: ${bg};
     color: ${text};
-    border-radius: 24px;
+    border-radius: ${isPortalEmbed ? '0' : (isPopupEmbed ? '24px' : `${mergedConfig.style.cornerRadius || 12}px`)};
     box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
     flex-direction: column;
     overflow: hidden;
-    margin-bottom: 16px;
-    border: 1px solid ${border};
+    margin-bottom: ${isPopupEmbed ? '16px' : '0'};
+    border: ${isPortalEmbed ? 'none' : `1px solid ${border}`};
     position: relative;
-    transform-origin: bottom right;
+    transform-origin: ${isPopupEmbed ? 'bottom right' : 'center'};
   `;
   container.appendChild(chatWindow);
 
   // Add bubble AFTER chat window so it appears below in flexbox
-  container.appendChild(bubble);
+  if (bubble) {
+    container.appendChild(bubble);
+  }
 
   // Header icons (top right) - matching preview
   const headerIcons = document.createElement('div');
@@ -641,8 +898,13 @@ export function createChatWidget(runtimeConfig: WidgetRuntimeConfig): void {
     justify-content: center;
   `;
 
-  // Greeting
+  // Greeting wrapper (for responsive centering)
+  const greetingWrap = document.createElement('div');
+  greetingWrap.className = 'n8n-greeting-wrap';
+
   const greetingEl = document.createElement('h2');
+  greetingEl.id = 'n8n-greeting';
+  greetingEl.className = 'n8n-greeting-narrow';
   greetingEl.style.cssText = `
     font-size: 1.5rem;
     font-weight: 600;
@@ -652,12 +914,14 @@ export function createChatWidget(runtimeConfig: WidgetRuntimeConfig): void {
     color: ${text};
   `;
   greetingEl.textContent = greeting;
-  startScreen.appendChild(greetingEl);
+  greetingWrap.appendChild(greetingEl);
+  startScreen.appendChild(greetingWrap);
 
   // Starter prompts
   const starterPrompts = mergedConfig.startScreen?.prompts || [];
   if (starterPrompts.length > 0) {
     const promptsContainer = document.createElement('div');
+    promptsContainer.id = 'n8n-prompts-container';
     promptsContainer.style.cssText = `display: flex; flex-direction: column; gap: 4px;`;
 
     starterPrompts.forEach((prompt) => {
@@ -671,18 +935,58 @@ export function createChatWidget(runtimeConfig: WidgetRuntimeConfig): void {
             ${iconSvg}
           </svg>
         </span>
-        <span style="font-weight: 500;">${prompt.label}</span>
+        <span style="font-weight: 500;">${escapeHTML(prompt.label)}</span>
       `;
       promptBtn.addEventListener('click', () => {
         handleSendMessage(prompt.prompt || prompt.label);
-      });
+      }, { signal });
       promptsContainer.appendChild(promptBtn);
     });
 
-    startScreen.appendChild(promptsContainer);
+    greetingWrap.appendChild(promptsContainer);
   }
 
   mainContent.appendChild(startScreen);
+
+  // Responsive prompt layout: switch between narrow (list) and wide (card grid)
+  // when the chat window width crosses the 500px breakpoint, matching the preview.
+  let resizeObserver: ResizeObserver | null = null;
+  if (typeof ResizeObserver !== 'undefined') {
+    let wasWide = false;
+    const promptsEl = document.getElementById('n8n-prompts-container');
+    const greetingH2 = document.getElementById('n8n-greeting');
+
+    const ro = new ResizeObserver((entries) => {
+      const w = entries[0].contentRect.width;
+      const isWide = w >= 500;
+      if (isWide === wasWide) return;
+      wasWide = isWide;
+
+      if (isWide) {
+        startScreen.classList.add('n8n-start-screen-wide');
+        if (greetingH2) {
+          greetingH2.classList.remove('n8n-greeting-narrow');
+          greetingH2.classList.add('n8n-greeting-wide');
+        }
+        if (promptsEl) {
+          promptsEl.classList.add('n8n-prompts-wide');
+          promptsEl.style.cssText = '';
+        }
+      } else {
+        startScreen.classList.remove('n8n-start-screen-wide');
+        if (greetingH2) {
+          greetingH2.classList.remove('n8n-greeting-wide');
+          greetingH2.classList.add('n8n-greeting-narrow');
+        }
+        if (promptsEl) {
+          promptsEl.classList.remove('n8n-prompts-wide');
+          promptsEl.style.cssText = 'display: flex; flex-direction: column; gap: 4px;';
+        }
+      }
+    });
+    ro.observe(chatWindow);
+    resizeObserver = ro;
+  }
 
   // Messages container (hidden initially, shown when messages exist)
   const messagesContainer = document.createElement('div');
@@ -692,9 +996,52 @@ export function createChatWidget(runtimeConfig: WidgetRuntimeConfig): void {
     flex: 1;
     flex-direction: column;
     padding-top: 48px;
-    gap: 16px;
+    gap: ${messageGap};
   `;
   mainContent.appendChild(messagesContainer);
+
+  // Lightbox: gated behind feature flag (disabled by default)
+  const lightboxEnabled = config.features?.lightboxEnabled === true;
+  if (lightboxEnabled) {
+    const pdfLightbox = new PdfLightbox();
+    messagesContainer.addEventListener('click', (e) => {
+      const target = e.target as HTMLElement;
+      const link = target.closest('a') as HTMLAnchorElement | null;
+      if (link && isPdfUrl(link.href)) {
+        e.preventDefault();
+        e.stopPropagation();
+        pdfLightbox.open(link.href);
+      }
+    });
+  }
+
+  // Link preview card theme — derived from existing widget theme colors
+  const previewCardTheme: LinkPreviewTheme = {
+    surface,
+    text,
+    subText,
+    border,
+    accentColor,
+    elementRadius,
+  };
+
+  // Inject preview cards for all external links in a message bubble
+  function injectLinkPreviewCards(bubbleEl: HTMLElement) {
+    if (lightboxEnabled) return;
+    const links = bubbleEl.querySelectorAll('a[href]');
+    links.forEach((linkEl) => {
+      const anchor = linkEl as HTMLAnchorElement;
+      const href = anchor.href;
+      if (!href || href.startsWith('#') || href.startsWith('mailto:') || href.startsWith('javascript:')) return;
+      if (anchor.closest('pre') || anchor.closest('code')) return;
+      const card = createLinkPreviewCard(href, previewCardTheme);
+      if (anchor.parentElement && anchor.parentElement !== bubbleEl) {
+        anchor.parentElement.after(card);
+      } else {
+        anchor.after(card);
+      }
+    });
+  }
 
   // Composer area - matching preview
   const composerArea = document.createElement('div');
@@ -716,7 +1063,9 @@ export function createChatWidget(runtimeConfig: WidgetRuntimeConfig): void {
       border-radius: ${composerRadius};
       border: 1px solid ${border};
       box-shadow: ${isDark ? 'none' : '0 4px 12px rgba(0,0,0,0.05)'};
-      transition: box-shadow 0.15s;
+      transition: box-shadow 0.15s, outline 0.15s;
+      outline: 2px solid transparent;
+      outline-offset: 1px;
     ">
   `;
 
@@ -750,7 +1099,7 @@ export function createChatWidget(runtimeConfig: WidgetRuntimeConfig): void {
 
   // Input
   composerHTML += `
-    <input type="text" id="n8n-chat-input" placeholder="${inputPlaceholder}" style="
+    <input type="text" id="n8n-chat-input" placeholder="${escapeHTML(inputPlaceholder)}" style="
       flex: 1;
       border: none;
       background: transparent;
@@ -771,12 +1120,13 @@ export function createChatWidget(runtimeConfig: WidgetRuntimeConfig): void {
       align-items: center;
       justify-content: center;
       border-radius: 50%;
-      background: ${isDark ? '#404040' : '#f3f4f6'};
+      background: ${surface};
       border: none;
       cursor: pointer;
-      color: ${isDark ? '#737373' : '#a3a3a3'};
+      color: ${subText};
       transition: background 0.15s, color 0.15s;
       flex-shrink: 0;
+      opacity: 0.5;
     ">
       <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
         <line x1="12" y1="19" x2="12" y2="5"/>
@@ -813,42 +1163,48 @@ export function createChatWidget(runtimeConfig: WidgetRuntimeConfig): void {
   const fileInput = composerArea.querySelector('#n8n-file-input') as HTMLInputElement;
   const clearBtn = headerIcons.querySelector('#n8n-clear-history') as HTMLButtonElement;
 
-  // Update send button style based on input
+  // Update send button style based on input (theme-aware, matching preview)
   function updateSendButtonStyle() {
     const hasText = input.value.trim().length > 0;
     if (hasText) {
       sendBtn.style.background = hasAccent ? accentColor : (isDark ? '#e5e5e5' : '#171717');
       sendBtn.style.color = hasAccent ? '#ffffff' : (isDark ? '#171717' : '#ffffff');
+      sendBtn.style.opacity = '1';
     } else {
-      sendBtn.style.background = isDark ? '#404040' : '#f3f4f6';
-      sendBtn.style.color = isDark ? '#737373' : '#a3a3a3';
+      sendBtn.style.background = surface;
+      sendBtn.style.color = subText;
+      sendBtn.style.opacity = '0.5';
     }
   }
 
-  input.addEventListener('input', updateSendButtonStyle);
+  input.addEventListener('input', updateSendButtonStyle, { signal });
 
   form.addEventListener('submit', (e) => {
     e.preventDefault();
     handleSendMessage();
-  });
+  }, { signal });
 
   clearBtn.addEventListener('click', () => {
     messages.length = 0;
     messagesContainer.innerHTML = '';
     messagesContainer.style.display = 'none';
     startScreen.style.display = 'flex';
-  });
+  }, { signal });
 
   if (attachBtn && fileInput) {
-    attachBtn.addEventListener('click', () => fileInput.click());
+    attachBtn.addEventListener('click', () => fileInput.click(), { signal });
     fileInput.addEventListener('change', (e) => {
       const files = (e.target as HTMLInputElement).files;
       if (files) selectedFiles = Array.from(files);
-    });
+    }, { signal });
   }
 
   // Toggle chat window - with icon animation matching preview
   function toggleChat() {
+    if (!isPopupEmbed) {
+      return;
+    }
+
     isOpen = !isOpen;
     if (isOpen) {
       // Show chat window with animation
@@ -893,6 +1249,15 @@ export function createChatWidget(runtimeConfig: WidgetRuntimeConfig): void {
     }
   }
 
+  // Inline and portal modes are always visible (no launcher/toggle).
+  if (!isPopupEmbed) {
+    isOpen = true;
+    chatWindow.style.display = 'flex';
+    chatWindow.style.opacity = '1';
+    chatWindow.style.transform = 'none';
+    input.focus();
+  }
+
   // Show messages view (hide start screen)
   function showMessagesView() {
     startScreen.style.display = 'none';
@@ -927,7 +1292,7 @@ export function createChatWidget(runtimeConfig: WidgetRuntimeConfig): void {
     bubbleEl.className = 'n8n-message-content';
     bubbleEl.style.cssText = `
       max-width: 85%;
-      padding: 10px 14px;
+      padding: ${messagePadding};
       border-radius: ${elementRadius};
       line-height: 1.5;
       box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
@@ -946,33 +1311,46 @@ export function createChatWidget(runtimeConfig: WidgetRuntimeConfig): void {
           </div>
         `;
       } else {
-        bubbleEl.innerHTML = renderMarkdown(content);
+        bubbleEl.innerHTML = cachedRenderMarkdown(content);
       }
     } else {
       bubbleEl.textContent = content;
     }
 
+    // Inject preview cards for external links in assistant messages
+    if (role === 'assistant' && !isLoading) {
+      injectLinkPreviewCards(bubbleEl);
+    }
+
     messageEl.appendChild(bubbleEl);
     messagesContainer.appendChild(messageEl);
-    mainContent.scrollTop = mainContent.scrollHeight;
+
+    // Scroll so the top of the new message is visible (not the bottom)
+    messageEl.scrollIntoView({ behavior: 'smooth', block: 'start' });
 
     return message;
   }
 
-  // Update message content
+  // Update message content — scroll to top of message so user reads from start
   function updateMessage(messageId: string, content: string) {
     const messageEl = messagesContainer.querySelector(`#${messageId}`) as HTMLElement;
     if (!messageEl) return;
 
     const bubbleEl = messageEl.querySelector('.n8n-message-content');
     if (bubbleEl) {
-      bubbleEl.innerHTML = renderMarkdown(content);
+      bubbleEl.innerHTML = cachedRenderMarkdown(content);
+    }
+
+    // Re-inject preview cards after content update
+    if (bubbleEl) {
+      injectLinkPreviewCards(bubbleEl as HTMLElement);
     }
 
     const message = messages.find(m => m.id === messageId);
     if (message) message.content = content;
 
-    mainContent.scrollTop = mainContent.scrollHeight;
+    // Scroll to top of the updated message
+    messageEl.scrollIntoView({ behavior: 'smooth', block: 'start' });
   }
 
   // Handle sending message
@@ -1074,4 +1452,20 @@ export function createChatWidget(runtimeConfig: WidgetRuntimeConfig): void {
       throw error;
     }
   }
+
+  // Return cleanup handle for SPA environments
+  return {
+    destroy() {
+      // Remove all event listeners at once
+      ac.abort();
+      // Disconnect ResizeObserver
+      if (resizeObserver) {
+        resizeObserver.disconnect();
+        resizeObserver = null;
+      }
+      // Remove DOM elements
+      document.getElementById('n8n-chat-widget-styles')?.remove();
+      document.getElementById('n8n-chat-widget-container')?.remove();
+    },
+  };
 }

@@ -18,6 +18,7 @@ import { getWidgetById, getWidgetWithLicense, updateWidget, deleteWidget, getUse
 import { createWidgetConfigSchema } from '@/lib/validation/widget-schema';
 import { deepMerge, stripLegacyConfigProperties, sanitizeConfig, forceN8nProviderConfig } from '@/lib/utils/config-helpers';
 import { CHATKIT_SERVER_ENABLED } from '@/lib/feature-flags';
+import { logActivity } from '@/lib/db/admin-queries';
 import { z } from 'zod';
 
 // =============================================================================
@@ -78,6 +79,8 @@ async function getWidgetWithOwnership(widgetId: string, userId: string): Promise
 const UpdateWidgetSchema = z.object({
   name: z.string().min(1).max(100).optional(),
   config: z.any().optional(),
+  embedType: z.enum(['popup', 'inline', 'fullpage', 'portal']).optional(),
+  allowedDomains: z.array(z.string().min(1)).optional(),
   status: z.enum(['active', 'paused']).optional(),
 });
 
@@ -183,6 +186,16 @@ export async function PATCH(
     // Update status if provided
     if (updates.status !== undefined) {
       updateData.status = updates.status;
+    }
+
+    // Update embed type if provided
+    if (updates.embedType !== undefined) {
+      updateData.embedType = updates.embedType;
+    }
+
+    // Update allowed domains if provided (empty array means allow all)
+    if (updates.allowedDomains !== undefined) {
+      updateData.allowedDomains = updates.allowedDomains;
     }
 
     // Handle config updates with deep merge and validation
@@ -296,6 +309,9 @@ export async function DELETE(
 
     // 4. Soft delete widget (sets status='deleted')
     await deleteWidget(widgetId);
+
+    // Log activity
+    void logActivity(user.sub, 'widget_deleted', { widgetId });
 
     // 5. Return 204 No Content on success
     return new NextResponse(null, { status: 204 });

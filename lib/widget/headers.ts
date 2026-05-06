@@ -53,11 +53,31 @@ export function extractDomainFromReferer(referer: string): string | null {
  * - Cache-Control: Browser and CDN caching strategy
  * - Access-Control-Allow-Origin: CORS header for cross-origin loading
  */
-export function createResponseHeaders(): Record<string, string> {
+/**
+ * Headers for the JS bundle.
+ * Uses must-revalidate so browsers check for updates on every load,
+ * but get a fast 304 Not Modified when the bundle hasn't changed.
+ * Pass a content hash as etag to enable conditional requests.
+ */
+export function createResponseHeaders(etag?: string): Record<string, string> {
+  const headers: Record<string, string> = {
+    'Content-Type': 'application/javascript; charset=utf-8',
+    'Cache-Control': 'public, no-cache',
+    'Access-Control-Allow-Origin': '*'
+  };
+  if (etag) {
+    headers['ETag'] = etag;
+  }
+  return headers;
+}
+
+/**
+ * Headers for the config endpoint (changes frequently)
+ */
+export function createConfigResponseHeaders(): Record<string, string> {
   return {
-    'Content-Type': 'application/javascript',
-    // Very short cache for debugging - increase after testing
-    'Cache-Control': 'public, max-age=10, must-revalidate, no-transform',
+    'Content-Type': 'application/json',
+    'Cache-Control': 'public, max-age=10, must-revalidate',
     'Access-Control-Allow-Origin': '*'
   };
 }

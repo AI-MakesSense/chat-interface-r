@@ -866,7 +866,11 @@ export const ConfigSidebar: React.FC<ConfigSidebarProps> = ({
         <div className="flex items-center gap-1">
           {onReset && (
             <button
-              onClick={onReset}
+              onClick={() => {
+                if (window.confirm('Reset all changes to last saved state?')) {
+                  onReset();
+                }
+              }}
               className={`w-8 h-8 flex items-center justify-center rounded-lg transition-colors ${theme.buttonBg} ${theme.buttonIcon}`}
               title="Reset to Default"
             >
@@ -1284,6 +1288,10 @@ export const ConfigSidebar: React.FC<ConfigSidebarProps> = ({
               <div className={`${theme.textMuted} font-medium`}>Attachments</div>
               <Toggle checked={config.enableAttachments || false} onChange={(v) => handleChange('enableAttachments', v)} isDark={isDark} />
             </Row>
+            <Row>
+              <div className={`${theme.textMuted} font-medium`}>PDF Lightbox</div>
+              <Toggle checked={config.enablePdfLightbox || false} onChange={(v) => handleChange('enablePdfLightbox', v)} isDark={isDark} />
+            </Row>
           </div>
         </Section>
 
@@ -1358,7 +1366,7 @@ export const ConfigSidebar: React.FC<ConfigSidebarProps> = ({
                     {isN8nSelected && (
                       <div className="mt-3 animate-in slide-in-from-top-1 fade-in duration-200">
                         <SidebarInput
-                          type="text"
+                          type="url"
                           value={config.connection?.webhookUrl || ''}
                           onChange={(e) => onChange({
                             ...config,

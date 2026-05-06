@@ -734,6 +734,21 @@ export async function getWidgetsPaginated(
     licenseKey: r.licenses.licenseKey, // Explicitly add licenseKey for frontend convenience
   }));
 
+  // Backfill widgetKey for legacy widgets (same as getWidgetsPaginatedV2)
+  const needsKey = widgetsWithLicenses.filter(w => !w.widgetKey);
+  if (needsKey.length > 0) {
+    await Promise.all(
+      needsKey.map(async (w) => {
+        const key = generateWidgetKey();
+        await db
+          .update(widgets)
+          .set({ widgetKey: key, updatedAt: sql`NOW()` })
+          .where(eq(widgets.id, w.id));
+        (w as any).widgetKey = key;
+      })
+    );
+  }
+
   return { widgets: widgetsWithLicenses, total };
 }
 
@@ -877,6 +892,23 @@ export async function getWidgetsPaginatedV2(
     .orderBy(desc(widgets.createdAt))
     .limit(limit)
     .offset(offset);
+
+  // Backfill widgetKey for legacy widgets that don't have one yet.
+  // This runs lazily on read so we don't need a one-shot migration script.
+  const needsKey = results.filter(w => !w.widgetKey);
+  if (needsKey.length > 0) {
+    await Promise.all(
+      needsKey.map(async (w) => {
+        const key = generateWidgetKey();
+        await db
+          .update(widgets)
+          .set({ widgetKey: key, updatedAt: sql`NOW()` })
+          .where(eq(widgets.id, w.id));
+        // Patch the in-memory result so the caller sees the key immediately
+        (w as any).widgetKey = key;
+      })
+    );
+  }
 
   return { widgets: results, total };
 }

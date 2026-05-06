@@ -28,6 +28,14 @@ import { PreviewCanvas } from '@/components/configurator/preview-canvas';
 import { CodeModal } from '@/components/configurator/code-modal';
 import { ArrowLeft, Save, Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
+import { ErrorBoundary } from '@/components/ui/error-boundary';
+
+const EMBED_TYPE_OPTIONS: Array<{ value: EmbedType; label: string }> = [
+  { value: 'popup', label: 'Popup' },
+  { value: 'inline', label: 'Inline' },
+  { value: 'fullpage', label: 'Fullpage' },
+  { value: 'portal', label: 'Portal' },
+];
 
 /**
  * Suspense wrapper for the configurator page
@@ -35,9 +43,11 @@ import { toast } from 'sonner';
  */
 function ConfiguratorPageWrapper() {
   return (
-    <Suspense fallback={<ConfiguratorLoading />}>
-      <ConfiguratorPage />
-    </Suspense>
+    <ErrorBoundary>
+      <Suspense fallback={<ConfiguratorLoading />}>
+        <ConfiguratorPage />
+      </Suspense>
+    </ErrorBoundary>
   );
 }
 
@@ -73,6 +83,7 @@ function ConfiguratorPage() {
     getWidget,
     createWidget,
     updateConfig,
+    updateWidget,
     saveConfig,
     resetConfig
   } = useWidgetStore();
@@ -81,8 +92,9 @@ function ConfiguratorPage() {
   const [isCodeModalOpen, setIsCodeModalOpen] = useState(false);
   const [hasCheckedAuth, setHasCheckedAuth] = useState(false);
 
-  // Get embed type from URL params (set in create-widget-modal)
-  const embedType = (searchParams?.get('embedType') as EmbedType) || 'popup';
+  // For existing widgets, prefer stored embedType. For new widgets, use URL param.
+  const urlEmbedType = (searchParams?.get('embedType') as EmbedType) || 'popup';
+  const [selectedEmbedType, setSelectedEmbedType] = useState<EmbedType>(urlEmbedType);
 
   // Load widget if widgetId is provided
   // Load widget if widgetId is provided, otherwise reset for new widget
@@ -104,6 +116,25 @@ function ConfiguratorPage() {
       setWidgetName(currentWidget.name);
     }
   }, [currentWidget]);
+
+  // Warn user before navigating away with unsaved changes
+  useEffect(() => {
+    if (!hasUnsavedChanges) return;
+    const handler = (e: BeforeUnloadEvent) => {
+      e.preventDefault();
+    };
+    window.addEventListener('beforeunload', handler);
+    return () => window.removeEventListener('beforeunload', handler);
+  }, [hasUnsavedChanges]);
+
+  // Sync selected embed type with loaded widget.
+  useEffect(() => {
+    if (currentWidget?.embedType) {
+      setSelectedEmbedType(currentWidget.embedType as EmbedType);
+      return;
+    }
+    setSelectedEmbedType(urlEmbedType);
+  }, [currentWidget?.id, currentWidget?.embedType, urlEmbedType]);
 
   // Ensure cookie-based session is restored before redirect checks.
   useEffect(() => {
@@ -142,12 +173,12 @@ function ConfiguratorPage() {
       const widget = await createWidget({
         name: widgetName,
         widgetType: 'n8n',
-        embedType, // Pass the embed type from URL params
+        embedType: selectedEmbedType,
         config: currentConfig
       });
 
       toast.success('Widget created successfully');
-      router.push(`/configurator/n8n?widgetId=${widget.id}&embedType=${embedType}`);
+      router.push(`/configurator/n8n?widgetId=${widget.id}&embedType=${selectedEmbedType}`);
     } catch (error) {
       console.error('Failed to create widget:', error);
       toast.error('Failed to create widget. Please try again.');
@@ -160,11 +191,26 @@ function ConfiguratorPage() {
       if (!currentWidget) {
         await handleCreateWidget();
       } else {
+        const widgetUpdates: Record<string, any> = {};
+
         // Update name if changed
         if (currentWidget.name !== widgetName) {
-          await useWidgetStore.getState().updateWidget(currentWidget.id, { name: widgetName });
+          widgetUpdates.name = widgetName;
         }
-        await saveConfig();
+
+        // Update embed type if changed
+        if ((currentWidget.embedType || 'popup') !== selectedEmbedType) {
+          widgetUpdates.embedType = selectedEmbedType;
+        }
+
+        if (Object.keys(widgetUpdates).length > 0) {
+          await updateWidget(currentWidget.id, widgetUpdates);
+        }
+
+        if (hasUnsavedChanges) {
+          await saveConfig();
+        }
+
         toast.success('Configuration saved successfully');
       }
     } catch (error) {
@@ -174,24 +220,9 @@ function ConfiguratorPage() {
   };
 
   // Handle config changes from sidebar
+  // updateConfig already deep-merges all nested objects (branding, style, connection, etc.)
   const handleConfigChange = (newConfig: WidgetConfig) => {
-    // Deep merge with current config to preserve nested objects
-    updateConfig({
-      ...currentConfig,
-      ...newConfig,
-      branding: {
-        ...currentConfig.branding,
-        ...newConfig.branding
-      },
-      style: {
-        ...currentConfig.style,
-        ...newConfig.style
-      },
-      connection: {
-        ...currentConfig.connection,
-        ...newConfig.connection
-      }
-    });
+    updateConfig(newConfig);
   };
 
   // Redirect to login if not authenticated (must be in useEffect for client-side navigation)
@@ -237,6 +268,24 @@ function ConfiguratorPage() {
           </div>
         </div>
         <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 mr-2">
+            <Label htmlFor="embed-type" className="text-xs text-muted-foreground">
+              Embed
+            </Label>
+            <select
+              id="embed-type"
+              value={selectedEmbedType}
+              onChange={(e) => setSelectedEmbedType(e.target.value as EmbedType)}
+              className="h-8 rounded-lg border border-border bg-background px-3 pr-8 text-sm font-medium appearance-none cursor-pointer hover:border-primary/50 focus:outline-none focus:ring-1 focus:ring-primary/50 transition-colors"
+              style={{ backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%23888' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E")`, backgroundRepeat: 'no-repeat', backgroundPosition: 'right 8px center' }}
+            >
+              {EMBED_TYPE_OPTIONS.map((option) => (
+                <option key={option.value} value={option.value}>
+                  {option.label}
+                </option>
+              ))}
+            </select>
+          </div>
           <Button
             onClick={handleSave}
             disabled={isSaving}
@@ -270,7 +319,10 @@ function ConfiguratorPage() {
         />
 
         {/* Preview Canvas */}
-        <PreviewCanvas config={currentConfig} />
+        <PreviewCanvas
+          config={currentConfig}
+          onDimensionsChange={(width, height) => updateConfig({ inlineWidth: width, inlineHeight: height })}
+        />
       </div>
 
       {/* Code Modal */}
@@ -279,7 +331,7 @@ function ConfiguratorPage() {
         isOpen={isCodeModalOpen}
         onClose={() => setIsCodeModalOpen(false)}
         widgetKey={currentWidget?.widgetKey}
-        embedType={embedType}
+        embedType={selectedEmbedType}
       />
     </div>
   );

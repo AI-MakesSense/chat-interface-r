@@ -17,6 +17,7 @@ import { requireAuth } from '@/lib/auth/guard';
 import { db } from '@/lib/db/client';
 import { licenses, widgets, users } from '@/lib/db/schema';
 import { eq } from 'drizzle-orm';
+import { logActivity } from '@/lib/db/admin-queries';
 import {
   createWidget,
   createWidgetV2,
@@ -30,6 +31,7 @@ import { createDefaultConfig } from '@/lib/config/defaults';
 import { createWidgetConfigSchema } from '@/lib/validation/widget-schema';
 import { deepMerge, forceN8nProviderConfig, stripLegacyConfigProperties } from '@/lib/utils/config-helpers';
 import { CHATKIT_SERVER_ENABLED } from '@/lib/feature-flags';
+import { generateEmbedCode, resolveEmbedBaseUrlFromRequest, type EmbedType as GeneratedEmbedType } from '@/lib/embed';
 import { z } from 'zod';
 
 // =============================================================================
@@ -183,9 +185,12 @@ export async function POST(request: NextRequest) {
     }
 
     // 10. Generate embed codes for Schema v2.0 widgets
-    const baseUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
+    const baseUrl = resolveEmbedBaseUrlFromRequest(request.url);
     const widgetKey = (widget as any).widgetKey;
-    const embedCodes = widgetKey ? generateEmbedCodes(baseUrl, widgetKey, (widget as any).embedType || 'popup') : null;
+    const embedCodes = widgetKey ? generateEmbedCodes(baseUrl, widgetKey, (widget as any).embedType || 'popup', (widget as any).config) : null;
+
+    // Log activity
+    void logActivity(authUser.sub, 'widget_created', { widgetId: widget.id, name: widget.name });
 
     // 11. Return 201 Created with widget data
     return NextResponse.json({
@@ -266,7 +271,7 @@ export async function GET(request: NextRequest) {
     }
 
     // 4. Get paginated widgets for the user
-    const baseUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
+    const baseUrl = resolveEmbedBaseUrlFromRequest(request.url);
 
     // Use legacy query if licenseId provided or legacy flag set
     if (licenseId || useLegacy) {
@@ -296,7 +301,7 @@ export async function GET(request: NextRequest) {
             // Compute isDeployed from deployedAt
             isDeployed: !!(w as any).deployedAt,
             // Schema v2.0: Add embed codes if widgetKey exists
-            ...(widgetKey && { embedCodes: generateEmbedCodes(baseUrl, widgetKey, widgetEmbedType) }),
+            ...(widgetKey && { embedCodes: generateEmbedCodes(baseUrl, widgetKey, widgetEmbedType, normalizedConfig) }),
           };
         }),
         pagination: {
@@ -333,7 +338,7 @@ export async function GET(request: NextRequest) {
             // Compute isDeployed from deployedAt
             isDeployed: !!(w as any).deployedAt,
             // Schema v2.0: Add embed codes if widgetKey exists
-            ...(widgetKey && { embedCodes: generateEmbedCodes(baseUrl, widgetKey, widgetEmbedType) }),
+            ...(widgetKey && { embedCodes: generateEmbedCodes(baseUrl, widgetKey, widgetEmbedType, normalizedConfig) }),
           };
         }),
         pagination: {
@@ -366,12 +371,23 @@ export async function GET(request: NextRequest) {
  * Generate embed codes for all embed types (Schema v2.0)
  * Returns an object with code snippets for each embed type
  */
-function generateEmbedCodes(baseUrl: string, widgetKey: string, primaryEmbedType: string) {
+function generateEmbedCodes(baseUrl: string, widgetKey: string, primaryEmbedType: string, config?: any) {
+  const widget = { widgetKey };
+  const validTypes: GeneratedEmbedType[] = ['popup', 'inline', 'fullpage', 'portal'];
+  const normalizedPrimary = validTypes.includes(primaryEmbedType as GeneratedEmbedType)
+    ? (primaryEmbedType as GeneratedEmbedType)
+    : 'popup';
+  const opts = { baseUrl, inlineWidth: config?.inlineWidth, inlineHeight: config?.inlineHeight };
+  const popup = generateEmbedCode(widget, 'popup', opts).code;
+  const inline = generateEmbedCode(widget, 'inline', opts).code;
+  const fullpage = generateEmbedCode(widget, 'fullpage', opts).code;
+  const portal = generateEmbedCode(widget, 'portal', opts).code;
+
   return {
-    primary: primaryEmbedType,
-    popup: `<script src="${baseUrl}/w/${widgetKey}.js" async></script>`,
-    inline: `<div id="chat-widget-${widgetKey}"></div>\n<script src="${baseUrl}/w/${widgetKey}.js" data-embed="inline" async></script>`,
-    fullpage: `${baseUrl}/chat/${widgetKey}`,
-    portal: `${baseUrl}/chat/portal/${widgetKey}`,
+    primary: normalizedPrimary,
+    popup,
+    inline,
+    fullpage,
+    portal,
   };
 }

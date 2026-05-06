@@ -151,19 +151,19 @@ export function SubscriptionCard({
     : 0;
 
   return (
-    <Card>
+    <Card className="bg-zinc-900 border-zinc-800 text-white">
       <CardHeader>
         <div className="flex items-start justify-between">
           <div className="flex items-center gap-3">
-            <div className={`p-2 rounded-lg bg-muted ${tierConfig.color}`}>
+            <div className={`p-2 rounded-lg bg-white/5 ${tierConfig.color}`}>
               <TierIcon className="h-5 w-5" />
             </div>
             <div>
-              <CardTitle className="text-lg flex items-center gap-2">
+              <CardTitle className="text-lg flex items-center gap-2 text-white">
                 {tierConfig.label} Plan
                 <Badge variant={statusInfo.variant}>{statusInfo.label}</Badge>
               </CardTitle>
-              <CardDescription className="mt-1">
+              <CardDescription className="mt-1 text-zinc-400">
                 {tierConfig.price}
                 {subscription.currentPeriodEnd && subscription.status === 'active' && (
                   <span className="text-muted-foreground">
@@ -181,15 +181,15 @@ export function SubscriptionCard({
         {usage && (
           <div className="space-y-2">
             <div className="flex items-center justify-between text-sm">
-              <span className="text-muted-foreground">Widgets Used</span>
-              <span className="font-medium">
+              <span className="text-zinc-400">Widgets Used</span>
+              <span className="font-medium text-white">
                 {usage.widgetsUsed} / {tierConfig.widgetLimit === -1 ? '∞' : tierConfig.widgetLimit}
               </span>
             </div>
             {tierConfig.widgetLimit > 0 && (
-              <div className="h-2 bg-muted rounded-full overflow-hidden">
+              <div className="h-2 bg-white/10 rounded-full overflow-hidden">
                 <div
-                  className="h-full bg-primary transition-all"
+                  className="h-full bg-indigo-500 transition-all"
                   style={{ width: `${usagePercent}%` }}
                 />
               </div>
@@ -199,7 +199,7 @@ export function SubscriptionCard({
 
         {/* Features List */}
         <div className="space-y-2">
-          <p className="text-sm font-medium text-muted-foreground">Included Features</p>
+          <p className="text-sm font-medium text-zinc-400">Included Features</p>
           <ul className="grid grid-cols-1 gap-1.5 text-sm">
             {tierConfig.features.slice(0, 5).map((feature, index) => (
               <li key={index} className="flex items-center gap-2">
@@ -240,7 +240,7 @@ export function SubscriptionCard({
           <Button
             variant="default"
             size="sm"
-            className="gap-2"
+            className="gap-2 bg-indigo-600 hover:bg-indigo-700 text-white"
             onClick={() => {
               // Determine next tier
               const nextTier = subscription.tier === 'free' ? 'basic'
@@ -259,6 +259,7 @@ export function SubscriptionCard({
             variant="outline"
             size="sm"
             onClick={onManage}
+            className="border-zinc-700 text-zinc-300 hover:bg-white/5 hover:text-white"
           >
             Manage Subscription
           </Button>
@@ -269,6 +270,7 @@ export function SubscriptionCard({
             variant="secondary"
             size="sm"
             onClick={() => onUpgrade('basic')}
+            className="bg-white/10 text-white hover:bg-white/20 border-0"
           >
             View Plans
           </Button>

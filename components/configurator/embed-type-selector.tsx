@@ -33,9 +33,9 @@ const EMBED_OPTIONS: EmbedTypeOption[] = [
   {
     value: 'inline',
     label: 'Inline',
-    description: 'Coming Soon',
+    description: 'Embedded in your page layout',
     icon: Layout,
-    available: false,
+    available: true,
   },
   {
     value: 'fullpage',
@@ -47,9 +47,9 @@ const EMBED_OPTIONS: EmbedTypeOption[] = [
   {
     value: 'portal',
     label: 'Link Only',
-    description: 'Coming Soon',
+    description: 'Shareable direct chat URL',
     icon: Link,
-    available: false,
+    available: true,
   },
 ];
 

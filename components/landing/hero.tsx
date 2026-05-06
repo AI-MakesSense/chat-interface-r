@@ -1,6 +1,8 @@
 import Link from 'next/link';
 import { Button } from '@/components/ui/button';
-import { ArrowRight, Sparkles, MessageSquare } from 'lucide-react';
+import { ArrowRight, Sparkles } from 'lucide-react';
+import { BRAND_DESCRIPTION } from '@/lib/brand';
+import { HeroPreview } from './hero-preview';
 
 export function Hero() {
     return (
@@ -34,10 +36,10 @@ export function Hero() {
                         </div>
                     </div>
                     <h1 className="text-4xl font-bold tracking-tight text-white sm:text-6xl bg-clip-text text-transparent bg-gradient-to-r from-white via-white to-white/50">
-                        Build Beautiful Chat Widgets for N8n
+                        Build Beautiful Chat Widgets in Minutes
                     </h1>
                     <p className="mt-6 text-lg leading-8 text-zinc-400">
-                        Design, customize, and deploy stunning chat interfaces for your N8n workflows in minutes. No coding required.
+                        {BRAND_DESCRIPTION}
                     </p>
                     <div className="mt-10 flex items-center justify-center gap-x-6">
                         <Link href="/auth/signup">
@@ -56,15 +58,8 @@ export function Hero() {
                 {/* Hero Image / Preview */}
                 <div className="mt-16 flow-root sm:mt-24">
                     <div className="-m-2 rounded-xl bg-white/5 p-2 ring-1 ring-inset ring-white/10 lg:-m-4 lg:rounded-2xl lg:p-4 backdrop-blur-sm">
-                        <div className="rounded-md bg-zinc-900/50 shadow-2xl ring-1 ring-white/10 overflow-hidden aspect-[16/9] flex items-center justify-center relative">
-                            {/* Placeholder for a real screenshot or interactive preview */}
-                            <div className="absolute inset-0 bg-gradient-to-br from-indigo-500/10 via-purple-500/10 to-pink-500/10" />
-                            <div className="text-center z-10">
-                                <div className="inline-flex items-center justify-center w-20 h-20 rounded-2xl bg-gradient-to-br from-indigo-500 to-purple-600 mb-4 shadow-lg shadow-indigo-500/20">
-                                    <MessageSquare className="h-10 w-10 text-white" />
-                                </div>
-                                <p className="text-zinc-500 font-medium">Interactive Preview Coming Soon</p>
-                            </div>
+                        <div className="rounded-md bg-zinc-900/50 shadow-2xl ring-1 ring-white/10 overflow-hidden">
+                            <HeroPreview />
                         </div>
                     </div>
                 </div>

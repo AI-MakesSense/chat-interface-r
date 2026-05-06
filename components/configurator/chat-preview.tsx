@@ -2,6 +2,8 @@
 
 import React, { useState, useRef, useEffect, useMemo } from 'react';
 import { WidgetConfig, StarterPrompt } from '@/stores/widget-store';
+import { PdfLightbox } from '@/widget/src/ui/pdf-lightbox';
+import { isPdfUrl } from '@/widget/src/utils/link-detector';
 import { History, Plus, ArrowUp, ChevronDown } from 'lucide-react';
 import {
   HelpCircle,
@@ -254,33 +256,10 @@ const getIconByName = (iconName: string): LucideIcon => {
   return ICON_MAP[iconName] || MessageCircle;
 };
 
-// Simple markdown renderer
-function renderMarkdown(text: string): string {
-  if (!text) return '';
-  try {
-    let html = escapeHtml(text);
-    // Code Blocks
-    html = html.replace(/```([\s\S]*?)```/g, '<pre><code>$1</code></pre>');
-    // Inline Code
-    html = html.replace(/`([^`]+)`/g, '<code>$1</code>');
-    // Bold
-    html = html.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>');
-    // Italic
-    html = html.replace(/\*([^*]+)\*/g, '<em>$1</em>');
-    // Links
-    html = html.replace(/\[([^\]]+)\]\((https?:\/\/[^)]+)\)/g, '<a href="$2" target="_blank" rel="noopener noreferrer" class="text-blue-500 underline">$1</a>');
-    // Newlines
-    html = html.replace(/\n/g, '<br>');
-    return html;
-  } catch {
-    return text;
-  }
-}
-
-function escapeHtml(unsafe: string): string {
-  const map: Record<string, string> = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#039;' };
-  return unsafe.replace(/[&<>"']/g, (char) => map[char] || char);
-}
+// Use the same markdown renderer as the production widget
+import { renderMarkdown } from '@/widget/src/markdown';
+import { resolveLinkColor, rgbaTint } from '@/widget/src/link-color';
+import { detectFileType } from '@/widget/src/utils/file-type-detector';
 
 // Typing indicator component
 const TypingIndicator = () => (
@@ -300,6 +279,12 @@ export const ChatPreview: React.FC<ChatPreviewProps> = ({ config }) => {
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const rootRef = useRef<HTMLDivElement>(null);
+  const pdfLightboxRef = useRef<PdfLightbox | null>(null);
+
+  // Initialize PDF lightbox once
+  if (!pdfLightboxRef.current) {
+    pdfLightboxRef.current = new PdfLightbox();
+  }
 
   // Generate session ID once per component mount
   const sessionId = useMemo(() => 'preview-' + Math.random().toString(36).substring(7), []);
@@ -316,7 +301,10 @@ export const ChatPreview: React.FC<ChatPreviewProps> = ({ config }) => {
       setWidth(entries[0].contentRect.width);
     });
     observer.observe(rootRef.current);
-    return () => observer.disconnect();
+    return () => {
+      observer.disconnect();
+      pdfLightboxRef.current?.destroy();
+    };
   }, []);
 
   // --- Typography Logic ---
@@ -470,6 +458,9 @@ export const ChatPreview: React.FC<ChatPreviewProps> = ({ config }) => {
 
   // --- Accent & Message Logic ---
   const accentColor = config.accentColor || '#0ea5e9';
+  const linkColor = resolveLinkColor(accentColor, bg);
+  const linkBgTint = rgbaTint(linkColor, 0.12);
+  const linkBgTintHover = rgbaTint(linkColor, 0.22);
   const useAccent = config.useAccent || false;
 
   let userMsgBg = useAccent ? accentColor : surface;
@@ -564,10 +555,90 @@ export const ChatPreview: React.FC<ChatPreviewProps> = ({ config }) => {
   };
 
   useEffect(() => {
+    if (messages.length === 0) return;
+    // Scroll to the top of the last message so the user can read from the start
+    const container = scrollContainerRef.current;
+    if (container) {
+      const messageEls = container.querySelectorAll('[data-chat-message]');
+      const lastMsg = messageEls[messageEls.length - 1] as HTMLElement | undefined;
+      if (lastMsg) {
+        lastMsg.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        return;
+      }
+    }
+    // Fallback to bottom sentinel
     if (messagesEndRef.current) {
       messagesEndRef.current.scrollIntoView({ behavior: 'smooth' });
     }
   }, [messages]);
+
+  // PDF Lightbox demo: inject/remove a demo PDF message when toggle changes
+  useEffect(() => {
+    const DEMO_PDF_MSG_ID = -999;
+    if (config.enablePdfLightbox) {
+      setMessages((prev) => {
+        if (prev.some((m) => m.id === DEMO_PDF_MSG_ID)) return prev;
+        return [
+          ...prev,
+          {
+            id: DEMO_PDF_MSG_ID,
+            text: "Here's a document for you to review:\n\n[📄 View Demo PDF](/widget/demo-document.pdf)",
+            isUser: false,
+          },
+        ];
+      });
+    } else {
+      setMessages((prev) => prev.filter((m) => m.id !== DEMO_PDF_MSG_ID));
+    }
+  }, [config.enablePdfLightbox]);
+
+  const renderMessageWithCards = (htmlContent: string) => {
+    const linkRegex = /<a\s+[^>]*href="([^"]+)"[^>]*>[^<]*<\/a>/g;
+    const links: string[] = [];
+    let match;
+    while ((match = linkRegex.exec(htmlContent)) !== null) {
+      const href = match[1];
+      if (href && !href.startsWith('#') && !href.startsWith('mailto:') && !href.startsWith('javascript:')) {
+        links.push(href);
+      }
+    }
+
+    return (
+      <>
+        <div dangerouslySetInnerHTML={{ __html: htmlContent }} />
+        {links.map((href, i) => {
+          const info = detectFileType(href);
+          return (
+            <div key={i} className="link-preview-card">
+              <div
+                className="lpc-icon"
+                style={{
+                  backgroundColor: info.iconColor,
+                  fontSize: info.icon.length > 2 ? '10px' : '14px',
+                }}
+              >
+                {info.icon}
+              </div>
+              <div style={{ flex: 1, minWidth: 0, overflow: 'hidden' }}>
+                <div className="lpc-filename">{info.filename}</div>
+                <div className="lpc-domain">{info.domain}</div>
+              </div>
+              <a
+                  href={href}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="lpc-btn"
+                  style={{ color: accentColor, flexShrink: 0 }}
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  Open
+                </a>
+            </div>
+          );
+        })}
+      </>
+    );
+  };
 
   return (
     <div
@@ -596,9 +667,83 @@ export const ChatPreview: React.FC<ChatPreviewProps> = ({ config }) => {
         .animate-bounce {
           animation: bounce 1.4s infinite ease-in-out both;
         }
-        pre { background: #f1f5f9; padding: 12px; border-radius: 8px; overflow-x: auto; margin: 8px 0; font-family: monospace; font-size: 13px; }
-        code { background: #f1f5f9; padding: 2px 4px; border-radius: 4px; font-family: monospace; font-size: 13px; }
-        pre code { background: transparent; padding: 0; }
+        /* Code */
+        pre { background: ${isDark ? '#0d0d0d' : '#f1f5f9'}; color: ${isDark ? '#e2e8f0' : '#334155'}; padding: 12px; border-radius: 8px; overflow-x: auto; margin: 8px 0; font-family: ui-monospace, monospace; font-size: 13px; }
+        code { background: ${isDark ? '#2d2d2d' : '#f1f5f9'}; padding: 2px 5px; border-radius: 4px; font-family: ui-monospace, monospace; font-size: 0.9em; }
+        pre code { background: transparent; padding: 0; color: inherit; }
+        /* Headings */
+        h1, h2, h3, h4, h5, h6 { margin: 0.6em 0 0.3em 0; font-weight: 600; line-height: 1.3; }
+        h1 { font-size: 1.4em; }
+        h2 { font-size: 1.25em; }
+        h3 { font-size: 1.1em; }
+        h4, h5, h6 { font-size: 1em; }
+        /* Lists */
+        ul, ol { margin: 0.4em 0; padding-left: 1.5em; }
+        ul { list-style: disc; }
+        ol { list-style: decimal; }
+        li { margin: 0.15em 0; }
+        /* Blockquotes */
+        blockquote { border-left: 3px solid ${isDark ? '#4b5563' : '#d1d5db'}; padding: 0.3em 0.8em; margin: 0.4em 0; color: ${isDark ? '#9ca3af' : '#6b7280'}; background: ${isDark ? 'rgba(255,255,255,0.03)' : 'rgba(0,0,0,0.02)'}; border-radius: 0 4px 4px 0; }
+        /* Horizontal rules */
+        hr { border: none; border-top: 1px solid ${isDark ? '#374151' : '#e5e7eb'}; margin: 0.6em 0; }
+        /* Tables */
+        table { border-collapse: collapse; width: 100%; margin: 0.5em 0; font-size: 0.9em; }
+        th, td { border: 1px solid ${isDark ? '#374151' : '#d1d5db'}; padding: 6px 10px; text-align: left; }
+        th { background: ${isDark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.04)'}; font-weight: 600; }
+        tbody tr:nth-child(even) { background: ${isDark ? 'rgba(255,255,255,0.02)' : 'rgba(0,0,0,0.015)'}; }
+        /* Links */
+        a { color: ${linkColor}; text-decoration: underline; background-color: ${linkBgTint}; padding: 0 2px; border-radius: 2px; cursor: pointer; transition: background-color 0.15s ease; }
+        a:hover { background-color: ${linkBgTintHover}; }
+        /* Link preview cards */
+        .link-preview-card {
+          display: flex;
+          align-items: center;
+          gap: 10px;
+          padding: 10px 12px;
+          margin-top: 6px;
+          background: ${surface};
+          border: 1px solid ${border};
+          border-radius: ${elementRadius};
+        }
+        .link-preview-card .lpc-icon {
+          width: 36px;
+          height: 36px;
+          border-radius: 6px;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          color: white;
+          font-weight: 700;
+          font-size: 14px;
+          flex-shrink: 0;
+        }
+        .link-preview-card .lpc-filename {
+          font-weight: 600;
+          font-size: 13px;
+          color: ${text};
+          white-space: nowrap;
+          overflow: hidden;
+          text-overflow: ellipsis;
+        }
+        .link-preview-card .lpc-domain {
+          font-size: 11px;
+          color: ${subText};
+          margin-top: 1px;
+        }
+        .link-preview-card .lpc-btn {
+          font-size: 12px;
+          text-decoration: none;
+          padding: 4px 14px;
+          border-radius: 4px;
+          border: 1px solid ${border};
+          background: ${surface};
+          cursor: pointer;
+          white-space: nowrap;
+        }
+        /* Paragraphs */
+        p { margin: 0 0 0.5em 0; }
+        p:last-child { margin-bottom: 0; }
+        strong { font-weight: 600; }
       `}} />
 
       {/* Header Icons */}
@@ -698,6 +843,7 @@ export const ChatPreview: React.FC<ChatPreviewProps> = ({ config }) => {
             {messages.map((msg) => (
               <div
                 key={msg.id}
+                data-chat-message
                 className={`flex flex-col ${msg.isUser ? 'items-end' : 'items-start'
                   } animate-in slide-in-from-bottom-2 duration-300`}
               >
@@ -715,7 +861,7 @@ export const ChatPreview: React.FC<ChatPreviewProps> = ({ config }) => {
                   ) : msg.isUser ? (
                     msg.text
                   ) : (
-                    <div dangerouslySetInnerHTML={{ __html: renderMarkdown(msg.text) }} />
+                    renderMessageWithCards(renderMarkdown(msg.text))
                   )}
                 </div>
               </div>

@@ -22,26 +22,31 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Download, Globe, ExternalLink, Puzzle, Loader2, Copy, Check, Code } from 'lucide-react';
 import { Input } from '@/components/ui/input';
+import { resolveEmbedBaseUrl } from '@/lib/embed';
 
 interface WidgetDownloadButtonsProps {
   widgetId: string;
   widgetName: string;
   licenseKey: string;
+  widgetKey?: string;
 }
 
-export function WidgetDownloadButtons({ widgetId, widgetName, licenseKey }: WidgetDownloadButtonsProps) {
+export function WidgetDownloadButtons({ widgetId, widgetName, licenseKey, widgetKey }: WidgetDownloadButtonsProps) {
   const [isDownloadingWebsite, setIsDownloadingWebsite] = useState(false);
   const [isDownloadingPortal, setIsDownloadingPortal] = useState(false);
   const [isDownloadingExtension, setIsDownloadingExtension] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
-  const [origin, setOrigin] = useState('');
+  const [baseUrl, setBaseUrl] = useState('');
 
   useEffect(() => {
-    setOrigin(window.location.origin);
+    setBaseUrl(resolveEmbedBaseUrl());
   }, []);
 
-  const embedCode = `<script src="${origin}/api/widget/${licenseKey}/chat-widget.js" async></script>`;
+  // Prefer v2.0 widgetKey embed, fall back to legacy licenseKey
+  const embedCode = widgetKey
+    ? `<script src="${baseUrl}/w/${widgetKey}.js" crossorigin="anonymous" async></script>`
+    : `<script src="${baseUrl}/api/widget/${licenseKey}/chat-widget.js" async></script>`;
 
   const copyToClipboard = () => {
     navigator.clipboard.writeText(embedCode);
