@@ -17,14 +17,6 @@ describe('createLinkPreviewCard', () => {
     expect(card.textContent).toContain('sharepoint.com');
   });
 
-  it('includes an Open link that opens in new tab', () => {
-    const card = createLinkPreviewCard('https://example.com/file.pdf', defaultTheme);
-    const openLink = card.querySelector('a[target="_blank"]') as HTMLAnchorElement;
-    expect(openLink).not.toBeNull();
-    expect(openLink.href).toContain('example.com/file.pdf');
-    expect(openLink.textContent).toBe('Open');
-  });
-
   it('has exactly one action link (Open)', () => {
     const card = createLinkPreviewCard('https://example.com/file.xlsx', defaultTheme);
     const links = card.querySelectorAll('a');

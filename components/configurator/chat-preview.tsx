@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useRef, useEffect, useMemo, useCallback } from 'react';
+import React, { useState, useRef, useEffect, useMemo } from 'react';
 import { WidgetConfig, StarterPrompt } from '@/stores/widget-store';
 import { PdfLightbox } from '@/widget/src/ui/pdf-lightbox';
 import { isPdfUrl } from '@/widget/src/utils/link-detector';
@@ -285,11 +285,6 @@ export const ChatPreview: React.FC<ChatPreviewProps> = ({ config }) => {
   if (!pdfLightboxRef.current) {
     pdfLightboxRef.current = new PdfLightbox();
   }
-
-  // Intercept PDF link clicks in message area
-  const handleMessageClick = useCallback((e: React.MouseEvent) => {
-    // Lightbox disabled — links open naturally via target="_blank"
-  }, []);
 
   // Generate session ID once per component mount
   const sessionId = useMemo(() => 'preview-' + Math.random().toString(36).substring(7), []);
@@ -844,7 +839,7 @@ export const ChatPreview: React.FC<ChatPreviewProps> = ({ config }) => {
           </div>
         ) : (
           // Message History
-          <div className={`flex-1 flex flex-col pt-12 pb-4 ${messageSpacing}`} onClick={handleMessageClick}>
+          <div className={`flex-1 flex flex-col pt-12 pb-4 ${messageSpacing}`}>
             {messages.map((msg) => (
               <div
                 key={msg.id}
