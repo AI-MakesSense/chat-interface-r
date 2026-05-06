@@ -26,7 +26,7 @@ export async function GET(request: NextRequest) {
         return new NextResponse(fileBuffer, {
             headers: {
                 'Content-Type': 'application/javascript',
-                'Cache-Control': 'public, max-age=31536000, immutable', // Cache for 1 year
+                'Cache-Control': 'public, max-age=3600, stale-while-revalidate=86400, no-transform',
                 'Access-Control-Allow-Origin': '*',
             },
         });
