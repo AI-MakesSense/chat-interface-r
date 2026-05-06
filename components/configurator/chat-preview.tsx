@@ -628,29 +628,16 @@ export const ChatPreview: React.FC<ChatPreviewProps> = ({ config }) => {
                 <div className="lpc-filename">{info.filename}</div>
                 <div className="lpc-domain">{info.domain}</div>
               </div>
-              <div style={{ display: 'flex', gap: '6px', flexShrink: 0 }}>
-                <a
+              <a
                   href={href}
                   target="_blank"
                   rel="noopener noreferrer"
                   className="lpc-btn"
-                  style={{ color: accentColor }}
+                  style={{ color: accentColor, flexShrink: 0 }}
                   onClick={(e) => e.stopPropagation()}
                 >
                   Open
                 </a>
-                <a
-                  href={href}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  download={info.filename}
-                  className="lpc-btn"
-                  style={{ color: subText }}
-                  onClick={(e) => e.stopPropagation()}
-                >
-                  Download
-                </a>
-              </div>
             </div>
           );
         })}
@@ -751,7 +738,7 @@ export const ChatPreview: React.FC<ChatPreviewProps> = ({ config }) => {
         .link-preview-card .lpc-btn {
           font-size: 12px;
           text-decoration: none;
-          padding: 4px 10px;
+          padding: 4px 14px;
           border-radius: 4px;
           border: 1px solid ${border};
           background: ${surface};
