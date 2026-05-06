@@ -114,6 +114,8 @@ export function createLinkPreviewCard(url: string, theme: LinkPreviewTheme): HTM
   // Download button
   const dlBtn = document.createElement('a');
   dlBtn.href = url;
+  dlBtn.target = '_blank';
+  dlBtn.rel = 'noopener noreferrer';
   dlBtn.download = info.filename;
   dlBtn.textContent = 'Download';
   dlBtn.style.cssText = `

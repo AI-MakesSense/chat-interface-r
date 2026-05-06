@@ -641,6 +641,8 @@ export const ChatPreview: React.FC<ChatPreviewProps> = ({ config }) => {
                 </a>
                 <a
                   href={href}
+                  target="_blank"
+                  rel="noopener noreferrer"
                   download={info.filename}
                   className="lpc-btn"
                   style={{ color: subText }}
