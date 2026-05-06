@@ -259,6 +259,7 @@ const getIconByName = (iconName: string): LucideIcon => {
 // Use the same markdown renderer as the production widget
 import { renderMarkdown } from '@/widget/src/markdown';
 import { resolveLinkColor, rgbaTint } from '@/widget/src/link-color';
+import { detectFileType } from '@/widget/src/utils/file-type-detector';
 
 // Typing indicator component
 const TypingIndicator = () => (
@@ -287,13 +288,7 @@ export const ChatPreview: React.FC<ChatPreviewProps> = ({ config }) => {
 
   // Intercept PDF link clicks in message area
   const handleMessageClick = useCallback((e: React.MouseEvent) => {
-    const target = e.target as HTMLElement;
-    const link = target.closest('a') as HTMLAnchorElement | null;
-    if (link && isPdfUrl(link.href)) {
-      e.preventDefault();
-      e.stopPropagation();
-      pdfLightboxRef.current?.open(link.href);
-    }
+    // Lightbox disabled — links open naturally via target="_blank"
   }, []);
 
   // Generate session ID once per component mount
@@ -602,6 +597,65 @@ export const ChatPreview: React.FC<ChatPreviewProps> = ({ config }) => {
     }
   }, [config.enablePdfLightbox]);
 
+  const renderMessageWithCards = (htmlContent: string) => {
+    const linkRegex = /<a\s+[^>]*href="([^"]+)"[^>]*>[^<]*<\/a>/g;
+    const links: string[] = [];
+    let match;
+    while ((match = linkRegex.exec(htmlContent)) !== null) {
+      const href = match[1];
+      if (href && !href.startsWith('#') && !href.startsWith('mailto:') && !href.startsWith('javascript:')) {
+        links.push(href);
+      }
+    }
+
+    return (
+      <>
+        <div dangerouslySetInnerHTML={{ __html: htmlContent }} />
+        {links.map((href, i) => {
+          const info = detectFileType(href);
+          return (
+            <div key={i} className="link-preview-card">
+              <div
+                className="lpc-icon"
+                style={{
+                  backgroundColor: info.iconColor,
+                  fontSize: info.icon.length > 2 ? '10px' : '14px',
+                }}
+              >
+                {info.icon}
+              </div>
+              <div style={{ flex: 1, minWidth: 0, overflow: 'hidden' }}>
+                <div className="lpc-filename">{info.filename}</div>
+                <div className="lpc-domain">{info.domain}</div>
+              </div>
+              <div style={{ display: 'flex', gap: '6px', flexShrink: 0 }}>
+                <a
+                  href={href}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="lpc-btn"
+                  style={{ color: accentColor }}
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  Open
+                </a>
+                <a
+                  href={href}
+                  download={info.filename}
+                  className="lpc-btn"
+                  style={{ color: subText }}
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  Download
+                </a>
+              </div>
+            </div>
+          );
+        })}
+      </>
+    );
+  };
+
   return (
     <div
       ref={rootRef}
@@ -656,6 +710,52 @@ export const ChatPreview: React.FC<ChatPreviewProps> = ({ config }) => {
         /* Links */
         a { color: ${linkColor}; text-decoration: underline; background-color: ${linkBgTint}; padding: 0 2px; border-radius: 2px; cursor: pointer; transition: background-color 0.15s ease; }
         a:hover { background-color: ${linkBgTintHover}; }
+        /* Link preview cards */
+        .link-preview-card {
+          display: flex;
+          align-items: center;
+          gap: 10px;
+          padding: 10px 12px;
+          margin-top: 6px;
+          background: ${surface};
+          border: 1px solid ${border};
+          border-radius: ${elementRadius};
+        }
+        .link-preview-card .lpc-icon {
+          width: 36px;
+          height: 36px;
+          border-radius: 6px;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          color: white;
+          font-weight: 700;
+          font-size: 14px;
+          flex-shrink: 0;
+        }
+        .link-preview-card .lpc-filename {
+          font-weight: 600;
+          font-size: 13px;
+          color: ${text};
+          white-space: nowrap;
+          overflow: hidden;
+          text-overflow: ellipsis;
+        }
+        .link-preview-card .lpc-domain {
+          font-size: 11px;
+          color: ${subText};
+          margin-top: 1px;
+        }
+        .link-preview-card .lpc-btn {
+          font-size: 12px;
+          text-decoration: none;
+          padding: 4px 10px;
+          border-radius: 4px;
+          border: 1px solid ${border};
+          background: ${surface};
+          cursor: pointer;
+          white-space: nowrap;
+        }
         /* Paragraphs */
         p { margin: 0 0 0.5em 0; }
         p:last-child { margin-bottom: 0; }
@@ -777,7 +877,7 @@ export const ChatPreview: React.FC<ChatPreviewProps> = ({ config }) => {
                   ) : msg.isUser ? (
                     msg.text
                   ) : (
-                    <div dangerouslySetInnerHTML={{ __html: renderMarkdown(msg.text) }} />
+                    renderMessageWithCards(renderMarkdown(msg.text))
                   )}
                 </div>
               </div>
