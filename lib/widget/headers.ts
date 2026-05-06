@@ -54,14 +54,21 @@ export function extractDomainFromReferer(referer: string): string | null {
  * - Access-Control-Allow-Origin: CORS header for cross-origin loading
  */
 /**
- * Headers for the JS bundle (rarely changes)
+ * Headers for the JS bundle.
+ * Uses must-revalidate so browsers check for updates on every load,
+ * but get a fast 304 Not Modified when the bundle hasn't changed.
+ * Pass a content hash as etag to enable conditional requests.
  */
-export function createResponseHeaders(): Record<string, string> {
-  return {
-    'Content-Type': 'application/javascript',
-    'Cache-Control': 'public, max-age=3600, stale-while-revalidate=86400, no-transform',
+export function createResponseHeaders(etag?: string): Record<string, string> {
+  const headers: Record<string, string> = {
+    'Content-Type': 'application/javascript; charset=utf-8',
+    'Cache-Control': 'public, no-cache',
     'Access-Control-Allow-Origin': '*'
   };
+  if (etag) {
+    headers['ETag'] = etag;
+  }
+  return headers;
 }
 
 /**

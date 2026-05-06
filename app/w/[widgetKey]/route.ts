@@ -333,12 +333,20 @@ export async function GET(
     };
 
     const requestOrigin = new URL(request.url).origin;
-    const widgetBundle = await serveWidgetBundle(mockLicense as any, widget.id, requestOrigin);
+    const { bundle: widgetBundle, etag } = await serveWidgetBundle(mockLicense as any, widget.id, requestOrigin);
 
-    // Step 12: Return successful response
+    // Step 12: Conditional response — return 304 if browser has current version
+    const ifNoneMatch = request.headers.get('if-none-match');
+    if (ifNoneMatch && ifNoneMatch === etag) {
+      return new NextResponse(null, {
+        status: 304,
+        headers: createResponseHeaders(etag)
+      });
+    }
+
     return new NextResponse(widgetBundle, {
       status: 200,
-      headers: createResponseHeaders()
+      headers: createResponseHeaders(etag)
     });
 
   } catch (error) {

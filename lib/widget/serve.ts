@@ -7,6 +7,7 @@
  */
 
 import { readFile } from 'fs/promises';
+import { createHash } from 'crypto';
 import { join } from 'path';
 import { License } from '@/lib/db/schema';
 import { injectLicenseFlags } from '@/lib/widget/inject';
@@ -16,6 +17,7 @@ import { injectLicenseFlags } from '@/lib/widget/inject';
  */
 interface BundleCache {
   bundle: string;
+  etag: string;
   timestamp: number;
 }
 
@@ -58,21 +60,21 @@ function getCacheKey(license: License, widgetId?: string, baseUrl?: string): str
  * @param license - License object from database
  * @param widgetId - Optional widget ID for relay configuration
  * @param baseUrl - Optional origin for relay URL injection
- * @returns Widget bundle JavaScript with injected flags
+ * @returns Object with bundle content and ETag for conditional responses
  */
 
 export async function serveWidgetBundle(
   license: License,
   widgetId?: string,
   baseUrl?: string
-): Promise<string> {
+): Promise<{ bundle: string; etag: string }> {
   const cacheKey = getCacheKey(license, widgetId, baseUrl);
   const now = Date.now();
 
   // Check cache
   const cached = bundleCache.get(cacheKey);
   if (cached && (now - cached.timestamp) < CACHE_TTL) {
-    return cached.bundle;
+    return { bundle: cached.bundle, etag: cached.etag };
   }
 
   // Read bundle from filesystem
@@ -81,13 +83,17 @@ export async function serveWidgetBundle(
   // Inject license flags and relay config
   const bundleWithFlags = injectLicenseFlags(rawBundle, license, widgetId, baseUrl);
 
+  // Generate ETag from content hash
+  const etag = `"${createHash('md5').update(bundleWithFlags).digest('hex').slice(0, 16)}"`;
+
   // Update cache
   bundleCache.set(cacheKey, {
     bundle: bundleWithFlags,
+    etag,
     timestamp: now
   });
 
-  return bundleWithFlags;
+  return { bundle: bundleWithFlags, etag };
 }
 
 /**

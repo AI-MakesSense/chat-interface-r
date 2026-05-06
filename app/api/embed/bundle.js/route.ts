@@ -1,16 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { createHash } from 'crypto';
 import fs from 'fs';
 import path from 'path';
 
 export async function GET(request: NextRequest) {
     try {
-        // Path to the compiled widget file
-        // In production (Vercel), this might need adjustment depending on where the build output is
-        // For now, we assume it's in public/widget/chat-widget.iife.js or similar
-        // But since we are building it, we should probably read it from the build output directory
-
-        // NOTE: The widget build process outputs to public/widget/chat-widget.iife.js
-        // We will serve this file.
         const widgetPath = path.join(process.cwd(), 'public', 'widget', 'chat-widget.iife.js');
 
         if (!fs.existsSync(widgetPath)) {
@@ -22,12 +16,28 @@ export async function GET(request: NextRequest) {
         }
 
         const fileBuffer = fs.readFileSync(widgetPath);
+        const etag = `"${createHash('md5').update(fileBuffer).digest('hex').slice(0, 16)}"`;
+
+        // Return 304 if browser already has the current version
+        const ifNoneMatch = request.headers.get('if-none-match');
+        if (ifNoneMatch && ifNoneMatch === etag) {
+            return new NextResponse(null, {
+                status: 304,
+                headers: {
+                    'Content-Type': 'application/javascript; charset=utf-8',
+                    'Cache-Control': 'public, no-cache',
+                    'Access-Control-Allow-Origin': '*',
+                    'ETag': etag,
+                },
+            });
+        }
 
         return new NextResponse(fileBuffer, {
             headers: {
-                'Content-Type': 'application/javascript',
-                'Cache-Control': 'public, max-age=3600, stale-while-revalidate=86400, no-transform',
+                'Content-Type': 'application/javascript; charset=utf-8',
+                'Cache-Control': 'public, no-cache',
                 'Access-Control-Allow-Origin': '*',
+                'ETag': etag,
             },
         });
 
