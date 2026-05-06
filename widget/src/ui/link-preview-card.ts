@@ -2,7 +2,7 @@
  * Link Preview Card
  *
  * Creates a compact inline preview card for external links.
- * Shows file type icon, filename, domain, and Open/Download buttons.
+ * Shows file type icon, filename, domain, and an Open button.
  */
 
 import { detectFileType } from '../utils/file-type-detector';
@@ -84,14 +84,6 @@ export function createLinkPreviewCard(url: string, theme: LinkPreviewTheme): HTM
 
   card.appendChild(textArea);
 
-  // Action buttons
-  const actions = document.createElement('div');
-  actions.style.cssText = `
-    display: flex;
-    gap: 6px;
-    flex-shrink: 0;
-  `;
-
   // Open button
   const openBtn = document.createElement('a');
   openBtn.href = url;
@@ -102,36 +94,16 @@ export function createLinkPreviewCard(url: string, theme: LinkPreviewTheme): HTM
     font-size: 12px;
     color: ${theme.accentColor};
     text-decoration: none;
-    padding: 4px 10px;
+    padding: 4px 14px;
     border-radius: 4px;
     background: ${theme.surface};
     border: 1px solid ${theme.border};
     cursor: pointer;
     white-space: nowrap;
+    flex-shrink: 0;
   `;
-  actions.appendChild(openBtn);
 
-  // Download button
-  const dlBtn = document.createElement('a');
-  dlBtn.href = url;
-  dlBtn.target = '_blank';
-  dlBtn.rel = 'noopener noreferrer';
-  dlBtn.download = info.filename;
-  dlBtn.textContent = 'Download';
-  dlBtn.style.cssText = `
-    font-size: 12px;
-    color: ${theme.subText};
-    text-decoration: none;
-    padding: 4px 10px;
-    border-radius: 4px;
-    background: ${theme.surface};
-    border: 1px solid ${theme.border};
-    cursor: pointer;
-    white-space: nowrap;
-  `;
-  actions.appendChild(dlBtn);
-
-  card.appendChild(actions);
+  card.appendChild(openBtn);
 
   return card;
 }

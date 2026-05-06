@@ -25,12 +25,13 @@ describe('createLinkPreviewCard', () => {
     expect(openLink.textContent).toBe('Open');
   });
 
-  it('includes a Download link', () => {
+  it('has exactly one action link (Open)', () => {
     const card = createLinkPreviewCard('https://example.com/file.xlsx', defaultTheme);
     const links = card.querySelectorAll('a');
-    const downloadLink = Array.from(links).find(a => a.textContent === 'Download');
-    expect(downloadLink).not.toBeUndefined();
-    expect(downloadLink!.hasAttribute('download')).toBe(true);
+    expect(links.length).toBe(1);
+    expect(links[0].textContent).toBe('Open');
+    expect(links[0].target).toBe('_blank');
+    expect(links[0].hasAttribute('download')).toBe(false);
   });
 
   it('shows file type icon with correct color for known types', () => {
