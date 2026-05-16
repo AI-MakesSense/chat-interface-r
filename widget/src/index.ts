@@ -6,6 +6,7 @@
  */
 
 import { ChatRenderer } from './renderers/chat/chat-renderer';
+import { DisplayRenderer } from './renderers/display/display-renderer';
 import { WidgetRuntimeConfig, WidgetConfig } from './types';
 import { Widget as WidgetConstructor } from './core/widget';
 
@@ -149,8 +150,10 @@ if (typeof window !== 'undefined') {
       // Save config to window so the internal message handler can find it if needed
       (window as any).ChatWidgetConfig = runtimeConfig;
 
-      // 5. Initialize
-      await new ChatRenderer().mount(runtimeConfig, document.body);
+      // 5. Initialize — dispatch on config.kind
+      const isDisplay = remoteConfig.kind === 'display';
+      const renderer = isDisplay ? new DisplayRenderer() : new ChatRenderer();
+      await renderer.mount(runtimeConfig, document.body);
 
     } catch (error) {
       console.error('[N8n Chat Widget] Boot error:', error);
