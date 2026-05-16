@@ -5,7 +5,7 @@
  * Responsibility: Initialize widget, create UI, handle user interaction
  */
 
-import { createChatWidget } from './widget';
+import { ChatRenderer } from './renderers/chat/chat-renderer';
 import { WidgetRuntimeConfig, WidgetConfig } from './types';
 import { Widget as WidgetConstructor } from './core/widget';
 
@@ -64,10 +64,10 @@ if (typeof window !== 'undefined') {
     if (injectedRelay && injectedRelay.relayUrl && (injectedConfig.branding || (injectedConfig.uiConfig && injectedConfig.uiConfig.branding))) {
       console.log('[N8n Chat Widget] Using existing full configuration');
       try {
-        createChatWidget({
-          ...(injectedConfig as WidgetRuntimeConfig),
-          display: displayConfig,
-        });
+        await new ChatRenderer().mount(
+          { ...(injectedConfig as WidgetRuntimeConfig), display: displayConfig },
+          document.body
+        );
         return;
       } catch (error) {
         console.error('[N8n Chat Widget] Initialization error:', error);
@@ -150,7 +150,7 @@ if (typeof window !== 'undefined') {
       (window as any).ChatWidgetConfig = runtimeConfig;
 
       // 5. Initialize
-      createChatWidget(runtimeConfig);
+      await new ChatRenderer().mount(runtimeConfig, document.body);
 
     } catch (error) {
       console.error('[N8n Chat Widget] Boot error:', error);
