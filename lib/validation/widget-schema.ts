@@ -503,3 +503,37 @@ export type FeaturesInput = z.infer<typeof featuresSchema>;
 export type PlaygroundConfigInput = z.infer<typeof playgroundConfigSchema>;
 export type StarterPromptInput = z.infer<typeof starterPromptSchema>;
 export type WidgetConfigInput = z.infer<typeof widgetConfigBaseSchema>;
+
+// =============================================================================
+// Widget Kind Dispatch Helper
+// =============================================================================
+
+export { displayWidgetConfigSchema } from './display-widget-schema';
+export type { DisplayWidgetConfig } from './display-widget-schema';
+
+import { displayWidgetConfigSchema as _displayWidgetConfigSchema } from './display-widget-schema';
+
+/**
+ * Returns the right Zod schema for a widget config based on its kind.
+ *
+ * - `'chat'`: returns the tier-aware factory schema (createWidgetConfigSchema)
+ * - `'display'`: returns the display widget schema (tier-agnostic in v1; tier checks
+ *   can be layered on later via .superRefine if needed)
+ *
+ * API routes use this so they can validate either widget kind through one entry point.
+ * The shape returned is `ZodTypeAny`-compatible (each branch is a different concrete Zod
+ * schema) — callers should use `.safeParse(config)` and inspect the result.
+ */
+export function getWidgetConfigSchemaForKind(
+  kind: 'chat' | 'display',
+  tier: LicenseTier,
+  brandingRequired: boolean
+) {
+  if (kind === 'chat') {
+    return createWidgetConfigSchema(tier, brandingRequired);
+  }
+  if (kind === 'display') {
+    return _displayWidgetConfigSchema;
+  }
+  throw new Error(`Unknown widget kind: ${kind}`);
+}
