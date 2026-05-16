@@ -29,7 +29,7 @@ export class DisplayRenderer implements Renderer {
 
     this.injectStyles();
 
-    const ui = (runtimeConfig as any).uiConfig;
+    const ui = runtimeConfig.uiConfig;
     this.sidebar = new Sidebar({
       widgetKey: runtimeConfig.relay.licenseKey,
       title: ui.display?.header?.title ?? 'Documents',
@@ -50,11 +50,12 @@ export class DisplayRenderer implements Renderer {
     this.sidebar?.dispose();
     this.sidebar = null;
     this.container = null;
+    this.runtimeConfig = null;
   }
 
   private async fire(): Promise<void> {
     if (!this.runtimeConfig || !this.sidebar) return;
-    const ui = (this.runtimeConfig as any).uiConfig;
+    const ui = this.runtimeConfig.uiConfig;
 
     this.abort?.abort();
     this.abort = new AbortController();
@@ -106,7 +107,7 @@ export class DisplayRenderer implements Renderer {
 
   private setState(state: DisplayRendererState): void {
     if (!this.sidebar) return;
-    const ui = (this.runtimeConfig as any).uiConfig;
+    const ui = this.runtimeConfig!.uiConfig;
     renderDocList(this.sidebar.getBodyElement(), state, {
       emptyMessage: ui.display?.emptyMessage ?? 'No documents available.',
       onRetry: () => {

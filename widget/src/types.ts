@@ -23,6 +23,12 @@ export interface WidgetConfig {
   composer?: ComposerConfig;
   advancedStyling?: any; // Legacy/Pro styling
   behavior?: any; // Legacy behavior settings
+
+  // =========================================================================
+  // Display widget fields
+  // =========================================================================
+  kind?: 'chat' | 'display';
+  display?: DisplayUiConfig;
 }
 
 export interface PortalConfig {
@@ -260,4 +266,18 @@ export interface ModelOption {
   label: string;
   description?: string;
   default?: boolean;
+}
+
+// =========================================================================
+// Display Widget Configuration
+// =========================================================================
+
+export interface DisplayUiConfig {
+  position: 'left' | 'right';
+  defaultOpen: boolean;
+  header: {
+    title: string;
+    showCount: boolean;
+  };
+  emptyMessage: string;
 }
