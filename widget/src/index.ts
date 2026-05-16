@@ -65,7 +65,10 @@ if (typeof window !== 'undefined') {
     if (injectedRelay && injectedRelay.relayUrl && (injectedConfig.branding || (injectedConfig.uiConfig && injectedConfig.uiConfig.branding))) {
       console.log('[N8n Chat Widget] Using existing full configuration');
       try {
-        await new ChatRenderer().mount(
+        const fastConfig = injectedConfig.uiConfig ?? injectedConfig;
+        const isDisplay = (fastConfig as any).kind === 'display';
+        const fastRenderer = isDisplay ? new DisplayRenderer() : new ChatRenderer();
+        await fastRenderer.mount(
           { ...(injectedConfig as WidgetRuntimeConfig), display: displayConfig },
           document.body
         );

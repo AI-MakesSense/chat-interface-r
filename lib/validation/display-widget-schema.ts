@@ -1,7 +1,10 @@
 import { z } from 'zod';
 
 const hexColor = z.string().regex(/^#([0-9a-f]{3}|[0-9a-f]{6})$/i, 'must be a hex color');
-const httpsUrl = z.string().url().refine((u) => u.startsWith('https://'), 'must be https://');
+const httpsUrl = z.string().url().refine(
+  (u) => u.startsWith('https://') || u.includes('localhost'),
+  'must use HTTPS (or localhost for development)'
+);
 const optionalHttpsUrl = z.union([httpsUrl, z.null()]);
 
 const brandingSchema = z.object({
