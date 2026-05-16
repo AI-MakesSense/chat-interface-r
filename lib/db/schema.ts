@@ -114,7 +114,7 @@ export const widgets = pgTable('widgets', {
   name: varchar('name', { length: 100 }).notNull(), // User-friendly name ("Homepage Chat", "Support Widget")
   status: varchar('status', { length: 20 }).default('active').notNull(), // 'active' | 'paused' | 'deleted'
   widgetType: varchar('widget_type', { length: 20 }).default('n8n').notNull(), // 'n8n' | 'chatkit'
-  kind: varchar('kind', { length: 20 }).notNull().default('chat'), // 'chat' | 'document'
+  kind: varchar('kind', { length: 20 }).notNull().default('chat'), // 'chat' | 'display'
 
   // Embed type (Schema v2.0) - determines embed code format
   embedType: varchar('embed_type', { length: 20 }).default('popup'), // 'popup' | 'inline' | 'fullpage' | 'portal'
