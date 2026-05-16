@@ -14,7 +14,7 @@ describe('ChatRenderer', () => {
     (createChatWidget as jest.Mock).mockClear();
   });
 
-  it('forwards mount() to createChatWidget with the runtime config', async () => {
+  it('forwards mount() to createChatWidget with the runtime config (container is intentionally not passed — createChatWidget self-attaches)', async () => {
     const renderer = new ChatRenderer();
     const config = {
       uiConfig: { branding: { companyName: 'X' } },
@@ -29,8 +29,31 @@ describe('ChatRenderer', () => {
     expect(createChatWidget).toHaveBeenCalledWith(config);
   });
 
-  it('dispose() resolves (chat lifecycle is owned by createChatWidget)', async () => {
+  it('dispose() invokes destroy() on the cleanup handle returned by createChatWidget', async () => {
+    const destroy = jest.fn();
+    (createChatWidget as jest.Mock).mockReturnValue({ destroy });
+
+    const renderer = new ChatRenderer();
+    await renderer.mount({} as any, document.createElement('div'));
+    await renderer.dispose();
+
+    expect(destroy).toHaveBeenCalledTimes(1);
+  });
+
+  it('dispose() is safe to call before mount (no cleanup handle yet)', async () => {
     const renderer = new ChatRenderer();
     await expect(renderer.dispose()).resolves.toBeUndefined();
+  });
+
+  it('dispose() is idempotent — second call does not re-invoke destroy', async () => {
+    const destroy = jest.fn();
+    (createChatWidget as jest.Mock).mockReturnValue({ destroy });
+
+    const renderer = new ChatRenderer();
+    await renderer.mount({} as any, document.createElement('div'));
+    await renderer.dispose();
+    await renderer.dispose();
+
+    expect(destroy).toHaveBeenCalledTimes(1);
   });
 });
