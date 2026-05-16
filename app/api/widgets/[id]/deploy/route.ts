@@ -15,7 +15,7 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { requireAuth } from '@/lib/auth/guard';
-import { getWidgetWithLicense, deployWidget } from '@/lib/db/queries';
+import { getWidgetWithLicense, getWidgetById, getUserById, deployWidget } from '@/lib/db/queries';
 import { getWidgetConfigSchemaForKind } from '@/lib/validation/widget-schema';
 import { z } from 'zod';
 
@@ -38,15 +38,39 @@ export async function POST(
     const idSchema = z.string().uuid();
     const widgetId = idSchema.parse(id);
 
-    // 3. Get widget with license information
-    const widget = await getWidgetWithLicense(widgetId);
+    // 3. Get widget with license information (legacy path)
+    //    V2.0 widgets have licenseId = NULL so the inner join returns null — fall back to direct lookup.
+    const widgetWithLicense = await getWidgetWithLicense(widgetId);
 
-    if (!widget) {
-      return NextResponse.json({ error: 'Widget not found' }, { status: 404 });
+    let ownerUserId: string;
+    let tier: string;
+    // `widget` holds only the base Widget columns (status, kind, config) used below.
+    // Both paths produce a value that satisfies this shape.
+    let widget: { status: string; kind: string; config: unknown };
+
+    if (widgetWithLicense) {
+      // Legacy path: widget is associated with a license
+      ownerUserId = widgetWithLicense.license.userId;
+      tier = widgetWithLicense.license.tier;
+      widget = widgetWithLicense;
+    } else {
+      // V2.0 path: widget is associated directly with a user (licenseId is NULL)
+      const v2Widget = await getWidgetById(widgetId);
+      if (!v2Widget) {
+        return NextResponse.json({ error: 'Widget not found' }, { status: 404 });
+      }
+      if (!v2Widget.userId) {
+        // Widget exists but has neither a license nor a userId — data integrity issue
+        return NextResponse.json({ error: 'Widget not found' }, { status: 404 });
+      }
+      const widgetUser = await getUserById(v2Widget.userId);
+      ownerUserId = v2Widget.userId;
+      tier = widgetUser?.tier ?? 'free';
+      widget = v2Widget;
     }
 
-    // 4. Verify ownership through license
-    if (widget.license.userId !== user.sub) {
+    // 4. Verify ownership
+    if (ownerUserId !== user.sub) {
       return NextResponse.json({ error: 'You do not own this widget' }, { status: 403 });
     }
 
@@ -61,7 +85,7 @@ export async function POST(
     // 6. Validate config is deployment-ready (strict validation - no defaults)
     // Use the existing widget's kind to select the right schema.
     const widgetKind: 'chat' | 'display' = (widget.kind === 'display') ? 'display' : 'chat';
-    const configSchema = getWidgetConfigSchemaForKind(widgetKind, widget.license.tier as any, false);
+    const configSchema = getWidgetConfigSchemaForKind(widgetKind, tier as any, false);
 
     try {
       configSchema.parse(widget.config);
