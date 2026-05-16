@@ -11,6 +11,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getWidgetByKeyWithUser } from '@/lib/db/queries';
 import { normalizeDomain } from '@/lib/license/domain';
 import { CHATKIT_SERVER_ENABLED } from '@/lib/feature-flags';
+import { translateDisplayConfig } from '@/lib/widget/translate-display-config';
 import type { WidgetConfig } from '@/widget/src/types';
 
 /**
@@ -325,15 +326,18 @@ export async function GET(
 
     // Translate config
     const dbConfig = widget.config as any;
-    const config = translateConfig(
-      {
-        ...dbConfig,
-        widgetId: widget.id,
-      },
-      request.url,
-      widgetKey,
-      userTier
-    );
+    const config =
+      widget.kind === 'display'
+        ? translateDisplayConfig(dbConfig, request.url)
+        : translateConfig(
+            {
+              ...dbConfig,
+              widgetId: widget.id,
+            },
+            request.url,
+            widgetKey,
+            userTier
+          );
 
     return NextResponse.json(config, {
       headers: {
