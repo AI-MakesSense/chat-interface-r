@@ -15,7 +15,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { requireAuth } from '@/lib/auth/guard';
 import { getWidgetById, getWidgetWithLicense, updateWidget, deleteWidget, getUserById } from '@/lib/db/queries';
-import { createWidgetConfigSchema } from '@/lib/validation/widget-schema';
+import { getWidgetConfigSchemaForKind } from '@/lib/validation/widget-schema';
 import { deepMerge, stripLegacyConfigProperties, sanitizeConfig, forceN8nProviderConfig } from '@/lib/utils/config-helpers';
 import { CHATKIT_SERVER_ENABLED } from '@/lib/feature-flags';
 import { logActivity } from '@/lib/db/admin-queries';
@@ -206,8 +206,9 @@ export async function PATCH(
       // SANITIZATION: Enforce tier restrictions and fix data integrity
       const sanitizedConfig = sanitizeConfig(mergedConfig, tier);
 
-      // Validate merged config against tier restrictions
-      const configSchema = createWidgetConfigSchema(tier as any, true);
+      // Validate merged config against tier restrictions, using the existing widget's kind
+      const existingKind: 'chat' | 'display' = (widget.kind === 'display') ? 'display' : 'chat';
+      const configSchema = getWidgetConfigSchemaForKind(existingKind, tier as any, true);
       configSchema.parse(sanitizedConfig);
 
       // Strip legacy properties that might conflict with new structure

@@ -28,7 +28,7 @@ import {
   getUserById,
 } from '@/lib/db/queries';
 import { createDefaultConfig } from '@/lib/config/defaults';
-import { createWidgetConfigSchema } from '@/lib/validation/widget-schema';
+import { createWidgetConfigSchema, getWidgetConfigSchemaForKind } from '@/lib/validation/widget-schema';
 import { deepMerge, forceN8nProviderConfig, stripLegacyConfigProperties } from '@/lib/utils/config-helpers';
 import { CHATKIT_SERVER_ENABLED } from '@/lib/feature-flags';
 import { generateEmbedCode, resolveEmbedBaseUrlFromRequest, type EmbedType as GeneratedEmbedType } from '@/lib/embed';
@@ -60,6 +60,7 @@ const CreateWidgetSchema = z.object({
   embedType: z.enum(['popup', 'inline', 'fullpage', 'portal']).optional(),
   allowedDomains: z.array(z.string()).optional(),
   widgetType: z.enum(['n8n', 'chatkit']).optional(),
+  kind: z.enum(['chat', 'display']).default('chat'),
 });
 
 // =============================================================================
@@ -74,7 +75,7 @@ export async function POST(request: NextRequest) {
 
     // 2. Parse and validate request body
     const body = await request.json();
-    const { licenseId, name, config: userConfig, embedType, allowedDomains, widgetType: requestWidgetType } = CreateWidgetSchema.parse(body);
+    const { licenseId, name, config: userConfig, embedType, allowedDomains, widgetType: requestWidgetType, kind } = CreateWidgetSchema.parse(body);
 
     // Force n8n-only mode when ChatKit is disabled.
     if (!CHATKIT_SERVER_ENABLED) {
@@ -148,7 +149,7 @@ export async function POST(request: NextRequest) {
     }
 
     // 6. Validate final config against tier restrictions
-    const configSchema = createWidgetConfigSchema(tier as any, true);
+    const configSchema = getWidgetConfigSchemaForKind(kind, tier as any, true);
     configSchema.parse(finalConfig);
 
     // 7. Clean legacy properties that might conflict with new structure
@@ -171,6 +172,7 @@ export async function POST(request: NextRequest) {
         name,
         config: cleanedConfig,
         widgetType: finalWidgetType,
+        kind,
       });
     } else {
       // Schema v2.0 path: Create with userId directly
@@ -181,6 +183,7 @@ export async function POST(request: NextRequest) {
         embedType: embedType || 'popup',
         allowedDomains: allowedDomains || undefined,
         widgetType: finalWidgetType,
+        kind,
       });
     }
 

@@ -416,6 +416,7 @@ export async function createWidget(data: {
   config: any;
   status?: string;
   widgetType?: string;
+  kind?: 'chat' | 'display';
   version?: number;
   deployedAt?: Date | null;
 }): Promise<Widget> {
@@ -428,6 +429,7 @@ export async function createWidget(data: {
       config: data.config,
       status: data.status || 'active',
       widgetType: data.widgetType || 'n8n',
+      kind: data.kind || 'chat',
       version: data.version || 1,
       deployedAt: data.deployedAt || null,
       createdAt: now,
@@ -811,6 +813,7 @@ export async function createWidgetV2(data: {
   allowedDomains?: string[];
   status?: string;
   widgetType?: string;
+  kind?: 'chat' | 'display';
   version?: number;
   deployedAt?: Date | null;
   // Legacy: optional licenseId for backward compatibility
@@ -833,6 +836,7 @@ export async function createWidgetV2(data: {
       allowedDomains: data.allowedDomains || null,
       status: data.status || 'active',
       widgetType: data.widgetType || 'n8n',
+      kind: data.kind || 'chat',
       version: data.version || 1,
       deployedAt: data.deployedAt ?? now, // Schema v2.0: Auto-deploy on creation
       createdAt: now,
