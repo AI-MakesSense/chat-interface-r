@@ -22,6 +22,22 @@ if (typeof window !== 'undefined') {
 
   console.log('%c[N8n Chat Widget] Script Loaded', 'background: #222; color: #bada55; padding: 4px; border-radius: 4px;');
 
+  // Capture document.currentScript synchronously at IIFE evaluation time —
+  // BEFORE any await or addEventListener. Once the event loop yields,
+  // document.currentScript becomes null.
+  let scriptTag: HTMLScriptElement | null = null;
+  const currentScript = document.currentScript;
+  if (currentScript instanceof HTMLScriptElement) {
+    scriptTag = currentScript;
+  } else {
+    // Fallback for async/deferred scripts or environments where currentScript
+    // is unavailable. Last-wins selector mirrors legacy behaviour.
+    const scriptCandidates = Array.from(
+      document.querySelectorAll('script[src*="/chat-widget.js"], script[src*="/bundle.js"], script[src*="/w/"]')
+    ) as HTMLScriptElement[];
+    scriptTag = scriptCandidates[scriptCandidates.length - 1] || null;
+  }
+
   // Wait for DOM to be ready
   if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', init);
@@ -34,10 +50,6 @@ if (typeof window !== 'undefined') {
     const injectedConfig = (window as any).ChatWidgetConfig || {};
     // Handle case where injectedConfig might be nested or flat
     const injectedRelay = injectedConfig.relay || (injectedConfig.uiConfig ? injectedConfig.uiConfig.relay : {});
-    const scriptCandidates = Array.from(
-      document.querySelectorAll('script[src*="/chat-widget.js"], script[src*="/bundle.js"], script[src*="/w/"]')
-    ) as HTMLScriptElement[];
-    const scriptTag = scriptCandidates[scriptCandidates.length - 1] || null;
 
     const scriptModeAttr = (scriptTag?.getAttribute('data-mode') || scriptTag?.getAttribute('data-embed') || '')
       .trim()

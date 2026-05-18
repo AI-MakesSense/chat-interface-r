@@ -359,6 +359,79 @@ describe('DisplayRenderer', () => {
     expect(body.context.pageUrl).toBeDefined();
   });
 
+  // ── parseDocuments hardening tests (U9 #14) ──────────────────────────────
+
+  it('renders error state when all documents have malicious URLs (all-dropped → error)', async () => {
+    fetchSpy.mockImplementation((async () =>
+      new Response(JSON.stringify({
+        documents: [
+          { title: 'a', url: 'javascript:alert(1)' },
+          { title: 'b', url: 'javascript:void(0)' },
+        ],
+      }), { status: 200 })
+    ) as any);
+    const r = new DisplayRenderer();
+    await r.mount(baseConfig, document.body);
+    await new Promise((res) => setTimeout(res, 0));
+    // All items dropped → parseDocuments returns null → error state
+    expect(document.body.querySelector('.cw-display-error')).not.toBeNull();
+    expect(document.body.querySelector('.cw-display-empty')).toBeNull();
+  });
+
+  it('renders empty state (not error) when documents array is empty []', async () => {
+    fetchSpy.mockImplementation((async () =>
+      new Response(JSON.stringify({ documents: [] }), { status: 200 })
+    ) as any);
+    const r = new DisplayRenderer();
+    await r.mount(baseConfig, document.body);
+    await new Promise((res) => setTimeout(res, 0));
+    // Empty-by-design: parseDocuments returns [] → empty state
+    expect(document.body.querySelector('.cw-display-empty')).not.toBeNull();
+    expect(document.body.querySelector('.cw-display-error')).toBeNull();
+  });
+
+  it('renders only the valid card when array contains one valid and one javascript: URL', async () => {
+    fetchSpy.mockImplementation((async () =>
+      new Response(JSON.stringify({
+        documents: [
+          { title: 'Good', url: 'https://example.com/doc.pdf' },
+          { title: 'Bad', url: 'javascript:alert(1)' },
+        ],
+      }), { status: 200 })
+    ) as any);
+    const r = new DisplayRenderer();
+    await r.mount(baseConfig, document.body);
+    await new Promise((res) => setTimeout(res, 0));
+    const cards = document.body.querySelectorAll('.cw-display-card');
+    expect(cards.length).toBe(1);
+    expect((cards[0] as HTMLAnchorElement).href).toBe('https://example.com/doc.pdf');
+  });
+
+  it('calls console.warn once with drop count when an invalid item is dropped', async () => {
+    const warnSpy = jest.spyOn(console, 'warn').mockImplementation(() => {});
+    try {
+      fetchSpy.mockImplementation((async () =>
+        new Response(JSON.stringify({
+          documents: [
+            { title: 'Safe', url: 'https://example.com/safe.pdf' },
+            { title: 'Malicious', url: 'javascript:alert(1)' },
+          ],
+        }), { status: 200 })
+      ) as any);
+      const r = new DisplayRenderer();
+      await r.mount(baseConfig, document.body);
+      await new Promise((res) => setTimeout(res, 0));
+
+      const warnCalls = warnSpy.mock.calls.filter((args) =>
+        typeof args[0] === 'string' && args[0].includes('Dropped')
+      );
+      expect(warnCalls.length).toBe(1);
+      expect(warnCalls[0][0]).toMatch(/Dropped 1 invalid document/);
+    } finally {
+      warnSpy.mockRestore();
+    }
+  });
+
   // ── NPE guard test (U8 #13) ───────────────────────────────────────────────
 
   it('does not throw when dispose() runs before the fetch resolves', async () => {

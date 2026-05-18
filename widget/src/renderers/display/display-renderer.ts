@@ -173,19 +173,35 @@ export class DisplayRenderer implements Renderer {
     const docs = (data as any).documents;
     if (!Array.isArray(docs)) return null;
     const out: DisplayDocument[] = [];
+    let firstDroppedTitle: string | undefined;
     for (const d of docs) {
       if (d && typeof d.title === 'string' && typeof d.url === 'string') {
         let parsed: URL;
         try {
           parsed = new URL(d.url);
         } catch {
+          firstDroppedTitle ??= d.title;
           continue; // invalid URL — drop
         }
         if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
+          firstDroppedTitle ??= d.title;
           continue; // disallowed scheme — drop
         }
         out.push({ title: d.title, url: d.url });
       }
+    }
+    const droppedCount = docs.length - out.length;
+    if (droppedCount > 0) {
+      console.warn(
+        `[N8n Display Widget] Dropped ${droppedCount} invalid document(s) from response` +
+          (firstDroppedTitle !== undefined ? ` (first: "${firstDroppedTitle}")` : '')
+      );
+    }
+    // If every item was dropped (likely a malicious/malformed payload), escalate
+    // to error state rather than silently rendering an empty list. The empty-by-
+    // design case (docs: []) passes through as [] → empty state as before.
+    if (docs.length > 0 && out.length === 0) {
+      return null;
     }
     return out;
   }
