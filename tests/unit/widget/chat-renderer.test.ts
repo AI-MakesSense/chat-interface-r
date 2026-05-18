@@ -29,6 +29,21 @@ describe('ChatRenderer', () => {
     expect(createChatWidget).toHaveBeenCalledWith(config);
   });
 
+  it('accepts a fetcher option and still calls createChatWidget with the config (fetcher is ignored by chat renderer)', async () => {
+    const renderer = new ChatRenderer();
+    const config = {
+      uiConfig: { branding: { companyName: 'Y' } },
+      relay: { relayUrl: 'http://r', widgetId: 'w2', licenseKey: 'k2' },
+    } as any;
+    const container = document.createElement('div');
+    const stubFetcher = async () => new Response('{}', { status: 200 });
+
+    await renderer.mount(config, container, { fetcher: stubFetcher });
+
+    expect(createChatWidget).toHaveBeenCalledTimes(1);
+    expect(createChatWidget).toHaveBeenCalledWith(config);
+  });
+
   it('dispose() invokes destroy() on the cleanup handle returned by createChatWidget', async () => {
     const destroy = jest.fn();
     (createChatWidget as jest.Mock).mockReturnValue({ destroy });

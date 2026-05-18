@@ -171,4 +171,43 @@ describe('DisplayRenderer', () => {
     await new Promise((res) => setTimeout(res, 0));
     expect(document.body.querySelectorAll('.cw-display-card').length).toBe(1);
   });
+
+  // ── Injected-fetcher tests (U5) ───────────────────────────────────────────
+
+  it('uses the stub fetcher passed via options instead of globalThis.fetch', async () => {
+    const stubDocs = [{ title: 'Stub doc', url: 'https://stub.example.com/doc.pdf' }];
+    const stubFetcher = jest.fn(async () =>
+      new Response(JSON.stringify({ documents: stubDocs }), { status: 200 })
+    );
+
+    const r = new DisplayRenderer();
+    await r.mount(baseConfig, document.body, { fetcher: stubFetcher });
+    await new Promise((res) => setTimeout(res, 0));
+
+    // The injected stub was used
+    expect(stubFetcher).toHaveBeenCalledTimes(1);
+    expect(stubFetcher).toHaveBeenCalledWith('http://relay', expect.objectContaining({ method: 'POST' }));
+    // globalThis.fetch (the spy) was NOT called
+    expect(fetchSpy).not.toHaveBeenCalled();
+    // The doc card rendered from the stub response
+    expect(document.body.querySelectorAll('.cw-display-card').length).toBe(1);
+  });
+
+  it('falls back to globalThis.fetch when no fetcher option is provided', async () => {
+    const r = new DisplayRenderer();
+    await r.mount(baseConfig, document.body);
+    await new Promise((res) => setTimeout(res, 0));
+
+    expect(fetchSpy).toHaveBeenCalledTimes(1);
+  });
+
+  it('does NOT modify globalThis.fetch — identity is preserved before and after mount', async () => {
+    const fetchBefore = globalThis.fetch;
+    const r = new DisplayRenderer();
+    await r.mount(baseConfig, document.body);
+    await new Promise((res) => setTimeout(res, 0));
+    const fetchAfter = globalThis.fetch;
+
+    expect(fetchAfter).toBe(fetchBefore);
+  });
 });

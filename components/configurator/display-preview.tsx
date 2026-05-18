@@ -1,6 +1,7 @@
 "use client";
 import { useEffect, useRef } from "react";
 import { DisplayRenderer } from "@/widget/src/renderers/display/display-renderer";
+import type { WidgetFetcher } from "@/widget/src/core/renderer";
 import type { DisplaySectionValue } from "./sections/display-section";
 import type { DisplayThemeValue } from "./sections/display-theme-section";
 import type { DisplayBrandingValue } from "./sections/display-branding-section";
@@ -29,7 +30,8 @@ export function DisplayPreview({ display, theme, branding, triggerMessage }: Pro
       void prev.dispose();
     }
 
-    // Stub the network call so n8n is never actually invoked
+    // Stub the network call so n8n is never actually invoked.
+    // Passed via options.fetcher so globalThis.fetch is never mutated.
     const stubResponse = {
       documents: [
         { title: 'Sample document 1.pdf', url: 'https://example.com/1.pdf' },
@@ -37,8 +39,8 @@ export function DisplayPreview({ display, theme, branding, triggerMessage }: Pro
         { title: 'Sample document 3.xlsx', url: 'https://example.com/3.xlsx' },
       ],
     };
-    const originalFetch = window.fetch;
-    window.fetch = (async () => new Response(JSON.stringify(stubResponse), { status: 200 })) as typeof fetch;
+    const stubFetcher: WidgetFetcher = async () =>
+      new Response(JSON.stringify(stubResponse), { status: 200 });
 
     const renderer = new DisplayRenderer();
     void renderer.mount(
@@ -59,11 +61,11 @@ export function DisplayPreview({ display, theme, branding, triggerMessage }: Pro
         relay: { relayUrl: 'about:blank', widgetId: 'preview', licenseKey: 'preview' },
       } as any,
       containerRef.current,
+      { fetcher: stubFetcher },
     );
     rendererRef.current = renderer;
 
     return () => {
-      window.fetch = originalFetch;
       void renderer.dispose();
     };
   }, [JSON.stringify({ display, theme, branding, triggerMessage })]);

@@ -1,4 +1,4 @@
-import type { Renderer } from '../../core/renderer';
+import type { Renderer, RendererMountOptions, WidgetFetcher } from '../../core/renderer';
 import type { WidgetRuntimeConfig } from '../../types';
 import { Sidebar } from './sidebar';
 import { renderDocList } from './doc-list';
@@ -22,8 +22,14 @@ export class DisplayRenderer implements Renderer {
   private abort: AbortController | null = null;
   private runtimeConfig: WidgetRuntimeConfig | null = null;
   private container: HTMLElement | null = null;
+  private fetcher: WidgetFetcher = globalThis.fetch.bind(globalThis);
 
-  async mount(runtimeConfig: WidgetRuntimeConfig, container: HTMLElement): Promise<void> {
+  async mount(
+    runtimeConfig: WidgetRuntimeConfig,
+    container: HTMLElement,
+    options?: RendererMountOptions
+  ): Promise<void> {
+    this.fetcher = options?.fetcher ?? globalThis.fetch.bind(globalThis);
     this.runtimeConfig = runtimeConfig;
     this.container = container;
 
@@ -76,7 +82,7 @@ export class DisplayRenderer implements Renderer {
     });
 
     try {
-      const res = await fetch(this.runtimeConfig.relay.relayUrl, {
+      const res = await this.fetcher(this.runtimeConfig.relay.relayUrl, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload),
