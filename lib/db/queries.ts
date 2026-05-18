@@ -444,6 +444,7 @@ export async function createWidget(data: {
  * Update widget fields (partial update)
  * Returns null if widget doesn't exist
  * Never updates createdAt, always updates updatedAt
+ * kind is immutable — set at creation time and cannot be changed via this function
  */
 export async function updateWidget(
   id: string,
@@ -456,6 +457,9 @@ export async function updateWidget(
     deployedAt?: Date | null;
   }
 ): Promise<Widget | null> {
+  if ('kind' in data) {
+    throw new Error('updateWidget cannot change widget kind — kind is set at creation time');
+  }
   const updateData: any = {};
   if (data.name !== undefined) updateData.name = data.name;
   if (data.config !== undefined) updateData.config = data.config;

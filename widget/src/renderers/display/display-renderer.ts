@@ -82,6 +82,12 @@ export class DisplayRenderer implements Renderer {
     this.container = null;
     this.runtimeConfig = null;
     _activeDisplayInstances = Math.max(0, _activeDisplayInstances - 1);
+    // Remove the shared <style> tag when the last instance is torn down so
+    // the injected CSS doesn't linger on pages that fully unmount all display
+    // widgets (e.g. configurator preview cycling through multiple renders).
+    if (_activeDisplayInstances === 0) {
+      document.getElementById(STYLE_ID)?.remove();
+    }
   }
 
   private async fire(): Promise<void> {
@@ -156,9 +162,9 @@ export class DisplayRenderer implements Renderer {
         }
         this.setState({ kind: 'success', documents: docs });
         this.sidebar?.updateCount(docs.length);
-      } catch (err: any) {
+      } catch (err: unknown) {
         clearTimeout(timeoutId);
-        if (err?.name === 'AbortError') {
+        if (err instanceof Error && err.name === 'AbortError') {
           if (timedOut) {
             this.setState({ kind: 'error', message: 'Request timed out.' });
             return;

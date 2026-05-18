@@ -81,4 +81,30 @@ describe('Sidebar', () => {
     const badge = c.querySelector('.cw-display-count') as HTMLElement;
     expect(badge?.style.display).toBe('none');
   });
+
+  it('getBodyElement() throws if called before mount()', () => {
+    const sidebar = new Sidebar({ widgetKey: 'w1', title: 't', position: 'right', defaultOpen: true });
+    expect(() => sidebar.getBodyElement()).toThrow(/not mounted/i);
+  });
+
+  it('getBodyElement() throws after dispose()', () => {
+    const c = document.createElement('div');
+    const sidebar = new Sidebar({ widgetKey: 'w1', title: 't', position: 'right', defaultOpen: true });
+    sidebar.mount(c);
+    sidebar.dispose();
+    expect(() => sidebar.getBodyElement()).toThrow(/not mounted/i);
+  });
+
+  it('getRootElement() throws if called before mount()', () => {
+    const sidebar = new Sidebar({ widgetKey: 'w1', title: 't', position: 'right', defaultOpen: true });
+    expect(() => sidebar.getRootElement()).toThrow(/not mounted/i);
+  });
+
+  it('getRootElement() throws after dispose()', () => {
+    const c = document.createElement('div');
+    const sidebar = new Sidebar({ widgetKey: 'w1', title: 't', position: 'right', defaultOpen: true });
+    sidebar.mount(c);
+    sidebar.dispose();
+    expect(() => sidebar.getRootElement()).toThrow(/not mounted/i);
+  });
 });

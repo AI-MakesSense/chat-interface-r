@@ -19,8 +19,17 @@ export class Sidebar {
   private root: HTMLElement | null = null;
   private bodyEl: HTMLElement | null = null;
   private countEl: HTMLElement | null = null;
+  private collapseBtn: HTMLButtonElement | null = null;
   private collapsed = false;
   private opts: SidebarOptions;
+
+  /**
+   * Stored as an arrow-function field so the same reference is used for both
+   * addEventListener and removeEventListener (anonymous inline lambdas cannot
+   * be removed by reference). Cleared in dispose() to avoid a stale closure
+   * holding the button alive after unmount.
+   */
+  private handleCollapseClick: (() => void) | null = null;
 
   constructor(opts: SidebarOptions) {
     this.opts = opts;
@@ -53,7 +62,8 @@ export class Sidebar {
     btn.className = 'cw-display-collapse-btn';
     btn.setAttribute('aria-expanded', String(!this.collapsed));
     btn.textContent = this.collapsed ? '›' : '‹';
-    btn.addEventListener('click', () => this.toggleCollapsed(btn, root));
+    this.handleCollapseClick = () => this.toggleCollapsed(btn, root);
+    btn.addEventListener('click', this.handleCollapseClick);
 
     header.appendChild(titleEl);
     header.appendChild(countEl);
@@ -69,6 +79,7 @@ export class Sidebar {
     this.root = root;
     this.bodyEl = body;
     this.countEl = countEl;
+    this.collapseBtn = btn;
   }
 
   getBodyElement(): HTMLElement {
@@ -86,10 +97,19 @@ export class Sidebar {
   }
 
   dispose(): void {
+    // Explicitly remove the collapse-button listener before removing the root
+    // from the DOM. This prevents listener accumulation in remount-heavy
+    // scenarios (e.g. configurator preview cycling) where the same page never
+    // fully unloads the script context.
+    if (this.collapseBtn && this.handleCollapseClick) {
+      this.collapseBtn.removeEventListener('click', this.handleCollapseClick);
+    }
     this.root?.remove();
     this.root = null;
     this.bodyEl = null;
     this.countEl = null;
+    this.collapseBtn = null;
+    this.handleCollapseClick = null;
   }
 
   private toggleCollapsed(btn: HTMLButtonElement, root: HTMLElement): void {
