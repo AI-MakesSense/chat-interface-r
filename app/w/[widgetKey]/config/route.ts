@@ -13,6 +13,7 @@ import { getWidgetByKeyWithUser } from '@/lib/db/queries';
 import { isValidWidgetKey } from '@/lib/embed';
 import { CHATKIT_SERVER_ENABLED } from '@/lib/feature-flags';
 import { normalizeDomain } from '@/lib/license/domain';
+import { translateDisplayConfig } from '@/lib/widget/translate-display-config';
 import type { WidgetConfig } from '@/widget/src/types';
 
 /**
@@ -294,19 +295,21 @@ export async function GET(
     const dbConfig = widget.config as any;
 
     // Translate the config to widget format
-    const config = translateConfig(
-      {
-        ...dbConfig,
-        widgetId: widget.id,
-        license: {
-          key: widgetKey,
-          active: true,
-          plan: widget.user.tier || 'free'
-        }
-      },
-      request.url,
-      widget.user.tier || 'free'
-    );
+    const config = widget.kind === 'display'
+      ? translateDisplayConfig(dbConfig, request.url)
+      : translateConfig(
+          {
+            ...dbConfig,
+            widgetId: widget.id,
+            license: {
+              key: widgetKey,
+              active: true,
+              plan: widget.user.tier || 'free'
+            }
+          },
+          request.url,
+          widget.user.tier || 'free'
+        );
 
     return NextResponse.json(config, {
       headers: {
