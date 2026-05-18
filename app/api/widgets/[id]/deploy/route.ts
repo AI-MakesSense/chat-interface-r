@@ -16,7 +16,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { requireAuth } from '@/lib/auth/guard';
 import { getWidgetWithLicense, getWidgetById, getUserById, deployWidget } from '@/lib/db/queries';
-import { getWidgetConfigSchemaForKind } from '@/lib/validation/widget-schema';
+import { getWidgetConfigSchemaForKind, normalizeTier } from '@/lib/validation/widget-schema';
 import { z } from 'zod';
 
 // =============================================================================
@@ -85,7 +85,7 @@ export async function POST(
     // 6. Validate config is deployment-ready (strict validation - no defaults)
     // Use the existing widget's kind to select the right schema.
     const widgetKind: 'chat' | 'display' = (widget.kind === 'display') ? 'display' : 'chat';
-    const configSchema = getWidgetConfigSchemaForKind(widgetKind, tier as any, false);
+    const configSchema = getWidgetConfigSchemaForKind(widgetKind, normalizeTier(tier), false);
 
     try {
       configSchema.parse(widget.config);

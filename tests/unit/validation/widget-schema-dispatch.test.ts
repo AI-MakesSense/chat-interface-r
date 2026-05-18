@@ -1,4 +1,4 @@
-import { getWidgetConfigSchemaForKind } from '@/lib/validation/widget-schema';
+import { getWidgetConfigSchemaForKind, normalizeTier } from '@/lib/validation/widget-schema';
 
 describe('getWidgetConfigSchemaForKind', () => {
   const validDisplayConfig = {
@@ -46,5 +46,27 @@ describe('getWidgetConfigSchemaForKind', () => {
   it('throws on unknown kind', () => {
     // @ts-expect-error — intentionally passing an invalid kind
     expect(() => getWidgetConfigSchemaForKind('mystery', 'pro', false)).toThrow();
+  });
+});
+
+describe('normalizeTier', () => {
+  it('returns valid tiers as-is', () => {
+    expect(normalizeTier('basic')).toBe('basic');
+    expect(normalizeTier('pro')).toBe('pro');
+    expect(normalizeTier('agency')).toBe('agency');
+  });
+
+  it('normalizes free to basic', () => {
+    expect(normalizeTier('free')).toBe('basic');
+  });
+
+  it('normalizes null and undefined to basic', () => {
+    expect(normalizeTier(null)).toBe('basic');
+    expect(normalizeTier(undefined)).toBe('basic');
+  });
+
+  it('normalizes garbage strings to basic', () => {
+    expect(normalizeTier('garbage')).toBe('basic');
+    expect(normalizeTier('')).toBe('basic');
   });
 });

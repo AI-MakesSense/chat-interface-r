@@ -414,6 +414,22 @@ export const widgetConfigBaseSchema = z.object({
 export type LicenseTier = 'basic' | 'pro' | 'agency';
 
 /**
+ * Normalizes a user-supplied or DB-derived tier value to a valid LicenseTier.
+ *
+ * `LicenseTier = 'basic' | 'pro' | 'agency'`. Any other value — `'free'`, `null`,
+ * `undefined`, garbage strings — collapses to `'basic'`. This is the canonical entry
+ * point for any tier value flowing into `createWidgetConfigSchema` or
+ * `getWidgetConfigSchemaForKind` — without it, free-tier users would bypass all
+ * tier-gated checks because `createWidgetConfigSchema` has no `'free'` branch.
+ *
+ * Call this at every API route boundary that derives `tier` from user/license data.
+ */
+export function normalizeTier(raw: string | null | undefined): LicenseTier {
+  if (raw === 'basic' || raw === 'pro' || raw === 'agency') return raw;
+  return 'basic';
+}
+
+/**
  * Create tier-aware widget config schema
  *
  * Business Rules:

@@ -28,7 +28,7 @@ import {
   getUserById,
 } from '@/lib/db/queries';
 import { createDefaultConfig } from '@/lib/config/defaults';
-import { createWidgetConfigSchema, getWidgetConfigSchemaForKind } from '@/lib/validation/widget-schema';
+import { createWidgetConfigSchema, getWidgetConfigSchemaForKind, normalizeTier } from '@/lib/validation/widget-schema';
 import { deepMerge, forceN8nProviderConfig, stripLegacyConfigProperties } from '@/lib/utils/config-helpers';
 import { CHATKIT_SERVER_ENABLED } from '@/lib/feature-flags';
 import { generateEmbedCode, resolveEmbedBaseUrlFromRequest, type EmbedType as GeneratedEmbedType } from '@/lib/embed';
@@ -149,7 +149,7 @@ export async function POST(request: NextRequest) {
     }
 
     // 6. Validate final config against tier restrictions
-    const configSchema = getWidgetConfigSchemaForKind(kind, tier as any, true);
+    const configSchema = getWidgetConfigSchemaForKind(kind, normalizeTier(tier), true);
     // Assign back the validated parse result (parse returns the validated/transformed value)
     finalConfig = configSchema.parse(finalConfig);
 
