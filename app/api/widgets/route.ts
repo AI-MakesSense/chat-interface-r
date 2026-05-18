@@ -28,7 +28,7 @@ import {
   getUserById,
 } from '@/lib/db/queries';
 import { createDefaultConfig } from '@/lib/config/defaults';
-import { createWidgetConfigSchema, getWidgetConfigSchemaForKind, normalizeTier } from '@/lib/validation/widget-schema';
+import { getWidgetConfigSchemaForKind, normalizeTier } from '@/lib/validation/widget-schema';
 import { deepMerge, forceN8nProviderConfig, stripLegacyConfigProperties } from '@/lib/utils/config-helpers';
 import { CHATKIT_SERVER_ENABLED } from '@/lib/feature-flags';
 import { generateEmbedCode, resolveEmbedBaseUrlFromRequest, type EmbedType as GeneratedEmbedType } from '@/lib/embed';

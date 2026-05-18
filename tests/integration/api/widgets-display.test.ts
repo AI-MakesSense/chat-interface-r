@@ -1,4 +1,6 @@
 /**
+ * @jest-environment node
+ *
  * Display Widget Configuration API Integration Tests
  *
  * Endpoint: GET /api/w/[widgetKey]/config (v2)
