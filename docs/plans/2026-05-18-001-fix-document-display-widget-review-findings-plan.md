@@ -1,7 +1,7 @@
 ---
 title: "fix: Resolve document display widget code review findings"
 type: fix
-status: active
+status: completed
 date: 2026-05-18
 origin: code review run /tmp/compound-engineering/ce-code-review/20260518-38c9e0c0/ on branch feat/document-display-widget
 ---
