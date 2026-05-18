@@ -53,4 +53,53 @@ describe('displayWidgetConfigSchema', () => {
     const bad = { ...valid, connection: { ...valid.connection, provider: 'chatkit' } };
     expect(() => displayWidgetConfigSchema.parse(bad)).toThrow();
   });
+
+  // --- webhookUrl: URL-parsed localhost check ---
+
+  it('accepts http://localhost webhook URL', () => {
+    const cfg = { ...valid, connection: { ...valid.connection, webhookUrl: 'http://localhost:3000/webhook' } };
+    expect(() => displayWidgetConfigSchema.parse(cfg)).not.toThrow();
+  });
+
+  it('accepts http://127.0.0.1 webhook URL', () => {
+    const cfg = { ...valid, connection: { ...valid.connection, webhookUrl: 'http://127.0.0.1:5678/webhook' } };
+    expect(() => displayWidgetConfigSchema.parse(cfg)).not.toThrow();
+  });
+
+  it('rejects http://attacker.com/?ref=localhost (substring bypass attempt)', () => {
+    const bad = { ...valid, connection: { ...valid.connection, webhookUrl: 'http://attacker.com/?ref=localhost' } };
+    expect(() => displayWidgetConfigSchema.parse(bad)).toThrow();
+  });
+
+  it('rejects http://localhost.attacker.com/ (subdomain bypass attempt)', () => {
+    const bad = { ...valid, connection: { ...valid.connection, webhookUrl: 'http://localhost.attacker.com/' } };
+    expect(() => displayWidgetConfigSchema.parse(bad)).toThrow();
+  });
+
+  it('rejects http://evil.com/#localhost (fragment bypass attempt)', () => {
+    const bad = { ...valid, connection: { ...valid.connection, webhookUrl: 'http://evil.com/#localhost' } };
+    expect(() => displayWidgetConfigSchema.parse(bad)).toThrow();
+  });
+
+  it('rejects http://malicious.localhost.foo/ (nested subdomain bypass attempt)', () => {
+    const bad = { ...valid, connection: { ...valid.connection, webhookUrl: 'http://malicious.localhost.foo/' } };
+    expect(() => displayWidgetConfigSchema.parse(bad)).toThrow();
+  });
+
+  // --- triggerMessage: non-empty requirement ---
+
+  it('rejects an empty triggerMessage', () => {
+    const bad = { ...valid, connection: { ...valid.connection, triggerMessage: '' } };
+    expect(() => displayWidgetConfigSchema.parse(bad)).toThrow();
+  });
+
+  it('accepts a triggerMessage at the 500-char boundary', () => {
+    const cfg = { ...valid, connection: { ...valid.connection, triggerMessage: 'a'.repeat(500) } };
+    expect(() => displayWidgetConfigSchema.parse(cfg)).not.toThrow();
+  });
+
+  it('rejects a triggerMessage exceeding 500 chars', () => {
+    const bad = { ...valid, connection: { ...valid.connection, triggerMessage: 'a'.repeat(501) } };
+    expect(() => displayWidgetConfigSchema.parse(bad)).toThrow();
+  });
 });

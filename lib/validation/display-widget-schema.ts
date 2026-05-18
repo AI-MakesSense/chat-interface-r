@@ -2,8 +2,17 @@ import { z } from 'zod';
 
 const hexColor = z.string().regex(/^#([0-9a-f]{3}|[0-9a-f]{6})$/i, 'must be a hex color');
 const httpsUrl = z.string().url().refine(
-  (u) => u.startsWith('https://') || u.includes('localhost'),
-  'must use HTTPS (or localhost for development)'
+  (u) => {
+    try {
+      const parsed = new URL(u);
+      if (parsed.protocol === 'https:') return true;
+      if (parsed.protocol === 'http:' && (parsed.hostname === 'localhost' || parsed.hostname === '127.0.0.1')) return true;
+      return false;
+    } catch {
+      return false;
+    }
+  },
+  'must use HTTPS (or http://localhost for development)'
 );
 const optionalHttpsUrl = z.union([httpsUrl, z.null()]);
 
@@ -39,7 +48,7 @@ const displaySchema = z.object({
 const connectionSchema = z.object({
   provider: z.literal('n8n'),
   webhookUrl: httpsUrl,
-  triggerMessage: z.string().max(500),
+  triggerMessage: z.string().min(1, 'Trigger message is required').max(500),
   captureContext: z.boolean(),
   customContext: z.record(z.string(), z.unknown()),
 });

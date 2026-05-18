@@ -119,11 +119,19 @@ export async function POST(
       );
     }
 
-    // Check if webhookUrl is HTTPS or localhost
-    const isLocalhostUrl = webhookUrl.includes('localhost') || webhookUrl.includes('127.0.0.1');
-    const isHttpsUrl = webhookUrl.startsWith('https://');
+    // Check if webhookUrl is HTTPS or localhost (use URL-parse to prevent substring-match bypasses)
+    const isValidDeployUrl = (() => {
+      try {
+        const parsed = new URL(webhookUrl);
+        if (parsed.protocol === 'https:') return true;
+        if (parsed.protocol === 'http:' && (parsed.hostname === 'localhost' || parsed.hostname === '127.0.0.1')) return true;
+        return false;
+      } catch {
+        return false;
+      }
+    })();
 
-    if (!isHttpsUrl && !isLocalhostUrl) {
+    if (!isValidDeployUrl) {
       return NextResponse.json(
         {
           error: 'Widget configuration is not ready for deployment',
