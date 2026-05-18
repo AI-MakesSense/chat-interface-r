@@ -142,18 +142,19 @@ export async function POST(request: NextRequest) {
     let finalConfig;
     if (userConfig) {
       // Deep merge user config with defaults
-      const defaults = createDefaultConfig(tier as any);
+      const defaults = createDefaultConfig(tier as any, kind);
       finalConfig = deepMerge(defaults, userConfig);
     } else {
-      finalConfig = createDefaultConfig(tier as any);
+      finalConfig = createDefaultConfig(tier as any, kind);
     }
 
     // 6. Validate final config against tier restrictions
     const configSchema = getWidgetConfigSchemaForKind(kind, tier as any, true);
-    configSchema.parse(finalConfig);
+    // Assign back the validated parse result (parse returns the validated/transformed value)
+    finalConfig = configSchema.parse(finalConfig);
 
     // 7. Clean legacy properties that might conflict with new structure
-    let cleanedConfig = stripLegacyConfigProperties(finalConfig);
+    let cleanedConfig = stripLegacyConfigProperties(finalConfig, kind);
     if (!CHATKIT_SERVER_ENABLED) {
       cleanedConfig = forceN8nProviderConfig(cleanedConfig);
     }

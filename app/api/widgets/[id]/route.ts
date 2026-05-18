@@ -203,16 +203,18 @@ export async function PATCH(
       // Deep merge new config with existing config
       const mergedConfig = deepMerge(widget.config, updates.config);
 
+      // Determine the widget's kind from the existing row — never trust the request body for this
+      const existingKind: 'chat' | 'display' = (widget.kind === 'display') ? 'display' : 'chat';
+
       // SANITIZATION: Enforce tier restrictions and fix data integrity
-      const sanitizedConfig = sanitizeConfig(mergedConfig, tier);
+      const sanitizedConfig = sanitizeConfig(mergedConfig, tier, existingKind);
 
       // Validate merged config against tier restrictions, using the existing widget's kind
-      const existingKind: 'chat' | 'display' = (widget.kind === 'display') ? 'display' : 'chat';
       const configSchema = getWidgetConfigSchemaForKind(existingKind, tier as any, true);
       configSchema.parse(sanitizedConfig);
 
       // Strip legacy properties that might conflict with new structure
-      let cleanedConfig = stripLegacyConfigProperties(sanitizedConfig);
+      let cleanedConfig = stripLegacyConfigProperties(sanitizedConfig, existingKind);
       if (!CHATKIT_SERVER_ENABLED) {
         cleanedConfig = forceN8nProviderConfig(cleanedConfig);
       }
