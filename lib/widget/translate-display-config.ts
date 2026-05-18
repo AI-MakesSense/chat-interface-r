@@ -19,5 +19,6 @@ export function translateDisplayConfig(dbConfig: any, requestUrl: string) {
       captureContext: dbConfig.connection?.captureContext ?? true,
       customContext: dbConfig.connection?.customContext ?? {},
     },
+    features: { fileAttachmentsEnabled: false, allowedExtensions: [], maxFileSizeKB: 0 },
   };
 }

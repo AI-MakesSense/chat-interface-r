@@ -53,6 +53,15 @@ describe('translateDisplayConfig', () => {
     expect(out.display).toEqual(dbConfig.display);
   });
 
+  it('includes a features stub for WidgetConfig compatibility', () => {
+    const out = translateDisplayConfig(dbConfig, 'https://app.example.com/w/abc/config');
+    expect(out.features).toEqual({
+      fileAttachmentsEnabled: false,
+      allowedExtensions: [],
+      maxFileSizeKB: 0,
+    });
+  });
+
   it('handles missing optional fields gracefully', () => {
     const minimal = {
       kind: 'display',
