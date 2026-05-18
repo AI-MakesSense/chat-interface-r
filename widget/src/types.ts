@@ -40,6 +40,17 @@ export interface PortalConfig {
 export interface WidgetRuntimeConfig {
   uiConfig: WidgetConfig;
   relay: RelayConfig;
+  /**
+   * Embed-mode configuration for the chat widget runtime.
+   *
+   * NOTE: This field controls *how* the chat widget is embedded on the page
+   * (popup / inline / portal) and is intentionally named `display` for
+   * historical reasons. It is **not** the same as `WidgetConfig.display`,
+   * which holds the display-widget sidebar UI config (position, header,
+   * emptyMessage, etc.). When reading code that references `.display` on a
+   * `WidgetRuntimeConfig`, it refers to the embed mode; when reading `.display`
+   * on a `WidgetConfig` / `uiConfig`, it refers to the sidebar UI settings.
+   */
   display?: WidgetDisplayConfig;
 }
 
