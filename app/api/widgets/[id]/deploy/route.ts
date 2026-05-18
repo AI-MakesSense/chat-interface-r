@@ -64,8 +64,13 @@ export async function POST(
         return NextResponse.json({ error: 'Widget not found' }, { status: 404 });
       }
       const widgetUser = await getUserById(v2Widget.userId);
+      if (!widgetUser) {
+        // The widget's owner account has been deleted — return 404 rather
+        // than falling through to a misleading 'free' tier validation failure.
+        return NextResponse.json({ error: 'Widget owner not found' }, { status: 404 });
+      }
       ownerUserId = v2Widget.userId;
-      tier = widgetUser?.tier ?? 'free';
+      tier = widgetUser.tier ?? 'free';
       widget = v2Widget;
     }
 

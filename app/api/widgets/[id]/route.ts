@@ -163,8 +163,21 @@ export async function PATCH(
     const widgetId = idSchema.parse(id);
 
     // 3. Parse and validate request body
-    const body = await request.json();
-    const updates = UpdateWidgetSchema.parse(body);
+    const rawBody = await request.json();
+
+    // Guard: kind is immutable — reject attempts to change it via PATCH
+    if ('kind' in rawBody) {
+      // We need the existing widget to compare — do a lightweight fetch first
+      const checkWidget = await getWidgetById(widgetId);
+      if (checkWidget && rawBody.kind !== checkWidget.kind) {
+        return NextResponse.json(
+          { error: 'kind cannot be changed via PATCH; create a new widget instead' },
+          { status: 400 }
+        );
+      }
+    }
+
+    const updates = UpdateWidgetSchema.parse(rawBody);
 
     // 4. Get widget and verify ownership (supports both v1 and v2.0)
     const result = await getWidgetWithOwnership(widgetId, user.sub);
