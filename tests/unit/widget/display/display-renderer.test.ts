@@ -210,4 +210,180 @@ describe('DisplayRenderer', () => {
 
     expect(fetchAfter).toBe(fetchBefore);
   });
+
+  // ── Theme injection tests (U8 #10) ────────────────────────────────────────
+
+  it('injects --cw-color-accent on the sidebar root from theme.color.accent', async () => {
+    const cfg = JSON.parse(JSON.stringify(baseConfig));
+    cfg.uiConfig.theme.color.accent = '#ff00ff';
+    const r = new DisplayRenderer();
+    await r.mount(cfg, document.body);
+    const root = document.body.querySelector('.cw-display-sidebar') as HTMLElement;
+    expect(root.style.getPropertyValue('--cw-color-accent')).toBe('#ff00ff');
+  });
+
+  it('injects --cw-color-surface on the sidebar root from theme.color.surface', async () => {
+    const cfg = JSON.parse(JSON.stringify(baseConfig));
+    cfg.uiConfig.theme.color.surface = '#abcdef';
+    const r = new DisplayRenderer();
+    await r.mount(cfg, document.body);
+    const root = document.body.querySelector('.cw-display-sidebar') as HTMLElement;
+    expect(root.style.getPropertyValue('--cw-color-surface')).toBe('#abcdef');
+  });
+
+  it('injects --cw-color-text, --cw-color-subText, --cw-color-border on the sidebar root', async () => {
+    const cfg = JSON.parse(JSON.stringify(baseConfig));
+    cfg.uiConfig.theme.color.text = '#101010';
+    cfg.uiConfig.theme.color.subText = '#202020';
+    cfg.uiConfig.theme.color.border = '#303030';
+    const r = new DisplayRenderer();
+    await r.mount(cfg, document.body);
+    const root = document.body.querySelector('.cw-display-sidebar') as HTMLElement;
+    expect(root.style.getPropertyValue('--cw-color-text')).toBe('#101010');
+    expect(root.style.getPropertyValue('--cw-color-subText')).toBe('#202020');
+    expect(root.style.getPropertyValue('--cw-color-border')).toBe('#303030');
+  });
+
+  // ── Fetch timeout tests (U8 #9) ───────────────────────────────────────────
+
+  it('renders an error state with timeout message when the fetcher stalls past 8s', async () => {
+    jest.useFakeTimers();
+    try {
+      // Fetcher that never resolves on its own — it only rejects when aborted.
+      const stallFetcher = jest.fn(
+        (_url: any, init?: any) =>
+          new Promise<Response>((_resolve, reject) => {
+            const sig: AbortSignal | undefined = init?.signal;
+            if (sig) {
+              sig.addEventListener('abort', () => {
+                const err: any = new Error('aborted');
+                err.name = 'AbortError';
+                reject(err);
+              });
+            }
+          })
+      );
+
+      const r = new DisplayRenderer();
+      const mountPromise = r.mount(baseConfig, document.body, { fetcher: stallFetcher });
+
+      // Advance past the 8s timeout. Then drain microtasks so the catch handler
+      // can run after the AbortError rejects.
+      jest.advanceTimersByTime(8001);
+      await Promise.resolve();
+      await Promise.resolve();
+      await mountPromise;
+
+      const errEl = document.body.querySelector('.cw-display-error');
+      expect(errEl).not.toBeNull();
+      expect(errEl?.textContent).toContain('timed out');
+    } finally {
+      jest.useRealTimers();
+    }
+  });
+
+  // ── Retry race guard test (U8 #11) ────────────────────────────────────────
+
+  it('isFiring guard prevents two synchronous fire() calls from both running', async () => {
+    // Hold the first fetch open until we release it, so the second sync
+    // call sees isFiring === true and returns early.
+    let release!: (value: Response) => void;
+    const heldFetcher = jest.fn(
+      () =>
+        new Promise<Response>((resolve) => {
+          release = resolve;
+        })
+    );
+
+    const r = new DisplayRenderer();
+    // mount() awaits fire(), but fire() is paused on the held promise — so the
+    // mount promise also hangs. We don't await mount; we observe state below.
+    const mountPromise = r.mount(baseConfig, document.body, { fetcher: heldFetcher });
+
+    // Synchronously trigger a second fire() by calling the retry path.
+    // Since we can't easily reach the retry button while in loading state,
+    // we exercise the guard directly via the private member. The behavior we're
+    // asserting is the call-count invariant.
+    await Promise.resolve();
+    // At this point the first fetcher call has been made, and isFiring === true.
+    // A second invocation of the private fire() must early-return without
+    // calling the fetcher again.
+    // @ts-expect-error — accessing private for guard test
+    await (r as any).fire();
+    expect(heldFetcher).toHaveBeenCalledTimes(1);
+
+    // Release the first fetch so mount() resolves and we can clean up.
+    release(new Response(JSON.stringify({ documents: [] }), { status: 200 }));
+    await mountPromise;
+  });
+
+  // ── captureContext toggle tests (U8 #12) ──────────────────────────────────
+
+  it('sends empty context when uiConfig.connection.captureContext === false', async () => {
+    const cfg = JSON.parse(JSON.stringify(baseConfig));
+    cfg.uiConfig.connection.captureContext = false;
+
+    const r = new DisplayRenderer();
+    await r.mount(cfg, document.body);
+    await new Promise((res) => setTimeout(res, 0));
+
+    const call = fetchSpy.mock.calls[0];
+    const body = JSON.parse((call[1] as any).body as string);
+    expect(body.context).toEqual({});
+  });
+
+  it('sends captured page context when captureContext === true', async () => {
+    const cfg = JSON.parse(JSON.stringify(baseConfig));
+    cfg.uiConfig.connection.captureContext = true;
+
+    const r = new DisplayRenderer();
+    await r.mount(cfg, document.body);
+    await new Promise((res) => setTimeout(res, 0));
+
+    const call = fetchSpy.mock.calls[0];
+    const body = JSON.parse((call[1] as any).body as string);
+    expect(body.context.pageUrl).toBeDefined();
+    expect(body.context.domain).toBeDefined();
+  });
+
+  it('sends captured page context when captureContext is unset (defaults to capture)', async () => {
+    const cfg = JSON.parse(JSON.stringify(baseConfig));
+    delete cfg.uiConfig.connection.captureContext;
+
+    const r = new DisplayRenderer();
+    await r.mount(cfg, document.body);
+    await new Promise((res) => setTimeout(res, 0));
+
+    const call = fetchSpy.mock.calls[0];
+    const body = JSON.parse((call[1] as any).body as string);
+    expect(body.context.pageUrl).toBeDefined();
+  });
+
+  // ── NPE guard test (U8 #13) ───────────────────────────────────────────────
+
+  it('does not throw when dispose() runs before the fetch resolves', async () => {
+    let release!: (value: Response) => void;
+    const heldFetcher = jest.fn(
+      () =>
+        new Promise<Response>((resolve) => {
+          release = resolve;
+        })
+    );
+
+    const r = new DisplayRenderer();
+    const mountPromise = r.mount(baseConfig, document.body, { fetcher: heldFetcher });
+    await Promise.resolve();
+
+    // Dispose while the fetch is still in flight — this nulls this.sidebar
+    // and this.runtimeConfig, then aborts the in-flight controller.
+    await r.dispose();
+
+    // Now release the fetch. The renderer's catch handler should receive an
+    // AbortError and bail silently; the success path (if it ran) would be
+    // protected by the `?.` guards on updateCount.
+    release(new Response(JSON.stringify({ documents: [{ title: 'A', url: 'https://x/a.pdf' }] }), { status: 200 }));
+
+    await expect(mountPromise).resolves.toBeUndefined();
+    expect(document.body.querySelector('.cw-display-sidebar')).toBeNull();
+  });
 });

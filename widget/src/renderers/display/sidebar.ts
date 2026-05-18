@@ -76,6 +76,11 @@ export class Sidebar {
     return this.bodyEl;
   }
 
+  getRootElement(): HTMLElement {
+    if (!this.root) throw new Error('Sidebar not mounted');
+    return this.root;
+  }
+
   updateCount(n: number): void {
     if (this.countEl) this.countEl.textContent = String(n);
   }
