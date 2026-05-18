@@ -11,6 +11,14 @@ const STYLE_ID = 'cw-display-styles';
 const FETCH_TIMEOUT_MS = 8000;
 
 /**
+ * Module-level counter that tracks the number of active DisplayRenderer
+ * instances on the page. Two display sidebars share the same fixed position
+ * and z-index, so they would overlap visually. We warn loudly when a second
+ * instance is detected so integrators can diagnose the problem quickly.
+ */
+let _activeDisplayInstances = 0;
+
+/**
  * Display widget renderer. Mounts a floating sidebar, fires a single request
  * to the chat-relay on mount (with the same payload shape as the chat widget),
  * and renders the response as a list of clickable document cards.
@@ -31,6 +39,15 @@ export class DisplayRenderer implements Renderer {
     container: HTMLElement,
     options?: RendererMountOptions
   ): Promise<void> {
+    _activeDisplayInstances += 1;
+    if (_activeDisplayInstances > 1) {
+      console.warn(
+        '[N8n Display Widget] A second display widget instance has been mounted on this page. ' +
+          'Both sidebars use the same fixed position and z-index and will overlap visually. ' +
+          'Use only one display widget per page.'
+      );
+    }
+
     this.fetcher = options?.fetcher ?? globalThis.fetch.bind(globalThis);
     this.runtimeConfig = runtimeConfig;
     this.container = container;
@@ -64,6 +81,7 @@ export class DisplayRenderer implements Renderer {
     this.sidebar = null;
     this.container = null;
     this.runtimeConfig = null;
+    _activeDisplayInstances = Math.max(0, _activeDisplayInstances - 1);
   }
 
   private async fire(): Promise<void> {
