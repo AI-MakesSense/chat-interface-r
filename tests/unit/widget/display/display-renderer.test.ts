@@ -92,4 +92,83 @@ describe('DisplayRenderer', () => {
     await r.dispose();
     expect(document.body.querySelector('.cw-display-sidebar')).toBeNull();
   });
+
+  // ── Scheme-validation tests (P0 XSS fix) ─────────────────────────────────
+
+  it('drops a javascript: URL and renders 0 cards', async () => {
+    fetchSpy.mockImplementation((async () =>
+      new Response(JSON.stringify({ documents: [{ title: 'X', url: 'javascript:alert(1)' }] }), { status: 200 })
+    ) as any);
+    const r = new DisplayRenderer();
+    await r.mount(baseConfig, document.body);
+    await new Promise((res) => setTimeout(res, 0));
+    expect(document.body.querySelectorAll('.cw-display-card').length).toBe(0);
+  });
+
+  it('drops a data: URL and renders 0 cards', async () => {
+    fetchSpy.mockImplementation((async () =>
+      new Response(JSON.stringify({ documents: [{ title: 'X', url: 'data:text/html,<script>alert(1)</script>' }] }), { status: 200 })
+    ) as any);
+    const r = new DisplayRenderer();
+    await r.mount(baseConfig, document.body);
+    await new Promise((res) => setTimeout(res, 0));
+    expect(document.body.querySelectorAll('.cw-display-card').length).toBe(0);
+  });
+
+  it('drops a vbscript: URL and renders 0 cards', async () => {
+    fetchSpy.mockImplementation((async () =>
+      new Response(JSON.stringify({ documents: [{ title: 'X', url: 'vbscript:msgbox' }] }), { status: 200 })
+    ) as any);
+    const r = new DisplayRenderer();
+    await r.mount(baseConfig, document.body);
+    await new Promise((res) => setTimeout(res, 0));
+    expect(document.body.querySelectorAll('.cw-display-card').length).toBe(0);
+  });
+
+  it('drops a blob: URL and renders 0 cards', async () => {
+    fetchSpy.mockImplementation((async () =>
+      new Response(JSON.stringify({ documents: [{ title: 'X', url: 'blob:https://x/abc-123' }] }), { status: 200 })
+    ) as any);
+    const r = new DisplayRenderer();
+    await r.mount(baseConfig, document.body);
+    await new Promise((res) => setTimeout(res, 0));
+    expect(document.body.querySelectorAll('.cw-display-card').length).toBe(0);
+  });
+
+  it('drops a malformed URL string and renders 0 cards', async () => {
+    fetchSpy.mockImplementation((async () =>
+      new Response(JSON.stringify({ documents: [{ title: 'X', url: 'not-a-url' }] }), { status: 200 })
+    ) as any);
+    const r = new DisplayRenderer();
+    await r.mount(baseConfig, document.body);
+    await new Promise((res) => setTimeout(res, 0));
+    expect(document.body.querySelectorAll('.cw-display-card').length).toBe(0);
+  });
+
+  it('renders only the valid doc when array contains one valid and one malicious URL', async () => {
+    fetchSpy.mockImplementation((async () =>
+      new Response(JSON.stringify({
+        documents: [
+          { title: 'Safe', url: 'https://example.com/doc.pdf' },
+          { title: 'Evil', url: 'javascript:alert(1)' },
+        ],
+      }), { status: 200 })
+    ) as any);
+    const r = new DisplayRenderer();
+    await r.mount(baseConfig, document.body);
+    await new Promise((res) => setTimeout(res, 0));
+    const cards = document.body.querySelectorAll('.cw-display-card');
+    expect(cards.length).toBe(1);
+    expect((cards[0] as HTMLAnchorElement).href).toBe('https://example.com/doc.pdf');
+  });
+
+  it('accepts an http: URL (not just https:)', async () => {
+    fetchSpy.mockImplementation((async () =>
+      new Response(JSON.stringify({ documents: [{ title: 'PDF', url: 'http://example.com/a.pdf' }] }), { status: 200 })
+    ) as any);
+    const r = new DisplayRenderer();
+    await r.mount(baseConfig, document.body);
+    await new Promise((res) => setTimeout(res, 0));
+    expect(document.body.querySelectorAll('.cw-display-card').length).toBe(1);
+  });
 });

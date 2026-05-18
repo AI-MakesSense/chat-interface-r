@@ -124,6 +124,15 @@ export class DisplayRenderer implements Renderer {
     const out: DisplayDocument[] = [];
     for (const d of docs) {
       if (d && typeof d.title === 'string' && typeof d.url === 'string') {
+        let parsed: URL;
+        try {
+          parsed = new URL(d.url);
+        } catch {
+          continue; // invalid URL — drop
+        }
+        if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
+          continue; // disallowed scheme — drop
+        }
         out.push({ title: d.title, url: d.url });
       }
     }
