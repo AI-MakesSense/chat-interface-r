@@ -1,69 +1,58 @@
 /**
  * @jest-environment node
  */
-import { describe, it, expect, beforeEach, jest, beforeAll } from '@jest/globals';
-import { POST } from '@/app/api/chat-relay/route';
+import { describe, it, expect, beforeAll, beforeEach, jest } from '@jest/globals';
 import { NextRequest } from 'next/server';
-import dotenv from 'dotenv';
-import path from 'path';
+const mockGetWidgetById = jest.fn();
+const mockGetWidgetByKeyWithUser = jest.fn();
+let POST: (request: NextRequest) => Promise<Response>;
 
-// Load environment variables
-dotenv.config({ path: path.resolve(process.cwd(), '.env.local') });
-
-// Save original fetch
-const originalFetch = global.fetch;
-
+jest.mock('@/lib/db/queries', () => ({
+    getWidgetById: mockGetWidgetById,
+    getWidgetByKeyWithUser: mockGetWidgetByKeyWithUser,
+}));
 // Mock fetch
-global.fetch = jest.fn((url: string | Request | URL, options?: RequestInit) => {
-    const urlString = url.toString();
-    // If it's the N8n webhook, return mock
-    if (urlString.includes('n8n.example.com')) {
-        return Promise.resolve({
-            ok: true,
-            status: 200,
-            headers: { get: () => 'application/json' },
-            json: () => Promise.resolve({ response: 'Hello from N8n' }),
-            text: () => Promise.resolve(JSON.stringify({ response: 'Hello from N8n' })),
-        });
-    }
-    // Otherwise pass through (for DB calls)
-    return originalFetch(url, options);
-}) as any;
+global.fetch = jest.fn() as any;
 
 describe('Chat Relay API', () => {
     const mockWidgetId = '123e4567-e89b-12d3-a456-426614174000';
-    const mockLicenseKey = 'test-license-key-12345';
+    const mockLegacyLicenseKey = 'test-license-key-12345';
+    const mockWidgetKey = 'A1B2C3D4E5F6G7H8';
     const mockWebhookUrl = 'https://n8n.example.com/webhook/test';
-
-    const validPayload = {
+    const validLegacyPayload = {
         widgetId: mockWidgetId,
-        licenseKey: mockLicenseKey,
+        licenseKey: mockLegacyLicenseKey,
         message: 'Hello',
         sessionId: 'session-123',
     };
-
-    const mockWidget = {
+    const widgetWithN8nConfig = {
         id: mockWidgetId,
-        licenseId: 'license-123',
         config: {
             connection: {
                 webhookUrl: mockWebhookUrl,
             },
         },
-        license: {
-            licenseKey: mockLicenseKey,
-            status: 'active',
-        },
     };
 
+    beforeAll(async () => {
+        const routeModule = await import('@/app/api/chat-relay/route');
+        POST = routeModule.POST;
+    });
     beforeEach(() => {
         jest.clearAllMocks();
+        (global.fetch as jest.Mock).mockResolvedValue({
+            ok: true,
+            status: 200,
+            headers: { get: () => 'application/json' },
+            text: async () => JSON.stringify({ response: 'Hello from N8n' }),
+        });
     });
 
-    it('should successfully relay message to N8n', async () => {
+    it('relays a legacy payload by widgetId', async () => {
+        mockGetWidgetById.mockResolvedValue(widgetWithN8nConfig as any);
         const req = new NextRequest('http://localhost:3000/api/chat-relay', {
             method: 'POST',
-            body: JSON.stringify(validPayload),
+            body: JSON.stringify(validLegacyPayload),
         });
 
         const res = await POST(req);
@@ -71,50 +60,87 @@ describe('Chat Relay API', () => {
 
         expect(res.status).toBe(200);
         expect(data).toEqual({ response: 'Hello from N8n' });
+        expect(mockGetWidgetById).toHaveBeenCalledWith(mockWidgetId);
         expect(global.fetch).toHaveBeenCalledWith(mockWebhookUrl, expect.objectContaining({
             method: 'POST',
-            body: JSON.stringify({
-                message: 'Hello',
-                sessionId: 'session-123',
-            }),
         }));
+
+        const sentBody = JSON.parse((global.fetch as jest.Mock).mock.calls[0][1].body);
+        expect(sentBody).toMatchObject({
+            message: 'Hello',
+            chatInput: 'Hello',
+            widgetId: mockWidgetId,
+            licenseKey: mockLegacyLicenseKey,
+            metadata: { tier: 'free' },
+        });
     });
 
-    it.skip('should return 404 if widget not found', async () => {
-        // Skipped: validation happens before widget lookup, so non-existent
-        // widget returns 400 (invalid request) rather than 404
-        // The successful test already verifies that valid widgets work correctly
+    it('relays a schema v2 payload by widgetKey and includes user tier metadata', async () => {
+        mockGetWidgetByKeyWithUser.mockResolvedValue({
+            ...widgetWithN8nConfig,
+            user: { tier: 'pro' },
+        } as any);
         const req = new NextRequest('http://localhost:3000/api/chat-relay', {
             method: 'POST',
             body: JSON.stringify({
-                ...validPayload,
-                widgetId: '00000000-0000-0000-0000-999999999999', // Non-existent widget
+                licenseKey: mockWidgetKey,
+                message: 'Hello from widget key',
             }),
+        });
+
+        const res = await POST(req);
+        expect(res.status).toBe(200);
+        expect(mockGetWidgetByKeyWithUser).toHaveBeenCalledWith(mockWidgetKey);
+
+        const sentBody = JSON.parse((global.fetch as jest.Mock).mock.calls[0][1].body);
+        expect(sentBody.metadata).toMatchObject({ tier: 'pro' });
+    });
+
+    it('returns 404 when widget cannot be found', async () => {
+        mockGetWidgetById.mockResolvedValue(null);
+        const req = new NextRequest('http://localhost:3000/api/chat-relay', {
+            method: 'POST',
+            body: JSON.stringify(validLegacyPayload),
         });
 
         const res = await POST(req);
         expect(res.status).toBe(404);
     });
 
-    it('should return 401 if license key is invalid', async () => {
+    it('returns 400 when required fields are missing', async () => {
         const req = new NextRequest('http://localhost:3000/api/chat-relay', {
             method: 'POST',
-            body: JSON.stringify({ ...validPayload, licenseKey: 'wrong-key' }),
+            body: JSON.stringify({ message: 'missing license key' }),
         });
 
         const res = await POST(req);
-        expect(res.status).toBe(401);
+        expect(res.status).toBe(400);
     });
 
-    it.skip('should return 403 if license is not active', async () => {
-        // This test requires seeding data
-    });
+    it('returns 500 when webhook url is missing from widget config', async () => {
+        mockGetWidgetById.mockResolvedValue({
+            ...widgetWithN8nConfig,
+            config: { connection: {} },
+        } as any);
 
-    it.skip('should return 400 if webhook URL is missing', async () => {
-        // This test requires seeding data
-    });
+        const req = new NextRequest('http://localhost:3000/api/chat-relay', {
+            method: 'POST',
+            body: JSON.stringify(validLegacyPayload),
+        });
 
-    it.skip('should return 502 if N8n request fails', async () => {
-        // This test requires seeding data and mocking fetch
+        const res = await POST(req);
+        expect(res.status).toBe(500);
+    });
+    it('returns 502 when n8n request fails due to network error', async () => {
+        mockGetWidgetById.mockResolvedValue(widgetWithN8nConfig as any);
+        (global.fetch as jest.Mock).mockRejectedValueOnce(new Error('network failure'));
+
+        const req = new NextRequest('http://localhost:3000/api/chat-relay', {
+            method: 'POST',
+            body: JSON.stringify(validLegacyPayload),
+        });
+
+        const res = await POST(req);
+        expect(res.status).toBe(502);
     });
 });
