@@ -598,3 +598,77 @@ normalizeTier(rawTier: string | undefined): LicenseTier
 - **Original feature spec:** `docs/superpowers/specs/2026-05-15-display-widget-design.md`
 - **Original feature plan:** `docs/superpowers/plans/2026-05-16-document-display-widget.md`
 - **Institutional learnings:** `docs/solutions/build-errors/obfuscator-mid-string-split-crashes-widget-2026-05-06.md`, `docs/solutions/design-patterns/link-preview-cards-with-feature-flag-gating-2026-05-06.md`, `docs/solutions/workflow-issues/vercel-deploy-alias-cache-branch-reconciliation-2026-05-06.md`, `docs/solutions/ui-bugs/chat-widget-link-visibility-2026-05-06.md`
+
+---
+
+## Execution Notes (added 2026-05-19)
+
+This section is the post-execution log appended after the plan shipped. The plan body above is preserved as the original decision artifact; this section reports what actually landed and what is still outstanding.
+
+### What shipped — all 12 units complete
+
+Branch `feat/document-display-widget`, PR [#7](https://github.com/AI-MakesSense/chat-interface-r/pull/7) targeting `main`.
+
+| U-ID | Status | Commit(s) | Notes |
+|---|---|---|---|
+| U1 | ✅ done | `882919a` | Kind-aware `stripLegacyConfigProperties` + `createDefaultConfig` + `sanitizeConfig` (also threaded `kind` through POST/PATCH route call sites). 14 tests added at `tests/unit/utils/config-helpers.test.ts`. |
+| U2 | ✅ done | `ed2fd07` | `features: {fileAttachmentsEnabled: false, allowedExtensions: [], maxFileSizeKB: 0}` stub in `translateDisplayConfig`. 1 test added. |
+| U3 | ✅ done | `6040d93` | Kind dispatch added to `app/w/[widgetKey]/config/route.ts` (the third config endpoint that original Task 8 missed). |
+| U4 | ✅ done | `6dfd667` | `parseDocuments` rejects non-`http:`/`https:` URLs via `new URL().protocol` check. 7 XSS tests added. |
+| U5 | ✅ done | `c3cae29` | `Renderer.mount()` accepts optional `fetcher`. `DisplayPreview` no longer mutates `window.fetch`. Bundle rebuilt. 6 tests added across 3 files. |
+| U6 | ✅ done | `027f36c` | `triggerMessage.min(1)` + URL-parsed `hostname === 'localhost' \|\| '127.0.0.1'` check in display schema and deploy route. 9 tests added. |
+| U7 | ✅ done | `31cd71f` | `normalizeTier` exported from `lib/validation/widget-schema.ts`. Three `tier as any` schema-dispatch sites replaced. 5 tests added. |
+| U8 | ✅ done | `eb5339c` | DisplayRenderer: theme variable injection on mount, 8s fetch timeout, `isFiring` retry guard, `captureContext` toggle wiring, NPE guards on `updateCount`. 9 tests added. |
+| U9 | ✅ done | `8119086` | `document.currentScript` capture at IIFE evaluation time. `parseDocuments` escalates to `error` state when all items dropped. 4 tests added. |
+| U10 | ✅ done | `5f2843c`, `2b7559a`, `91bb0de`, `750cbe8` | P2 cleanup: dead import removed, jest-env annotation, PATCH/deploy explicit rejections, naming JSDoc, multi-instance warn. |
+| U11 | ✅ done | `a0f984e` | P3 cleanup: CSS dispose policy, collapse-button listener removal, `instanceof Error` narrowing, `updateWidget` kind guard, 4 sidebar throw-path tests. |
+| U12 | ✅ done | (no commit — verification only) | Manual grep verification of all 30 findings + Tier 1 reviewer pass (verdict: Ready to ship). |
+
+**Aggregate:** 14 fix commits, 28 files changed, +1095/-124 lines. ~57 new unit tests across the widget runtime, API routes, validation schemas, config helpers, and configurator components.
+
+### Post-plan hotfix (not in original scope)
+
+| Commit | Description |
+|---|---|
+| `4a84da9` | `fix(auth): lazy-load JWT_SECRET so module top-level doesn't throw at build time` |
+
+The Vercel preview deploy of PR #7 failed at build time because `lib/auth/jwt.ts` threw `JWT_SECRET environment variable is not set` at module top-level during Next.js's route-module data-collection step. This wasn't a bug introduced by the fix pass — the throw site predates this branch — but the Vercel build environment exposed it for the first time.
+
+The hotfix moves the validation into a `getSecret()` function called by `signJWT`/`verifyJWT`. The same JWT_SECRET-missing and JWT_SECRET-too-short errors still fire, just at request time rather than at module evaluation time. `lib/db/client.ts` was already lazy via a Proxy pattern, so it didn't need the same change.
+
+After this commit, the build succeeded (deployment `chatinterfacer-ie1bfks96-polingerai.vercel.app`, status `Ready`).
+
+### What's verified
+
+- Type-check clean (`pnpm type-check`)
+- 325 unit tests pass; 5 failures are pre-existing vitest-in-jest module conflicts unchanged by this work
+- Widget bundle builds (`pnpm build:widget`, ~183 KB)
+- Vercel preview build succeeds (no module-top-level throws)
+- All 30 review findings present in code (per-unit subagent reviews + final manual grep verification + Tier 1 reviewer pass against the diff)
+- Unauthenticated routes on the preview deploy respond correctly: `/demo` → 200, `/auth/login` → 200, `/dashboard` → 307 (redirect), `/api/widgets` and `/api/auth/me` → 401
+
+### What's still pending / testing
+
+1. **Vercel environment variables not configured.** `vercel env ls` returns zero user-configured vars across production, preview, and development scopes. A POST to `/api/auth/login` returns `{"error":"DATABASE_URL environment variable is not set"}` — the runtime can't reach the DB. **This is the immediate blocker for using the preview deploy.** Resolution is on the deployment side, not the code side:
+   - Add `DATABASE_URL`, `JWT_SECRET`, `NEXT_PUBLIC_APP_URL` (and any other vars from `.env.example`) to **Vercel → Project Settings → Environment Variables**, scoped to at least Production + Preview.
+   - If using a Postgres marketplace integration (Neon, Supabase, etc.) that injects `POSTGRES_URL`, either alias `DATABASE_URL` to the same value or extend `lib/db/client.ts` to read `POSTGRES_URL` as a fallback.
+
+2. **Full smoke test still blocked by env configuration.** The plan's Manual Test Plan in the PR description can't be exercised end-to-end until env vars are set: configurator → widget save → DB row → embed script → render. Once env vars land, the verification sequence is:
+   - Sign in, navigate to `/configurator`, click "Document Display"
+   - Set webhook URL + trigger message, save
+   - Embed the generated `<script src="/w/[widgetKey].js">` on a test page with `window.ChatWidgetConfig.customContext`
+   - Confirm: sidebar mounts on the right edge, auto-fires on load, renders clickable doc cards from the n8n response
+
+3. **Two non-blocking review follow-ups** flagged by the final Tier 1 review and carried into the PR description. Not blockers for merging:
+   - PATCH `/api/widgets/[id]` kind-mismatch check runs before ownership verification — an authenticated non-owner can probe a widget's `kind`. Move the check after `getWidgetWithOwnership`.
+   - `DisplayRenderer.dispose()` doesn't proactively clear the 8s fetch timeout timer. Harmless (abort fires on an already-disposed controller) but unclean. Store the `timeoutId` and clear in `dispose()`.
+
+4. **Integration tests blocked by missing `DATABASE_URL` locally.** `tests/integration/api/widgets-display.test.ts` and `tests/integration/api/chat-relay-display.test.ts` skip when env is unset. Same env-config dependency as the manual smoke test.
+
+5. **Pre-existing repo issue, not blocking but worth a follow-up issue:** ~5 test files in this repo import from `vitest` while Jest is the runner — `tests/unit/auth/jwt.test.ts`, `tests/unit/widget/serve.test.ts`, `tests/unit/widget/rate-limit.test.ts`, `tests/unit/widget/inject.test.ts`, `tests/unit/widget/headers.test.ts`, `tests/unit/widget/error.test.ts`. These have been failing throughout the branch and are not caused by this fix pass.
+
+### Deployment artifacts
+
+- **PR:** https://github.com/AI-MakesSense/chat-interface-r/pull/7
+- **Preview deploy (build passing):** https://chatinterfacer-ie1bfks96-polingerai.vercel.app (Vercel SSO-protected; unauthenticated app responses are healthy, authenticated routes fail until env vars are configured)
+- **Failed prior preview (build failure, before hotfix):** `chatinterfacer-imrzf92l8-polingerai.vercel.app` — kept for log reference
