@@ -14,7 +14,9 @@ This test suite provides complete coverage for the authentication system, includ
 
 ```
 tests/
-├── setup.ts                          # Test environment configuration
+├── env-setup.ts                      # Early environment bootstrap (loaded via Jest setupFiles)
+├── jest.setup.js                     # Jest setupFilesAfterEnv
+├── jest.polyfills.js                 # Fetch/TextEncoder polyfills for test runtime
 ├── mocks/
 │   └── db.ts                        # Database mock utilities
 ├── unit/
@@ -40,9 +42,9 @@ npm install
 ```
 
 The following packages are required:
-- `vitest` - Fast unit test framework
-- `@vitest/ui` - Optional UI for test visualization
-- `happy-dom` - DOM environment for tests
+- `jest` - Test runner
+- `jest-environment-jsdom` - Browser-like environment for component tests
+- `@testing-library/react` - React testing utilities
 
 These are already added to `package.json` devDependencies.
 
@@ -190,7 +192,7 @@ Coverage reports will be generated in `coverage/` directory.
 
 ## Environment Variables
 
-Tests require the following environment variables (automatically set in `tests/setup.ts`):
+Tests require the following environment variables (automatically set in `tests/env-setup.ts`):
 
 ```bash
 JWT_SECRET=test-jwt-secret-key-that-is-at-least-32-characters-long-for-testing
@@ -198,14 +200,14 @@ DATABASE_URL=postgresql://test:test@localhost:5432/test_db
 NODE_ENV=test
 ```
 
-These are set automatically when tests run. For real testing with a database, set `TEST_DATABASE_URL` environment variable.
+These are set automatically when tests run via Jest `setupFiles`. For real testing with a database, set `TEST_DATABASE_URL` environment variable.
 
 ## Writing New Tests
 
 ### Unit Test Template
 
 ```typescript
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect } from '@jest/globals';
 import { yourFunction } from '@/path/to/module';
 
 describe('Your Module', () => {
@@ -227,21 +229,20 @@ describe('Your Module', () => {
 ### Integration Test Template
 
 ```typescript
-import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { describe, it, expect, beforeEach, jest } from '@jest/globals';
 import { POST } from '@/app/api/your-route/route';
 import { NextRequest } from 'next/server';
 import * as dbQueries from '@/lib/db/queries';
-
-vi.mock('@/lib/db/queries');
+jest.mock('@/lib/db/queries');
 
 describe('POST /api/your-route', () => {
   beforeEach(() => {
-    vi.clearAllMocks();
+    jest.clearAllMocks();
   });
 
   it('should handle request', async () => {
     // Arrange
-    vi.spyOn(dbQueries, 'someFunction').mockResolvedValue(mockData);
+    jest.spyOn(dbQueries, 'someFunction').mockResolvedValue(mockData);
     const request = createRequest(data);
 
     // Act
@@ -262,19 +263,19 @@ Use the provided database mocks in `tests/mocks/db.ts`:
 ```typescript
 import { mockUser, resetDbMocks, setupDbMocksForSuccess } from '@/tests/mocks/db';
 import * as dbQueries from '@/lib/db/queries';
-import { vi } from 'vitest';
+import { jest } from '@jest/globals';
 
 // Mock the module
-vi.mock('@/lib/db/queries');
+jest.mock('@/lib/db/queries');
 
 // In your test
 beforeEach(() => {
-  vi.clearAllMocks();
+  jest.clearAllMocks();
   resetDbMocks();
 });
 
 // Mock specific function
-vi.spyOn(dbQueries, 'getUserByEmail').mockResolvedValue(mockUser);
+jest.spyOn(dbQueries, 'getUserByEmail').mockResolvedValue(mockUser);
 ```
 
 ## Best Practices
@@ -290,31 +291,17 @@ vi.spyOn(dbQueries, 'getUserByEmail').mockResolvedValue(mockUser);
 ## Troubleshooting
 
 ### Tests fail with "JWT_SECRET not set"
-
-Make sure `tests/setup.ts` is being loaded. Check `vitest.config.ts` has:
-
-```typescript
-setupFiles: ['./tests/setup.ts']
-```
+Make sure `tests/env-setup.ts` is loaded in `jest.config.js` under `setupFiles`.
 
 ### Import errors with @/ alias
-
-Check `vitest.config.ts` has the resolve alias configured:
-
-```typescript
-resolve: {
-  alias: {
-    '@': path.resolve(__dirname, './'),
-  },
-}
-```
+Check `jest.config.js` includes `moduleNameMapper` for `^@/(.*)$`.
 
 ### Database mocks not working
 
-Ensure you're using `vi.mock()` at the top of your test file:
+Ensure you're using `jest.mock()` at the top of your test file:
 
 ```typescript
-vi.mock('@/lib/db/queries');
+jest.mock('@/lib/db/queries');
 ```
 
 ### Cannot find module errors
@@ -342,7 +329,7 @@ Add to your CI pipeline:
 
 ## Additional Resources
 
-- [Vitest Documentation](https://vitest.dev/)
+- [Jest Documentation](https://jestjs.io/docs/getting-started)
 - [Testing Best Practices](https://github.com/goldbergyoni/javascript-testing-best-practices)
 - [JWT Testing Guide](https://jwt.io/)
 
@@ -369,7 +356,7 @@ For questions or issues with tests:
 
 1. Check test output for detailed error messages
 2. Review this documentation
-3. Check vitest documentation
+3. Check Jest documentation
 4. Review existing test patterns in similar files
 
 ---
