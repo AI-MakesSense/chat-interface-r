@@ -32,19 +32,28 @@ export function deepMerge(target: any, source: any): any {
  * - theme.mode (old) vs themeMode (new)
  * - theme.colors (old) vs color system (new)
  * - behavior, advancedStyling, etc.
+ *
+ * @param config - The widget configuration to clean
+ * @param kind - Widget kind ('chat' | 'display'). Defaults to 'chat' for backward compatibility.
+ *               Display widgets retain their `theme` object; chat widgets strip it (legacy cleanup).
  */
-export function stripLegacyConfigProperties(config: any): any {
+export function stripLegacyConfigProperties(config: any, kind: 'chat' | 'display' = 'chat'): any {
   const cleaned = { ...config };
 
-  // Remove legacy nested theme object if it exists
-  // The new structure uses flat properties like themeMode, not nested theme.mode
-  if (cleaned.theme && typeof cleaned.theme === 'object') {
-    delete cleaned.theme;
+  // Remove legacy nested theme object if it exists.
+  // Chat widgets use flat themeMode/color properties — the nested `theme` object is legacy.
+  // Display widgets use a structured `theme` object (colorScheme, radius, density, color) — preserve it.
+  if (kind !== 'display') {
+    if (cleaned.theme && typeof cleaned.theme === 'object') {
+      delete cleaned.theme;
+    }
   }
 
-  // Remove other legacy nested structures
-  delete cleaned.behavior;
-  delete cleaned.advancedStyling;
+  // Remove other legacy nested structures (chat-only concepts)
+  if (kind !== 'display') {
+    delete cleaned.behavior;
+    delete cleaned.advancedStyling;
+  }
 
   return cleaned;
 }
@@ -52,8 +61,14 @@ export function stripLegacyConfigProperties(config: any): any {
 /**
  * Sanitize configuration to ensure it passes validation
  * Handles legacy data, invalid formats, and tier restrictions
+ *
+ * @param config - The widget configuration to sanitize
+ * @param tier - Subscription tier for restriction enforcement
+ * @param kind - Widget kind ('chat' | 'display'). Defaults to 'chat' for backward compatibility.
+ *               Chat-only transformations (launcherIcon, welcomeText, firstMessage, advancedStyling)
+ *               are skipped when kind === 'display' to avoid injecting chat fields into display configs.
  */
-export function sanitizeConfig(config: any, tier: string): any {
+export function sanitizeConfig(config: any, tier: string, kind: 'chat' | 'display' = 'chat'): any {
   const sanitized = JSON.parse(JSON.stringify(config)); // Deep clone
 
   // Helper to fix hex colors
@@ -78,10 +93,13 @@ export function sanitizeConfig(config: any, tier: string): any {
 
   // 1. Tier Restrictions (Basic/Free)
   if (tier === 'basic' || tier === 'free') {
-    if (sanitized.advancedStyling) sanitized.advancedStyling.enabled = false;
-    if (sanitized.features) {
-      sanitized.features.emailTranscript = false;
-      sanitized.features.ratingPrompt = false;
+    // advancedStyling and features are chat-only; guard ensures no-op for display configs
+    if (kind === 'chat') {
+      if (sanitized.advancedStyling) sanitized.advancedStyling.enabled = false;
+      if (sanitized.features) {
+        sanitized.features.emailTranscript = false;
+        sanitized.features.ratingPrompt = false;
+      }
     }
     if (sanitized.branding) sanitized.branding.brandingEnabled = true;
   }
@@ -89,21 +107,26 @@ export function sanitizeConfig(config: any, tier: string): any {
   // 2. Data Integrity - Branding
   if (sanitized.branding) {
     if (!sanitized.branding.companyName) sanitized.branding.companyName = 'My Company';
-    if (!sanitized.branding.welcomeText) sanitized.branding.welcomeText = 'How can we help?';
-    if (!sanitized.branding.firstMessage) sanitized.branding.firstMessage = 'Hello! How can I assist you today?';
 
-    // Fix launcher icon
-    if (sanitized.branding.launcherIcon === 'custom') {
-      const validUrl = fixUrl(sanitized.branding.customLauncherIconUrl);
-      if (!validUrl) {
-        sanitized.branding.launcherIcon = 'chat'; // Revert to default if URL invalid
-        sanitized.branding.customLauncherIconUrl = null;
+    // welcomeText and firstMessage are chat-only branding fields.
+    // Injecting them into a display config would add unexpected fields and corrupt validation.
+    if (kind === 'chat') {
+      if (!sanitized.branding.welcomeText) sanitized.branding.welcomeText = 'How can we help?';
+      if (!sanitized.branding.firstMessage) sanitized.branding.firstMessage = 'Hello! How can I assist you today?';
+
+      // Fix launcher icon (chat-only concept)
+      if (sanitized.branding.launcherIcon === 'custom') {
+        const validUrl = fixUrl(sanitized.branding.customLauncherIconUrl);
+        if (!validUrl) {
+          sanitized.branding.launcherIcon = 'chat'; // Revert to default if URL invalid
+          sanitized.branding.customLauncherIconUrl = null;
+        } else {
+          sanitized.branding.customLauncherIconUrl = validUrl;
+        }
       } else {
-        sanitized.branding.customLauncherIconUrl = validUrl;
+        // Ensure it's null if not custom, to avoid validation errors
+        sanitized.branding.customLauncherIconUrl = null;
       }
-    } else {
-      // Ensure it's null if not custom, to avoid validation errors
-      sanitized.branding.customLauncherIconUrl = null;
     }
 
     sanitized.branding.logoUrl = fixUrl(sanitized.branding.logoUrl);

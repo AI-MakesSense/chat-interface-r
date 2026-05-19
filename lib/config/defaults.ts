@@ -220,10 +220,12 @@ function createDefaultAdvancedStyling(tier: 'basic' | 'pro' | 'agency'): Advance
  * - Agency tier: All features, white-label, premium defaults
  *
  * @param tier - Subscription tier ('free' | 'basic' | 'pro' | 'agency')
+ * @param kind - Widget kind ('chat' | 'display'). Defaults to 'chat' for backward compatibility.
+ *               Display widgets get a minimal display-shaped config with theme/display/connection sections.
  * @returns Complete WidgetConfig with tier-appropriate defaults
  * @throws Error if tier is invalid, undefined, or null
  */
-export function createDefaultConfig(tier: 'free' | 'basic' | 'pro' | 'agency'): WidgetConfig {
+export function createDefaultConfig(tier: 'free' | 'basic' | 'pro' | 'agency', kind: 'chat' | 'display' = 'chat'): WidgetConfig {
   // Validate tier parameter
   if (!tier || tier === null || tier === undefined) {
     throw new Error('Tier parameter is required');
@@ -233,10 +235,52 @@ export function createDefaultConfig(tier: 'free' | 'basic' | 'pro' | 'agency'): 
     throw new Error(`Invalid tier: ${tier}. Must be 'free', 'basic', 'pro', or 'agency'`);
   }
 
+  // Return display-shaped defaults for display widgets
+  if (kind === 'display') {
+    const brandingEnabled = tier === 'basic' || tier === 'free';
+    const config = {
+      kind: 'display' as const,
+      branding: {
+        companyName: '',
+        logoUrl: null,
+        brandingEnabled,
+      },
+      theme: {
+        colorScheme: 'light' as const,
+        radius: 'medium' as const,
+        density: 'normal' as const,
+        color: {
+          accent: '#6366F1',
+          surface: '#FFFFFF',
+          text: '#111827',
+          subText: '#6B7280',
+          border: '#E5E7EB',
+        },
+      },
+      display: {
+        position: 'right' as const,
+        defaultOpen: true,
+        header: {
+          title: 'Required documents',
+          showCount: true,
+        },
+        emptyMessage: 'No documents available.',
+      },
+      connection: {
+        provider: 'n8n' as const,
+        webhookUrl: '',
+        triggerMessage: '',
+        captureContext: true,
+        customContext: {},
+      },
+    };
+    return structuredClone(config) as unknown as WidgetConfig;
+  }
+
   // Map 'free' to 'basic' for feature purposes
   const effectiveTier = tier === 'free' ? 'basic' : tier;
 
-  // Build complete configuration
+  // Build complete chat configuration
   const config: WidgetConfig = {
     branding: createDefaultBranding(effectiveTier),
     theme: createDefaultTheme(effectiveTier),

@@ -416,6 +416,7 @@ export async function createWidget(data: {
   config: any;
   status?: string;
   widgetType?: string;
+  kind?: 'chat' | 'display';
   version?: number;
   deployedAt?: Date | null;
 }): Promise<Widget> {
@@ -428,6 +429,7 @@ export async function createWidget(data: {
       config: data.config,
       status: data.status || 'active',
       widgetType: data.widgetType || 'n8n',
+      kind: data.kind || 'chat',
       version: data.version || 1,
       deployedAt: data.deployedAt || null,
       createdAt: now,
@@ -442,6 +444,7 @@ export async function createWidget(data: {
  * Update widget fields (partial update)
  * Returns null if widget doesn't exist
  * Never updates createdAt, always updates updatedAt
+ * kind is immutable — set at creation time and cannot be changed via this function
  */
 export async function updateWidget(
   id: string,
@@ -454,6 +457,9 @@ export async function updateWidget(
     deployedAt?: Date | null;
   }
 ): Promise<Widget | null> {
+  if ('kind' in data) {
+    throw new Error('updateWidget cannot change widget kind — kind is set at creation time');
+  }
   const updateData: any = {};
   if (data.name !== undefined) updateData.name = data.name;
   if (data.config !== undefined) updateData.config = data.config;
@@ -811,6 +817,7 @@ export async function createWidgetV2(data: {
   allowedDomains?: string[];
   status?: string;
   widgetType?: string;
+  kind?: 'chat' | 'display';
   version?: number;
   deployedAt?: Date | null;
   // Legacy: optional licenseId for backward compatibility
@@ -833,6 +840,7 @@ export async function createWidgetV2(data: {
       allowedDomains: data.allowedDomains || null,
       status: data.status || 'active',
       widgetType: data.widgetType || 'n8n',
+      kind: data.kind || 'chat',
       version: data.version || 1,
       deployedAt: data.deployedAt ?? now, // Schema v2.0: Auto-deploy on creation
       createdAt: now,

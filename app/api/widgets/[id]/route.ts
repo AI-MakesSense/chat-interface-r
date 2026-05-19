@@ -15,7 +15,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { requireAuth } from '@/lib/auth/guard';
 import { getWidgetById, getWidgetWithLicense, updateWidget, deleteWidget, getUserById } from '@/lib/db/queries';
-import { createWidgetConfigSchema } from '@/lib/validation/widget-schema';
+import { getWidgetConfigSchemaForKind, normalizeTier } from '@/lib/validation/widget-schema';
 import { deepMerge, stripLegacyConfigProperties, sanitizeConfig, forceN8nProviderConfig } from '@/lib/utils/config-helpers';
 import { CHATKIT_SERVER_ENABLED } from '@/lib/feature-flags';
 import { logActivity } from '@/lib/db/admin-queries';
@@ -163,8 +163,21 @@ export async function PATCH(
     const widgetId = idSchema.parse(id);
 
     // 3. Parse and validate request body
-    const body = await request.json();
-    const updates = UpdateWidgetSchema.parse(body);
+    const rawBody = await request.json();
+
+    // Guard: kind is immutable — reject attempts to change it via PATCH
+    if ('kind' in rawBody) {
+      // We need the existing widget to compare — do a lightweight fetch first
+      const checkWidget = await getWidgetById(widgetId);
+      if (checkWidget && rawBody.kind !== checkWidget.kind) {
+        return NextResponse.json(
+          { error: 'kind cannot be changed via PATCH; create a new widget instead' },
+          { status: 400 }
+        );
+      }
+    }
+
+    const updates = UpdateWidgetSchema.parse(rawBody);
 
     // 4. Get widget and verify ownership (supports both v1 and v2.0)
     const result = await getWidgetWithOwnership(widgetId, user.sub);
@@ -203,15 +216,18 @@ export async function PATCH(
       // Deep merge new config with existing config
       const mergedConfig = deepMerge(widget.config, updates.config);
 
-      // SANITIZATION: Enforce tier restrictions and fix data integrity
-      const sanitizedConfig = sanitizeConfig(mergedConfig, tier);
+      // Determine the widget's kind from the existing row — never trust the request body for this
+      const existingKind: 'chat' | 'display' = (widget.kind === 'display') ? 'display' : 'chat';
 
-      // Validate merged config against tier restrictions
-      const configSchema = createWidgetConfigSchema(tier as any, true);
+      // SANITIZATION: Enforce tier restrictions and fix data integrity
+      const sanitizedConfig = sanitizeConfig(mergedConfig, tier, existingKind);
+
+      // Validate merged config against tier restrictions, using the existing widget's kind
+      const configSchema = getWidgetConfigSchemaForKind(existingKind, normalizeTier(tier), true);
       configSchema.parse(sanitizedConfig);
 
       // Strip legacy properties that might conflict with new structure
-      let cleanedConfig = stripLegacyConfigProperties(sanitizedConfig);
+      let cleanedConfig = stripLegacyConfigProperties(sanitizedConfig, existingKind);
       if (!CHATKIT_SERVER_ENABLED) {
         cleanedConfig = forceN8nProviderConfig(cleanedConfig);
       }

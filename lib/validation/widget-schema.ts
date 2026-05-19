@@ -414,6 +414,22 @@ export const widgetConfigBaseSchema = z.object({
 export type LicenseTier = 'basic' | 'pro' | 'agency';
 
 /**
+ * Normalizes a user-supplied or DB-derived tier value to a valid LicenseTier.
+ *
+ * `LicenseTier = 'basic' | 'pro' | 'agency'`. Any other value — `'free'`, `null`,
+ * `undefined`, garbage strings — collapses to `'basic'`. This is the canonical entry
+ * point for any tier value flowing into `createWidgetConfigSchema` or
+ * `getWidgetConfigSchemaForKind` — without it, free-tier users would bypass all
+ * tier-gated checks because `createWidgetConfigSchema` has no `'free'` branch.
+ *
+ * Call this at every API route boundary that derives `tier` from user/license data.
+ */
+export function normalizeTier(raw: string | null | undefined): LicenseTier {
+  if (raw === 'basic' || raw === 'pro' || raw === 'agency') return raw;
+  return 'basic';
+}
+
+/**
  * Create tier-aware widget config schema
  *
  * Business Rules:
@@ -503,3 +519,37 @@ export type FeaturesInput = z.infer<typeof featuresSchema>;
 export type PlaygroundConfigInput = z.infer<typeof playgroundConfigSchema>;
 export type StarterPromptInput = z.infer<typeof starterPromptSchema>;
 export type WidgetConfigInput = z.infer<typeof widgetConfigBaseSchema>;
+
+// =============================================================================
+// Widget Kind Dispatch Helper
+// =============================================================================
+
+export { displayWidgetConfigSchema } from './display-widget-schema';
+export type { DisplayWidgetConfig } from './display-widget-schema';
+
+import { displayWidgetConfigSchema as _displayWidgetConfigSchema } from './display-widget-schema';
+
+/**
+ * Returns the right Zod schema for a widget config based on its kind.
+ *
+ * - `'chat'`: returns the tier-aware factory schema (createWidgetConfigSchema)
+ * - `'display'`: returns the display widget schema (tier-agnostic in v1; tier checks
+ *   can be layered on later via .superRefine if needed)
+ *
+ * API routes use this so they can validate either widget kind through one entry point.
+ * The shape returned is `ZodTypeAny`-compatible (each branch is a different concrete Zod
+ * schema) — callers should use `.safeParse(config)` and inspect the result.
+ */
+export function getWidgetConfigSchemaForKind(
+  kind: 'chat' | 'display',
+  tier: LicenseTier,
+  brandingRequired: boolean
+) {
+  if (kind === 'chat') {
+    return createWidgetConfigSchema(tier, brandingRequired);
+  }
+  if (kind === 'display') {
+    return _displayWidgetConfigSchema;
+  }
+  throw new Error(`Unknown widget kind: ${kind}`);
+}

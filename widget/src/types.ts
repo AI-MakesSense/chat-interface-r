@@ -23,6 +23,12 @@ export interface WidgetConfig {
   composer?: ComposerConfig;
   advancedStyling?: any; // Legacy/Pro styling
   behavior?: any; // Legacy behavior settings
+
+  // =========================================================================
+  // Display widget fields
+  // =========================================================================
+  kind?: 'chat' | 'display';
+  display?: DisplayUiConfig;
 }
 
 export interface PortalConfig {
@@ -34,6 +40,17 @@ export interface PortalConfig {
 export interface WidgetRuntimeConfig {
   uiConfig: WidgetConfig;
   relay: RelayConfig;
+  /**
+   * Embed-mode configuration for the chat widget runtime.
+   *
+   * NOTE: This field controls *how* the chat widget is embedded on the page
+   * (popup / inline / portal) and is intentionally named `display` for
+   * historical reasons. It is **not** the same as `WidgetConfig.display`,
+   * which holds the display-widget sidebar UI config (position, header,
+   * emptyMessage, etc.). When reading code that references `.display` on a
+   * `WidgetRuntimeConfig`, it refers to the embed mode; when reading `.display`
+   * on a `WidgetConfig` / `uiConfig`, it refers to the sidebar UI settings.
+   */
   display?: WidgetDisplayConfig;
 }
 
@@ -260,4 +277,18 @@ export interface ModelOption {
   label: string;
   description?: string;
   default?: boolean;
+}
+
+// =========================================================================
+// Display Widget Configuration
+// =========================================================================
+
+export interface DisplayUiConfig {
+  position: 'left' | 'right';
+  defaultOpen: boolean;
+  header: {
+    title: string;
+    showCount: boolean;
+  };
+  emptyMessage: string;
 }

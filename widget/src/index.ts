@@ -5,7 +5,8 @@
  * Responsibility: Initialize widget, create UI, handle user interaction
  */
 
-import { createChatWidget } from './widget';
+import { ChatRenderer } from './renderers/chat/chat-renderer';
+import { DisplayRenderer } from './renderers/display/display-renderer';
 import { WidgetRuntimeConfig, WidgetConfig } from './types';
 import { Widget as WidgetConstructor } from './core/widget';
 
@@ -21,6 +22,22 @@ if (typeof window !== 'undefined') {
 
   console.log('%c[N8n Chat Widget] Script Loaded', 'background: #222; color: #bada55; padding: 4px; border-radius: 4px;');
 
+  // Capture document.currentScript synchronously at IIFE evaluation time —
+  // BEFORE any await or addEventListener. Once the event loop yields,
+  // document.currentScript becomes null.
+  let scriptTag: HTMLScriptElement | null = null;
+  const currentScript = document.currentScript;
+  if (currentScript instanceof HTMLScriptElement) {
+    scriptTag = currentScript;
+  } else {
+    // Fallback for async/deferred scripts or environments where currentScript
+    // is unavailable. Last-wins selector mirrors legacy behaviour.
+    const scriptCandidates = Array.from(
+      document.querySelectorAll('script[src*="/chat-widget.js"], script[src*="/bundle.js"], script[src*="/w/"]')
+    ) as HTMLScriptElement[];
+    scriptTag = scriptCandidates[scriptCandidates.length - 1] || null;
+  }
+
   // Wait for DOM to be ready
   if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', init);
@@ -33,10 +50,6 @@ if (typeof window !== 'undefined') {
     const injectedConfig = (window as any).ChatWidgetConfig || {};
     // Handle case where injectedConfig might be nested or flat
     const injectedRelay = injectedConfig.relay || (injectedConfig.uiConfig ? injectedConfig.uiConfig.relay : {});
-    const scriptCandidates = Array.from(
-      document.querySelectorAll('script[src*="/chat-widget.js"], script[src*="/bundle.js"], script[src*="/w/"]')
-    ) as HTMLScriptElement[];
-    const scriptTag = scriptCandidates[scriptCandidates.length - 1] || null;
 
     const scriptModeAttr = (scriptTag?.getAttribute('data-mode') || scriptTag?.getAttribute('data-embed') || '')
       .trim()
@@ -64,10 +77,13 @@ if (typeof window !== 'undefined') {
     if (injectedRelay && injectedRelay.relayUrl && (injectedConfig.branding || (injectedConfig.uiConfig && injectedConfig.uiConfig.branding))) {
       console.log('[N8n Chat Widget] Using existing full configuration');
       try {
-        createChatWidget({
-          ...(injectedConfig as WidgetRuntimeConfig),
-          display: displayConfig,
-        });
+        const fastConfig = injectedConfig.uiConfig ?? injectedConfig;
+        const isDisplay = (fastConfig as any).kind === 'display';
+        const fastRenderer = isDisplay ? new DisplayRenderer() : new ChatRenderer();
+        await fastRenderer.mount(
+          { ...(injectedConfig as WidgetRuntimeConfig), display: displayConfig },
+          document.body
+        );
         return;
       } catch (error) {
         console.error('[N8n Chat Widget] Initialization error:', error);
@@ -149,8 +165,10 @@ if (typeof window !== 'undefined') {
       // Save config to window so the internal message handler can find it if needed
       (window as any).ChatWidgetConfig = runtimeConfig;
 
-      // 5. Initialize
-      createChatWidget(runtimeConfig);
+      // 5. Initialize — dispatch on config.kind
+      const isDisplay = remoteConfig.kind === 'display';
+      const renderer = isDisplay ? new DisplayRenderer() : new ChatRenderer();
+      await renderer.mount(runtimeConfig, document.body);
 
     } catch (error) {
       console.error('[N8n Chat Widget] Boot error:', error);

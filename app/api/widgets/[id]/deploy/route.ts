@@ -15,8 +15,8 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { requireAuth } from '@/lib/auth/guard';
-import { getWidgetWithLicense, deployWidget } from '@/lib/db/queries';
-import { createWidgetConfigSchema } from '@/lib/validation/widget-schema';
+import { getWidgetWithLicense, getWidgetById, getUserById, deployWidget } from '@/lib/db/queries';
+import { getWidgetConfigSchemaForKind, normalizeTier } from '@/lib/validation/widget-schema';
 import { z } from 'zod';
 
 // =============================================================================
@@ -38,15 +38,44 @@ export async function POST(
     const idSchema = z.string().uuid();
     const widgetId = idSchema.parse(id);
 
-    // 3. Get widget with license information
-    const widget = await getWidgetWithLicense(widgetId);
+    // 3. Get widget with license information (legacy path)
+    //    V2.0 widgets have licenseId = NULL so the inner join returns null — fall back to direct lookup.
+    const widgetWithLicense = await getWidgetWithLicense(widgetId);
 
-    if (!widget) {
-      return NextResponse.json({ error: 'Widget not found' }, { status: 404 });
+    let ownerUserId: string;
+    let tier: string;
+    // `widget` holds only the base Widget columns (status, kind, config) used below.
+    // Both paths produce a value that satisfies this shape.
+    let widget: { status: string; kind: string; config: unknown };
+
+    if (widgetWithLicense) {
+      // Legacy path: widget is associated with a license
+      ownerUserId = widgetWithLicense.license.userId;
+      tier = widgetWithLicense.license.tier;
+      widget = widgetWithLicense;
+    } else {
+      // V2.0 path: widget is associated directly with a user (licenseId is NULL)
+      const v2Widget = await getWidgetById(widgetId);
+      if (!v2Widget) {
+        return NextResponse.json({ error: 'Widget not found' }, { status: 404 });
+      }
+      if (!v2Widget.userId) {
+        // Widget exists but has neither a license nor a userId — data integrity issue
+        return NextResponse.json({ error: 'Widget not found' }, { status: 404 });
+      }
+      const widgetUser = await getUserById(v2Widget.userId);
+      if (!widgetUser) {
+        // The widget's owner account has been deleted — return 404 rather
+        // than falling through to a misleading 'free' tier validation failure.
+        return NextResponse.json({ error: 'Widget owner not found' }, { status: 404 });
+      }
+      ownerUserId = v2Widget.userId;
+      tier = widgetUser.tier ?? 'free';
+      widget = v2Widget;
     }
 
-    // 4. Verify ownership through license
-    if (widget.license.userId !== user.sub) {
+    // 4. Verify ownership
+    if (ownerUserId !== user.sub) {
       return NextResponse.json({ error: 'You do not own this widget' }, { status: 403 });
     }
 
@@ -59,7 +88,9 @@ export async function POST(
     }
 
     // 6. Validate config is deployment-ready (strict validation - no defaults)
-    const configSchema = createWidgetConfigSchema(widget.license.tier as any, false);
+    // Use the existing widget's kind to select the right schema.
+    const widgetKind: 'chat' | 'display' = (widget.kind === 'display') ? 'display' : 'chat';
+    const configSchema = getWidgetConfigSchemaForKind(widgetKind, normalizeTier(tier), false);
 
     try {
       configSchema.parse(widget.config);
@@ -93,11 +124,19 @@ export async function POST(
       );
     }
 
-    // Check if webhookUrl is HTTPS or localhost
-    const isLocalhostUrl = webhookUrl.includes('localhost') || webhookUrl.includes('127.0.0.1');
-    const isHttpsUrl = webhookUrl.startsWith('https://');
+    // Check if webhookUrl is HTTPS or localhost (use URL-parse to prevent substring-match bypasses)
+    const isValidDeployUrl = (() => {
+      try {
+        const parsed = new URL(webhookUrl);
+        if (parsed.protocol === 'https:') return true;
+        if (parsed.protocol === 'http:' && (parsed.hostname === 'localhost' || parsed.hostname === '127.0.0.1')) return true;
+        return false;
+      } catch {
+        return false;
+      }
+    })();
 
-    if (!isHttpsUrl && !isLocalhostUrl) {
+    if (!isValidDeployUrl) {
       return NextResponse.json(
         {
           error: 'Widget configuration is not ready for deployment',

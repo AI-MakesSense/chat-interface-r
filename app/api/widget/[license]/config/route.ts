@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getLicenseByKey, getWidgetsByLicenseId } from '@/lib/db/queries';
 import { CHATKIT_SERVER_ENABLED } from '@/lib/feature-flags';
 import { normalizeDomain } from '@/lib/license/domain';
+import { translateDisplayConfig } from '@/lib/widget/translate-display-config';
 import type { WidgetConfig } from '@/widget/src/types';
 
 /**
@@ -336,18 +337,21 @@ export async function GET(
         const dbConfig = widget.config as any; // JSONB config from database
 
         // Translate the config to widget format
-        const config = translateConfig(
-            {
-                ...dbConfig,
-                widgetId: widget.id,
-                license: {
-                    key: licenseKey,
-                    active: true,
-                    plan: license!.tier
-                }
-            },
-            request.url
-        );
+        const config =
+            widget.kind === 'display'
+                ? translateDisplayConfig(dbConfig, request.url)
+                : translateConfig(
+                    {
+                        ...dbConfig,
+                        widgetId: widget.id,
+                        license: {
+                            key: licenseKey,
+                            active: true,
+                            plan: license!.tier
+                        }
+                    },
+                    request.url
+                );
 
         return NextResponse.json(config, {
             headers: {
