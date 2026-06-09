@@ -77,17 +77,18 @@ export type DisplayWidgetConfig = z.infer<typeof displayWidgetConfigSchema>;
  */
 export function createDefaultDisplayConfig(tier: string): DisplayWidgetConfig & { kind: 'display' } {
   const brandingEnabled = tier === 'basic' || tier === 'free';
-  return structuredClone({
-    kind: 'display' as const,
+  // Round-trip through the schema so it is the enforced source of truth for
+  // display defaults — a drifting literal fails loudly here, not at deploy time.
+  const base = displayWidgetConfigSchema.parse({
     branding: {
       companyName: 'My Company',
       logoUrl: null,
       brandingEnabled,
     },
     theme: {
-      colorScheme: 'light' as const,
-      radius: 'medium' as const,
-      density: 'normal' as const,
+      colorScheme: 'light',
+      radius: 'medium',
+      density: 'normal',
       color: {
         accent: '#6366F1',
         surface: '#FFFFFF',
@@ -97,7 +98,7 @@ export function createDefaultDisplayConfig(tier: string): DisplayWidgetConfig & 
       },
     },
     display: {
-      position: 'right' as const,
+      position: 'right',
       defaultOpen: true,
       header: {
         title: 'Required documents',
@@ -106,11 +107,12 @@ export function createDefaultDisplayConfig(tier: string): DisplayWidgetConfig & 
       emptyMessage: 'No documents available.',
     },
     connection: {
-      provider: 'n8n' as const,
+      provider: 'n8n',
       webhookUrl: 'https://example.com/webhook',
       triggerMessage: 'List documents',
       captureContext: true,
       customContext: {},
     },
   });
+  return { ...base, kind: 'display' as const };
 }

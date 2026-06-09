@@ -1,5 +1,6 @@
 import { createDefaultConfig } from '@/lib/widget-config/defaults';
 import { createTierAwareSchema } from '@/lib/widget-config/schema';
+import { displayWidgetConfigSchema } from '@/lib/validation/display-widget-schema';
 
 describe('createDefaultConfig', () => {
   it('basic tier defaults have branding enabled and no premium features', () => {
@@ -27,5 +28,28 @@ describe('createDefaultConfig', () => {
       const schema = createTierAwareSchema(tier, tier === 'basic');
       expect(schema.safeParse(createDefaultConfig(tier, 'chat')).success).toBe(true);
     }
+  });
+
+  it('throws on an invalid tier', () => {
+    expect(() => createDefaultConfig('garbage' as any, 'chat')).toThrow();
+  });
+
+  it('display defaults carry the kind discriminant and validate against the display schema', () => {
+    const d = createDefaultConfig('basic', 'display');
+    expect(d.kind).toBe('display');
+    // Zod object schemas strip unknown keys (like the extra `kind` discriminant)
+    // rather than rejecting them, so the full object safeParses successfully.
+    expect(displayWidgetConfigSchema.safeParse(d).success).toBe(true);
+    expect(d.branding.brandingEnabled).toBe(true);
+
+    const pro = createDefaultConfig('pro', 'display');
+    expect(pro.branding.brandingEnabled).toBe(false);
+  });
+
+  it('returns isolated objects — mutating one default does not affect the next', () => {
+    const a = createDefaultConfig('pro', 'chat');
+    const b = createDefaultConfig('pro', 'chat');
+    a.branding.companyName = 'Mutated Corp';
+    expect(b.branding.companyName).toBe('My Company');
   });
 });

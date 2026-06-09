@@ -13,12 +13,15 @@ import { createDefaultDisplayConfig, type DisplayWidgetConfig } from '@/lib/vali
 export type InputTier = 'free' | 'basic' | 'pro' | 'agency';
 
 export function createDefaultConfig(tier: InputTier, kind?: 'chat'): ChatWidgetConfig;
-export function createDefaultConfig(tier: InputTier, kind: 'display'): DisplayWidgetConfig;
-export function createDefaultConfig(tier: InputTier, kind: 'chat' | 'display'): ChatWidgetConfig | DisplayWidgetConfig;
+export function createDefaultConfig(tier: InputTier, kind: 'display'): DisplayWidgetConfig & { kind: 'display' };
+export function createDefaultConfig(
+  tier: InputTier,
+  kind: 'chat' | 'display'
+): ChatWidgetConfig | (DisplayWidgetConfig & { kind: 'display' });
 export function createDefaultConfig(
   tier: InputTier,
   kind: 'chat' | 'display' = 'chat'
-): ChatWidgetConfig | DisplayWidgetConfig {
+): ChatWidgetConfig | (DisplayWidgetConfig & { kind: 'display' }) {
   if (!['free', 'basic', 'pro', 'agency'].includes(tier)) {
     throw new Error(`Invalid tier: ${tier}. Must be 'free', 'basic', 'pro', or 'agency'`);
   }
