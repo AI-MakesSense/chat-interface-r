@@ -472,5 +472,14 @@ export function migrateConfig(raw: unknown): ChatWidgetConfig {
     setIfAbsent(candidate.advanced as AnyRecord, 'customCss', src.customCss);
   }
 
+  // ChatKit/AgentKit credentials (legacy flat agentKitWorkflowId/agentKitApiKey
+  // → connection.workflowId/apiKey; structured connection values win)
+  if (typeof src.agentKitWorkflowId === 'string') {
+    setIfAbsent(candidate.connection as AnyRecord, 'workflowId', src.agentKitWorkflowId);
+  }
+  if (typeof src.agentKitApiKey === 'string') {
+    setIfAbsent(candidate.connection as AnyRecord, 'apiKey', src.agentKitApiKey);
+  }
+
   return lenientParse(candidate);
 }

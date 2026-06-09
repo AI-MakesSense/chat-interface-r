@@ -90,6 +90,12 @@ describe('playground/chatkit canonical sections (Task 4a)', () => {
     expect(cfg.advanced.customCss).toBe('');
   });
 
+  it('parse({}) includes chatkit connection credentials as empty strings', () => {
+    const cfg = chatWidgetConfigSchema.parse({});
+    expect(cfg.connection.workflowId).toBe('');
+    expect(cfg.connection.apiKey).toBe('');
+  });
+
   it('rejects invalid colorSystem hex colors and out-of-range chatkit values', () => {
     expect(chatWidgetConfigSchema.safeParse({ colorSystem: { accentColor: 'red' } }).success).toBe(false);
     expect(chatWidgetConfigSchema.safeParse({ chatkit: { accentLevel: 5 } }).success).toBe(false);

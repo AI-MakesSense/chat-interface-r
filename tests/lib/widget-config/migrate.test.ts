@@ -171,6 +171,34 @@ describe('migrateConfig', () => {
     expect(out.features.pdfLightbox).toBe(false);
   });
 
+  it('structured connection.workflowId/apiKey survive migration (ChatKit credentials not stripped)', () => {
+    const out = migrateConfig({
+      connection: { provider: 'chatkit', workflowId: 'wf_123', apiKey: 'sk-test-abc' },
+    });
+    expect(out.connection.provider).toBe('chatkit');
+    expect(out.connection.workflowId).toBe('wf_123');
+    expect(out.connection.apiKey).toBe('sk-test-abc');
+  });
+
+  it('maps legacy flat agentKitWorkflowId/agentKitApiKey into connection (Task 4a follow-up)', () => {
+    const out = migrateConfig({
+      agentKitWorkflowId: 'wf_legacy',
+      agentKitApiKey: 'sk-legacy',
+    });
+    expect(out.connection.workflowId).toBe('wf_legacy');
+    expect(out.connection.apiKey).toBe('sk-legacy');
+  });
+
+  it('structured connection credentials beat legacy flat agentKit* keys (canonical > flat)', () => {
+    const out = migrateConfig({
+      agentKitWorkflowId: 'wf_legacy',
+      agentKitApiKey: 'sk-legacy',
+      connection: { workflowId: 'wf_canonical', apiKey: 'sk-canonical' },
+    });
+    expect(out.connection.workflowId).toBe('wf_canonical');
+    expect(out.connection.apiKey).toBe('sk-canonical');
+  });
+
   it('is idempotent on configs containing the new flat playground fields', () => {
     const once = migrateConfig({ radius: 'pill', chatkitAccentLevel: 2, customCss: '.x{}', useAccent: false });
     expect(migrateConfig(once)).toEqual(once);

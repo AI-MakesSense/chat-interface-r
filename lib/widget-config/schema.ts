@@ -215,6 +215,10 @@ export const connectionSchema = z.object({
   route: z.string().max(100).nullable().default(null),
   timeoutSeconds: z.number().int().min(10).max(60).default(30),
   captureContext: z.boolean().default(true),
+  // ChatKit/AgentKit provider credentials (legacy flat keys
+  // `agentKitWorkflowId`/`agentKitApiKey` map here via migrate.ts).
+  workflowId: z.string().max(100).default(''),
+  apiKey: z.string().max(200).default(''),
 });
 
 const attachmentsSchema = z.object({
