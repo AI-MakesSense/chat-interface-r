@@ -7,6 +7,7 @@ describe('createDefaultConfig', () => {
     expect(cfg.branding.brandingEnabled).toBe(true);
     expect(cfg.advancedStyling.enabled).toBe(false);
     expect(cfg.features.emailTranscript).toBe(false);
+    expect(cfg.features.ratingPrompt).toBe(false);
   });
 
   it('pro tier defaults are white-label with premium features', () => {
@@ -14,6 +15,7 @@ describe('createDefaultConfig', () => {
     expect(cfg.branding.brandingEnabled).toBe(false);
     expect(cfg.advancedStyling.enabled).toBe(true);
     expect(cfg.features.emailTranscript).toBe(true);
+    expect(cfg.features.ratingPrompt).toBe(true);
   });
 
   it('free maps to basic', () => {

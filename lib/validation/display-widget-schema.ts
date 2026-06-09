@@ -67,6 +67,13 @@ export type DisplayWidgetConfig = z.infer<typeof displayWidgetConfigSchema>;
  * Matches the display-shaped literal from the old lib/config/defaults.ts.
  * Includes a `kind: 'display'` discriminant (not in the schema, but expected
  * by callers that switch on kind to dispatch configs).
+ *
+ * SENTINEL VALUES: `connection.webhookUrl` ('https://example.com/webhook') and
+ * `connection.triggerMessage` ('List documents') are schema-forced placeholders,
+ * NOT working defaults — displayWidgetConfigSchema rejects empty strings, so the
+ * old ''-style "user must configure" defaults cannot pass validation. These
+ * sentinels MUST be replaced by the user before deploy; the configurator UI is
+ * responsible for prompting that replacement.
  */
 export function createDefaultDisplayConfig(tier: string): DisplayWidgetConfig & { kind: 'display' } {
   const brandingEnabled = tier === 'basic' || tier === 'free';
