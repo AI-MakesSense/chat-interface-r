@@ -61,3 +61,49 @@ export const displayWidgetConfigSchema = z.object({
 });
 
 export type DisplayWidgetConfig = z.infer<typeof displayWidgetConfigSchema>;
+
+/**
+ * Create a default display widget configuration for the given tier.
+ * Matches the display-shaped literal from the old lib/config/defaults.ts.
+ * Includes a `kind: 'display'` discriminant (not in the schema, but expected
+ * by callers that switch on kind to dispatch configs).
+ */
+export function createDefaultDisplayConfig(tier: string): DisplayWidgetConfig & { kind: 'display' } {
+  const brandingEnabled = tier === 'basic' || tier === 'free';
+  return structuredClone({
+    kind: 'display' as const,
+    branding: {
+      companyName: 'My Company',
+      logoUrl: null,
+      brandingEnabled,
+    },
+    theme: {
+      colorScheme: 'light' as const,
+      radius: 'medium' as const,
+      density: 'normal' as const,
+      color: {
+        accent: '#6366F1',
+        surface: '#FFFFFF',
+        text: '#111827',
+        subText: '#6B7280',
+        border: '#E5E7EB',
+      },
+    },
+    display: {
+      position: 'right' as const,
+      defaultOpen: true,
+      header: {
+        title: 'Required documents',
+        showCount: true,
+      },
+      emptyMessage: 'No documents available.',
+    },
+    connection: {
+      provider: 'n8n' as const,
+      webhookUrl: 'https://example.com/webhook',
+      triggerMessage: 'List documents',
+      captureContext: true,
+      customContext: {},
+    },
+  });
+}
