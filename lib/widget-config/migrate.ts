@@ -163,6 +163,9 @@ function lenientParse(candidate: AnyRecord): ChatWidgetConfig {
     'features',
     'startScreen',
     'composer',
+    'colorSystem',
+    'chatkit',
+    'advanced',
   ] as const;
 
   const repaired: AnyRecord = { schemaVersion: CONFIG_SCHEMA_VERSION, kind: 'chat' };
@@ -214,6 +217,30 @@ export function migrateConfig(raw: unknown): ChatWidgetConfig {
     features: { ...(src.features && typeof src.features === 'object' ? (src.features as AnyRecord) : {}) },
     startScreen: { ...(src.startScreen && typeof src.startScreen === 'object' ? (src.startScreen as AnyRecord) : {}) },
     composer: { ...(src.composer && typeof src.composer === 'object' ? (src.composer as AnyRecord) : {}) },
+    colorSystem: { ...(src.colorSystem && typeof src.colorSystem === 'object' ? (src.colorSystem as AnyRecord) : {}) },
+    chatkit: { ...(src.chatkit && typeof src.chatkit === 'object' ? (src.chatkit as AnyRecord) : {}) },
+    advanced: { ...(src.advanced && typeof src.advanced === 'object' ? (src.advanced as AnyRecord) : {}) },
+  };
+
+  // Legacy `advanced.customJs` is intentionally dropped (never executed; XSS
+  // surface). Zod would strip it anyway, but delete explicitly for clarity.
+  delete (candidate.advanced as AnyRecord).customJs;
+
+  /**
+   * Write `value` to `obj[key]` only when the key is not already present.
+   * Used for the Task 4a flat-field mappings: these fields have no tier-3
+   * legacy (`style.*`) source, so "absent in candidate" is exactly
+   * "no canonical structured value" — canonical-over-flat precedence for free.
+   */
+  const setIfAbsent = (obj: AnyRecord, key: string, value: unknown): void => {
+    if (obj[key] === undefined) obj[key] = value;
+  };
+
+  /** Replace parent[key] with a shallow copy (avoids mutating caller-owned nested objects) and return it. */
+  const ensureOwnObject = (parent: AnyRecord, key: string): AnyRecord => {
+    const existing = parent[key];
+    parent[key] = existing && typeof existing === 'object' ? { ...(existing as AnyRecord) } : {};
+    return parent[key] as AnyRecord;
   };
 
   // ---- Capture canonical theme.colors and theme.mode BEFORE any legacy writes ----
@@ -374,6 +401,75 @@ export function migrateConfig(raw: unknown): ChatWidgetConfig {
         : {}),
       enabled: src.enableAttachments,
     };
+  }
+
+  // ---- (2b) Task 4a playground fields → new canonical sections ----
+  // These flat keys have no tier-3 (`style.*`) source, so setIfAbsent gives
+  // canonical-over-flat precedence directly: explicit structured values were
+  // spread into candidate at construction and are never overwritten here.
+
+  // Color system (flat useAccent/accentColor/tint*/surface*/custom* → colorSystem.*).
+  // NOTE: flat accentColor does NOT force useAccent on — the UI treats the flag
+  // as independent (chat-preview: `config.useAccent || false`). The existing
+  // accentColor → theme.colors.primary mirror above stays in place.
+  const colorSys = candidate.colorSystem as AnyRecord;
+  if (typeof src.useAccent === 'boolean') setIfAbsent(colorSys, 'useAccent', src.useAccent);
+  if (isHex(src.accentColor)) setIfAbsent(colorSys, 'accentColor', src.accentColor);
+  if (typeof src.useTintedGrayscale === 'boolean') setIfAbsent(colorSys, 'useTintedGrayscale', src.useTintedGrayscale);
+  if (typeof src.tintHue === 'number') setIfAbsent(colorSys, 'tintHue', src.tintHue);
+  if (typeof src.tintLevel === 'number') setIfAbsent(colorSys, 'tintLevel', src.tintLevel);
+  if (typeof src.shadeLevel === 'number') setIfAbsent(colorSys, 'shadeLevel', src.shadeLevel);
+  if (typeof src.useCustomSurfaceColors === 'boolean') setIfAbsent(colorSys, 'useCustomSurfaceColors', src.useCustomSurfaceColors);
+  if (isHex(src.surfaceBackgroundColor)) setIfAbsent(colorSys, 'surfaceBackgroundColor', src.surfaceBackgroundColor);
+  if (isHex(src.surfaceForegroundColor)) setIfAbsent(colorSys, 'surfaceForegroundColor', src.surfaceForegroundColor);
+  if (typeof src.useCustomTextColor === 'boolean') setIfAbsent(colorSys, 'useCustomTextColor', src.useCustomTextColor);
+  if (isHex(src.customTextColor)) setIfAbsent(colorSys, 'customTextColor', src.customTextColor);
+  if (typeof src.useCustomIconColor === 'boolean') setIfAbsent(colorSys, 'useCustomIconColor', src.useCustomIconColor);
+  if (isHex(src.customIconColor)) setIfAbsent(colorSys, 'customIconColor', src.customIconColor);
+  if (typeof src.useCustomUserMessageColors === 'boolean') setIfAbsent(colorSys, 'useCustomUserMessageColors', src.useCustomUserMessageColors);
+  if (isHex(src.customUserMessageTextColor)) setIfAbsent(colorSys, 'customUserMessageTextColor', src.customUserMessageTextColor);
+  if (isHex(src.customUserMessageBackgroundColor)) setIfAbsent(colorSys, 'customUserMessageBackgroundColor', src.customUserMessageBackgroundColor);
+
+  // Playground style (flat radius/density → theme.radius/theme.density)
+  if (typeof src.radius === 'string') setIfAbsent(candidate.theme as AnyRecord, 'radius', src.radius);
+  if (typeof src.density === 'string') setIfAbsent(candidate.theme as AnyRecord, 'density', src.density);
+
+  // Custom font (flat useCustomFont/customFontName/customFontCss → theme.typography.*)
+  if (
+    typeof src.useCustomFont === 'boolean' ||
+    typeof src.customFontName === 'string' ||
+    typeof src.customFontCss === 'string'
+  ) {
+    const typography = ensureOwnObject(candidate.theme as AnyRecord, 'typography');
+    if (typeof src.useCustomFont === 'boolean') setIfAbsent(typography, 'useCustomFont', src.useCustomFont);
+    if (typeof src.customFontName === 'string') setIfAbsent(typography, 'customFontName', src.customFontName);
+    if (typeof src.customFontCss === 'string') setIfAbsent(typography, 'customFontCss', src.customFontCss);
+  }
+
+  // Inline embed dimensions (flat inlineWidth/inlineHeight → theme.size.*)
+  if (typeof src.inlineWidth === 'number' || typeof src.inlineHeight === 'number') {
+    const size = ensureOwnObject(candidate.theme as AnyRecord, 'size');
+    if (typeof src.inlineWidth === 'number') setIfAbsent(size, 'inlineWidth', src.inlineWidth);
+    if (typeof src.inlineHeight === 'number') setIfAbsent(size, 'inlineHeight', src.inlineHeight);
+  }
+
+  // ChatKit (flat chatkit* + enableModelPicker → chatkit.* with prefix stripped)
+  const ck = candidate.chatkit as AnyRecord;
+  if (typeof src.chatkitGrayscaleHue === 'number') setIfAbsent(ck, 'grayscaleHue', src.chatkitGrayscaleHue);
+  if (typeof src.chatkitGrayscaleTint === 'number') setIfAbsent(ck, 'grayscaleTint', src.chatkitGrayscaleTint);
+  if (typeof src.chatkitGrayscaleShade === 'number') setIfAbsent(ck, 'grayscaleShade', src.chatkitGrayscaleShade);
+  if (isHex(src.chatkitAccentPrimary)) setIfAbsent(ck, 'accentPrimary', src.chatkitAccentPrimary);
+  if (typeof src.chatkitAccentLevel === 'number') setIfAbsent(ck, 'accentLevel', src.chatkitAccentLevel);
+  if (typeof src.enableModelPicker === 'boolean') setIfAbsent(ck, 'enableModelPicker', src.enableModelPicker);
+
+  // PDF lightbox (flat enablePdfLightbox → features.pdfLightbox)
+  if (typeof src.enablePdfLightbox === 'boolean') {
+    setIfAbsent(candidate.features as AnyRecord, 'pdfLightbox', src.enablePdfLightbox);
+  }
+
+  // Custom CSS (flat customCss → advanced.customCss; structured advanced.customCss wins)
+  if (typeof src.customCss === 'string') {
+    setIfAbsent(candidate.advanced as AnyRecord, 'customCss', src.customCss);
   }
 
   return lenientParse(candidate);

@@ -42,6 +42,76 @@ describe('canonical chat widget config schema', () => {
   });
 });
 
+describe('playground/chatkit canonical sections (Task 4a)', () => {
+  it('parse({}) includes colorSystem with store-matching defaults', () => {
+    const cfg = chatWidgetConfigSchema.parse({});
+    expect(cfg.colorSystem.useAccent).toBe(true);
+    expect(cfg.colorSystem.accentColor).toBe('#0ea5e9');
+    expect(cfg.colorSystem.useTintedGrayscale).toBe(false);
+    expect(cfg.colorSystem.tintHue).toBe(220);
+    expect(cfg.colorSystem.tintLevel).toBe(10);
+    expect(cfg.colorSystem.shadeLevel).toBe(10);
+    expect(cfg.colorSystem.useCustomSurfaceColors).toBe(false);
+    expect(cfg.colorSystem.surfaceBackgroundColor).toBe('#ffffff');
+    expect(cfg.colorSystem.surfaceForegroundColor).toBe('#f8fafc');
+    expect(cfg.colorSystem.useCustomTextColor).toBe(false);
+    expect(cfg.colorSystem.customTextColor).toBe('#1e293b');
+    expect(cfg.colorSystem.useCustomIconColor).toBe(false);
+    expect(cfg.colorSystem.customIconColor).toBe('#64748b');
+    expect(cfg.colorSystem.useCustomUserMessageColors).toBe(false);
+    expect(cfg.colorSystem.customUserMessageTextColor).toBe('#ffffff');
+    expect(cfg.colorSystem.customUserMessageBackgroundColor).toBe('#0ea5e9');
+  });
+
+  it('parse({}) includes chatkit section with store-matching defaults', () => {
+    const cfg = chatWidgetConfigSchema.parse({});
+    expect(cfg.chatkit.grayscaleHue).toBe(220);
+    expect(cfg.chatkit.grayscaleTint).toBe(6);
+    expect(cfg.chatkit.grayscaleShade).toBe(-1);
+    expect(cfg.chatkit.accentPrimary).toBe('#0f172a');
+    expect(cfg.chatkit.accentLevel).toBe(1);
+    expect(cfg.chatkit.enableModelPicker).toBe(false);
+  });
+
+  it('parse({}) includes new theme style fields with store-matching defaults', () => {
+    const cfg = chatWidgetConfigSchema.parse({});
+    expect(cfg.theme.radius).toBe('medium');
+    expect(cfg.theme.density).toBe('normal');
+    expect(cfg.theme.typography.useCustomFont).toBe(false);
+    expect(cfg.theme.typography.customFontName).toBe('');
+    expect(cfg.theme.typography.customFontCss).toBe('');
+    expect(cfg.theme.size.inlineWidth).toBe(400);
+    expect(cfg.theme.size.inlineHeight).toBe(600);
+  });
+
+  it('parse({}) includes features.pdfLightbox and advanced.customCss', () => {
+    const cfg = chatWidgetConfigSchema.parse({});
+    expect(cfg.features.pdfLightbox).toBe(false);
+    expect(cfg.advanced.customCss).toBe('');
+  });
+
+  it('rejects invalid colorSystem hex colors and out-of-range chatkit values', () => {
+    expect(chatWidgetConfigSchema.safeParse({ colorSystem: { accentColor: 'red' } }).success).toBe(false);
+    expect(chatWidgetConfigSchema.safeParse({ chatkit: { accentLevel: 5 } }).success).toBe(false);
+    expect(chatWidgetConfigSchema.safeParse({ chatkit: { grayscaleShade: -9 } }).success).toBe(false);
+    expect(chatWidgetConfigSchema.safeParse({ colorSystem: { tintHue: 999 } }).success).toBe(false);
+  });
+
+  it('new sections are isolated between parses', () => {
+    const a = chatWidgetConfigSchema.parse({});
+    const b = chatWidgetConfigSchema.parse({});
+    expect(a.colorSystem).not.toBe(b.colorSystem);
+    expect(a.chatkit).not.toBe(b.chatkit);
+    expect(a.advanced).not.toBe(b.advanced);
+    a.colorSystem.accentColor = '#000000';
+    a.chatkit.accentLevel = 3;
+    a.advanced.customCss = '.x{}';
+    expect(b.colorSystem.accentColor).toBe('#0ea5e9');
+    expect(b.chatkit.accentLevel).toBe(1);
+    expect(b.advanced.customCss).toBe('');
+  });
+});
+
 describe('default value isolation between parses', () => {
   it('each parse({}) yields distinct nested object and array instances', () => {
     const a = chatWidgetConfigSchema.parse({});

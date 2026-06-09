@@ -47,6 +47,135 @@ describe('migrateConfig', () => {
     expect(out.connection.webhookUrl).toBe('https://n8n.example.com/webhook/y');
   });
 
+  it('maps flat playground color-system fields into colorSystem (Task 4a)', () => {
+    const out = migrateConfig({
+      useAccent: false,
+      accentColor: '#22d3ee',
+      useTintedGrayscale: true,
+      tintHue: 30,
+      tintLevel: 12,
+      shadeLevel: 8,
+      useCustomSurfaceColors: true,
+      surfaceBackgroundColor: '#101010',
+      surfaceForegroundColor: '#202020',
+      useCustomTextColor: true,
+      customTextColor: '#abcdef',
+      useCustomIconColor: true,
+      customIconColor: '#fedcba',
+      useCustomUserMessageColors: true,
+      customUserMessageTextColor: '#111111',
+      customUserMessageBackgroundColor: '#222222',
+    });
+    expect(out.colorSystem.useAccent).toBe(false);
+    expect(out.colorSystem.accentColor).toBe('#22d3ee');
+    // existing mirror to theme.colors.primary stays
+    expect(out.theme.colors.primary).toBe('#22d3ee');
+    expect(out.theme.colors.userMessage).toBe('#22d3ee');
+    expect(out.colorSystem.useTintedGrayscale).toBe(true);
+    expect(out.colorSystem.tintHue).toBe(30);
+    expect(out.colorSystem.tintLevel).toBe(12);
+    expect(out.colorSystem.shadeLevel).toBe(8);
+    expect(out.colorSystem.useCustomSurfaceColors).toBe(true);
+    expect(out.colorSystem.surfaceBackgroundColor).toBe('#101010');
+    expect(out.colorSystem.surfaceForegroundColor).toBe('#202020');
+    expect(out.colorSystem.useCustomTextColor).toBe(true);
+    expect(out.colorSystem.customTextColor).toBe('#abcdef');
+    expect(out.colorSystem.useCustomIconColor).toBe(true);
+    expect(out.colorSystem.customIconColor).toBe('#fedcba');
+    expect(out.colorSystem.useCustomUserMessageColors).toBe(true);
+    expect(out.colorSystem.customUserMessageTextColor).toBe('#111111');
+    expect(out.colorSystem.customUserMessageBackgroundColor).toBe('#222222');
+  });
+
+  it('flat accentColor does NOT flip useAccent on (flag is independent in the UI)', () => {
+    const out = migrateConfig({ accentColor: '#22d3ee' });
+    expect(out.colorSystem.accentColor).toBe('#22d3ee');
+    expect(out.colorSystem.useAccent).toBe(true); // schema default, not forced
+    const out2 = migrateConfig({ accentColor: '#22d3ee', useAccent: false });
+    expect(out2.colorSystem.useAccent).toBe(false);
+  });
+
+  it('maps flat style/typography/size fields into theme (Task 4a)', () => {
+    const out = migrateConfig({
+      radius: 'pill',
+      density: 'compact',
+      useCustomFont: true,
+      customFontName: 'Geist',
+      customFontCss: '@font-face { font-family: Geist; src: url(https://x.com/g.woff2); }',
+      inlineWidth: 500,
+      inlineHeight: 700,
+    });
+    expect(out.theme.radius).toBe('pill');
+    expect(out.theme.density).toBe('compact');
+    expect(out.theme.typography.useCustomFont).toBe(true);
+    expect(out.theme.typography.customFontName).toBe('Geist');
+    expect(out.theme.typography.customFontCss).toContain('font-family: Geist');
+    expect(out.theme.size.inlineWidth).toBe(500);
+    expect(out.theme.size.inlineHeight).toBe(700);
+  });
+
+  it('maps flat chatkit*/enableModelPicker into chatkit section (Task 4a)', () => {
+    const out = migrateConfig({
+      chatkitGrayscaleHue: 200,
+      chatkitGrayscaleTint: 3,
+      chatkitGrayscaleShade: -2,
+      chatkitAccentPrimary: '#111111',
+      chatkitAccentLevel: 2,
+      enableModelPicker: true,
+    });
+    expect(out.chatkit.grayscaleHue).toBe(200);
+    expect(out.chatkit.grayscaleTint).toBe(3);
+    expect(out.chatkit.grayscaleShade).toBe(-2);
+    expect(out.chatkit.accentPrimary).toBe('#111111');
+    expect(out.chatkit.accentLevel).toBe(2);
+    expect(out.chatkit.enableModelPicker).toBe(true);
+  });
+
+  it('maps enablePdfLightbox and customCss into features/advanced (Task 4a)', () => {
+    const out = migrateConfig({
+      enablePdfLightbox: true,
+      customCss: '.widget { color: red; }',
+    });
+    expect(out.features.pdfLightbox).toBe(true);
+    expect(out.advanced.customCss).toBe('.widget { color: red; }');
+  });
+
+  it('legacy advanced.customCss survives; canonical advanced.customCss beats flat customCss (Task 4a)', () => {
+    const legacy = migrateConfig({ advanced: { customCss: '.a{}', customJs: 'alert(1)' } });
+    expect(legacy.advanced.customCss).toBe('.a{}');
+    expect('customJs' in (legacy.advanced as Record<string, unknown>)).toBe(false); // dropped — XSS surface
+
+    const both = migrateConfig({ customCss: '.flat{}', advanced: { customCss: '.canonical{}' } });
+    expect(both.advanced.customCss).toBe('.canonical{}');
+  });
+
+  it('explicit colorSystem.accentColor beats flat accentColor (canonical > playground)', () => {
+    const out = migrateConfig({
+      accentColor: '#22d3ee',
+      colorSystem: { accentColor: '#111111' },
+    });
+    expect(out.colorSystem.accentColor).toBe('#111111');
+  });
+
+  it('explicit canonical homes beat flat keys for chatkit/theme fields (canonical > playground)', () => {
+    const out = migrateConfig({
+      chatkitAccentLevel: 3,
+      chatkit: { accentLevel: 0 },
+      radius: 'pill',
+      theme: { radius: 'none' },
+      enablePdfLightbox: true,
+      features: { pdfLightbox: false },
+    });
+    expect(out.chatkit.accentLevel).toBe(0);
+    expect(out.theme.radius).toBe('none');
+    expect(out.features.pdfLightbox).toBe(false);
+  });
+
+  it('is idempotent on configs containing the new flat playground fields', () => {
+    const once = migrateConfig({ radius: 'pill', chatkitAccentLevel: 2, customCss: '.x{}', useAccent: false });
+    expect(migrateConfig(once)).toEqual(once);
+  });
+
   it('falls back to defaults for unparseable garbage', () => {
     const out = migrateConfig({ theme: { colors: { primary: 'not-a-color' } } });
     expect(out.theme.colors.primary).toBe('#4F46E5'); // default wins over invalid

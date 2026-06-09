@@ -85,6 +85,10 @@ const sizeSchema = z.object({
   customWidth: z.number().int().min(300).max(1000).nullable().default(null),
   customHeight: z.number().int().min(400).max(1000).nullable().default(null),
   fullscreenOnMobile: z.boolean().default(false),
+  // Inline-embed dimensions (pixels). Ranges mirror the resize clamps in
+  // components/configurator/preview-canvas.tsx (300–1200 × 400–900).
+  inlineWidth: z.number().int().min(300).max(1200).default(400),
+  inlineHeight: z.number().int().min(400).max(900).default(600),
 });
 
 const typographySchema = z.object({
@@ -92,6 +96,11 @@ const typographySchema = z.object({
   fontSize: z.number().int().min(12).max(20).default(14),
   fontUrl: optionalHttpsUrl.default(null),
   disableDefaultFont: z.boolean().default(false),
+  // Custom-font support (playground configurator). customFontCss holds the
+  // @font-face CSS (or font URL) the sidebar collects.
+  useCustomFont: z.boolean().default(false),
+  customFontName: z.string().max(100).default(''),
+  customFontCss: z.string().max(2000).default(''),
 });
 
 export const themeSchema = z.object({
@@ -102,6 +111,64 @@ export const themeSchema = z.object({
   size: sizeSchema.default(() => sizeSchema.parse({})),
   typography: typographySchema.default(() => typographySchema.parse({})),
   cornerRadius: z.number().int().min(0).max(20).default(12),
+  // Playground style controls (legacy flat `radius` / `density`).
+  radius: z.enum(['none', 'small', 'medium', 'large', 'pill']).default('medium'),
+  density: z.enum(['compact', 'normal', 'spacious']).default('normal'),
+});
+
+/**
+ * Playground color system (legacy flat fields `useAccent`, `accentColor`,
+ * `useTintedGrayscale`, `tintHue`, ... `customUserMessageBackgroundColor`).
+ * Defaults match stores/widget-store.ts defaultConfig. Note `useAccent`
+ * defaults TRUE (store default) — the other toggles default false.
+ */
+export const colorSystemSchema = z.object({
+  useAccent: z.boolean().default(true),
+  accentColor: hexColor.default('#0ea5e9'),
+  useTintedGrayscale: z.boolean().default(false),
+  tintHue: z.number().int().min(0).max(360).default(220),
+  tintLevel: z.number().int().min(0).max(100).default(10),
+  shadeLevel: z.number().int().min(0).max(100).default(10),
+  useCustomSurfaceColors: z.boolean().default(false),
+  surfaceBackgroundColor: hexColor.default('#ffffff'),
+  surfaceForegroundColor: hexColor.default('#f8fafc'),
+  useCustomTextColor: z.boolean().default(false),
+  customTextColor: hexColor.default('#1e293b'),
+  useCustomIconColor: z.boolean().default(false),
+  customIconColor: hexColor.default('#64748b'),
+  useCustomUserMessageColors: z.boolean().default(false),
+  customUserMessageTextColor: hexColor.default('#ffffff'),
+  customUserMessageBackgroundColor: hexColor.default('#0ea5e9'),
+});
+
+/**
+ * ChatKit-provider color/feature controls. Field mapping from the legacy
+ * widget-store flat keys (prefix stripped — the section name carries it):
+ *   chatkitGrayscaleHue   → chatkit.grayscaleHue
+ *   chatkitGrayscaleTint  → chatkit.grayscaleTint
+ *   chatkitGrayscaleShade → chatkit.grayscaleShade
+ *   chatkitAccentPrimary  → chatkit.accentPrimary
+ *   chatkitAccentLevel    → chatkit.accentLevel
+ *   enableModelPicker     → chatkit.enableModelPicker
+ * Ranges mirror the clamps in components/configurator/chatkit-preview.tsx
+ * (tint 0–9, shade -4..4, level 0–3) and the sidebar sliders (hue 0–360).
+ */
+export const chatkitSchema = z.object({
+  grayscaleHue: z.number().int().min(0).max(360).default(220),
+  grayscaleTint: z.number().int().min(0).max(9).default(6),
+  grayscaleShade: z.number().int().min(-4).max(4).default(-1),
+  accentPrimary: hexColor.default('#0f172a'),
+  accentLevel: z.number().int().min(0).max(3).default(1),
+  enableModelPicker: z.boolean().default(false),
+});
+
+/**
+ * Advanced escape hatches. customJs from the legacy store shape is
+ * INTENTIONALLY absent — it was never exposed or executed and is a pure XSS
+ * surface; migrate.ts drops it.
+ */
+export const advancedSchema = z.object({
+  customCss: z.string().max(5000).default(''),
 });
 
 const advancedMessagesSchema = z.object({
@@ -161,6 +228,8 @@ export const featuresSchema = z.object({
   emailTranscript: z.boolean().default(false),
   printTranscript: z.boolean().default(true),
   ratingPrompt: z.boolean().default(false),
+  // Legacy flat `enablePdfLightbox`
+  pdfLightbox: z.boolean().default(false),
 });
 
 // Absorbs the "playground-style" flat fields the runtime renders (greeting,
@@ -190,6 +259,9 @@ export const chatWidgetConfigSchema = z.object({
   features: featuresSchema.default(() => featuresSchema.parse({})),
   startScreen: startScreenSchema.default(() => startScreenSchema.parse({})),
   composer: composerSchema.default(() => composerSchema.parse({})),
+  colorSystem: colorSystemSchema.default(() => colorSystemSchema.parse({})),
+  chatkit: chatkitSchema.default(() => chatkitSchema.parse({})),
+  advanced: advancedSchema.default(() => advancedSchema.parse({})),
 });
 
 // ---------- tier-aware validation ----------
@@ -254,3 +326,6 @@ export type ConnectionConfig = z.infer<typeof connectionSchema>;
 export type FeaturesConfig = z.infer<typeof featuresSchema>;
 export type StartScreenConfig = z.infer<typeof startScreenSchema>;
 export type ComposerConfig = z.infer<typeof composerSchema>;
+export type ColorSystemConfig = z.infer<typeof colorSystemSchema>;
+export type ChatkitConfig = z.infer<typeof chatkitSchema>;
+export type AdvancedConfig = z.infer<typeof advancedSchema>;
