@@ -37,25 +37,71 @@ function isHex(v: unknown): v is string {
  * that Zod rejects, rather than replacing the entire section with defaults.
  * This preserves all valid sibling data when one leaf is invalid.
  *
- * Algorithm: repeatedly safeParse → delete each invalid leaf path → repeat until
- * success, capped at 25 iterations. Falls back to section defaults only if the
- * section is itself the wrong type or the iteration cap is hit.
+ * Algorithm: repeatedly safeParse → remove each invalid leaf/element → repeat
+ * until success, capped at 25 iterations. Falls back to section defaults only
+ * if the section is itself the wrong type, no progress can be made, or the
+ * iteration cap is hit.
+ *
+ * Array handling: when an issue path crosses an array (e.g.
+ * `starterPrompts[1].label`), deleting the leaf would leave the element
+ * required-missing (and `delete arr[i]` would leave a sparse hole) — both fail
+ * forever. Instead we splice out the whole offending ELEMENT at the first
+ * array container. Splices for the same array are applied in descending index
+ * order within a pass so earlier removals don't shift later indices.
  */
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 function repairSection(sectionSchema: z.ZodTypeAny, raw: unknown): unknown {
-  const candidate: AnyRecord =
-    raw && typeof raw === 'object' ? (structuredClone(raw) as AnyRecord) : {};
+  let candidate: AnyRecord;
+  if (raw && typeof raw === 'object') {
+    try {
+      candidate = structuredClone(raw) as AnyRecord;
+    } catch {
+      // Non-cloneable values (functions, etc.) — fall back to section defaults
+      return sectionSchema.parse({});
+    }
+  } else {
+    candidate = {};
+  }
 
   for (let i = 0; i < 25; i++) {
     const r = sectionSchema.safeParse(candidate);
     if (r.success) return r.data;
 
     let deleted = false;
+    // Collect array-element removals so same-array indices splice in
+    // descending order after all issues in this pass are examined.
+    const splices = new Map<unknown[], Set<number>>();
+
     for (const issue of r.error.issues) {
       // Section itself is the wrong type — no point deleting leaves
       if (issue.path.length === 0) return sectionSchema.parse({});
 
-      // Walk to the parent of the offending leaf and delete it
+      // Array-aware: if the path crosses an array, schedule removal of the
+      // offending ELEMENT at the FIRST array container.
+      let container: unknown = candidate;
+      let spliceTarget: { arr: unknown[]; index: number } | null = null;
+      for (let k = 0; k < issue.path.length; k++) {
+        const seg = issue.path[k];
+        if (Array.isArray(container) && typeof seg === 'number') {
+          spliceTarget = { arr: container, index: seg };
+          break;
+        }
+        if (container == null || typeof container !== 'object') {
+          container = null;
+          break;
+        }
+        container = (container as AnyRecord)[seg as string];
+      }
+      if (spliceTarget) {
+        const indices = splices.get(spliceTarget.arr) ?? new Set<number>();
+        indices.add(spliceTarget.index);
+        splices.set(spliceTarget.arr, indices);
+        continue;
+      }
+
+      // Pure object path: walk to the parent of the offending leaf, delete it.
+      // Only count as progress when the key actually existed — a missing
+      // required key can never be repaired by deletion, so the honest guard
+      // exits to section defaults immediately instead of spinning the cap.
       let cursor: AnyRecord | null = candidate;
       for (let k = 0; k < issue.path.length - 1; k++) {
         const key = issue.path[k] as string;
@@ -66,10 +112,24 @@ function repairSection(sectionSchema: z.ZodTypeAny, raw: unknown): unknown {
         cursor = cursor![key] as AnyRecord;
       }
       if (cursor) {
-        delete cursor[issue.path[issue.path.length - 1] as string];
-        deleted = true;
+        const leafKey = issue.path[issue.path.length - 1] as string;
+        if (Object.prototype.hasOwnProperty.call(cursor, leafKey)) {
+          delete cursor[leafKey];
+          deleted = true;
+        }
       }
     }
+
+    // Apply scheduled splices, highest index first per array.
+    for (const [arr, indices] of splices) {
+      for (const idx of [...indices].sort((a, b) => b - a)) {
+        if (idx >= 0 && idx < arr.length) {
+          arr.splice(idx, 1);
+          deleted = true;
+        }
+      }
+    }
+
     if (!deleted) return sectionSchema.parse({});
   }
 

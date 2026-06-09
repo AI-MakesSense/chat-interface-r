@@ -178,4 +178,48 @@ describe('migrateConfig', () => {
     const out2 = migrateConfig({ theme: { mode: 'auto' }, themeMode: 'dark' });
     expect(out2.theme.mode).toBe('auto');
   });
+
+  // C-06: invalid array ELEMENT is spliced out; valid siblings survive
+  it('splices out an invalid starterPrompts element, preserving the greeting and valid prompts (C-06)', () => {
+    const out = migrateConfig({
+      schemaVersion: 2,
+      startScreen: {
+        greeting: 'Hello from Acme',
+        starterPrompts: [
+          { label: 'Pricing', icon: 'tag' },
+          { label: '', icon: 'x' }, // invalid: empty label
+        ],
+      },
+    });
+    expect(out.startScreen.greeting).toBe('Hello from Acme');
+    expect(out.startScreen.starterPrompts).toHaveLength(1);
+    expect(out.startScreen.starterPrompts[0]).toEqual({ label: 'Pricing', icon: 'tag' });
+  });
+
+  // C-06: invalid primitive array element spliced without sparse holes
+  it('splices an invalid allowedExtensions entry, preserving all sibling feature values (C-06)', () => {
+    const out = migrateConfig({
+      schemaVersion: 2,
+      features: {
+        emailTranscript: true,
+        ratingPrompt: true,
+        attachments: { enabled: true, allowedExtensions: ['.pdf', 'PDF'], maxFileSizeMB: 25 },
+      },
+    });
+    expect(out.features.emailTranscript).toBe(true);
+    expect(out.features.ratingPrompt).toBe(true);
+    expect(out.features.attachments.enabled).toBe(true);
+    expect(out.features.attachments.maxFileSizeMB).toBe(25);
+    expect(out.features.attachments.allowedExtensions).toEqual(['.pdf']);
+  });
+
+  // C-06: every element invalid → empty array, siblings preserved
+  it('empties starterPrompts when all elements are invalid, preserving the greeting (C-06)', () => {
+    const out = migrateConfig({
+      schemaVersion: 2,
+      startScreen: { greeting: 'Hi', starterPrompts: [{ label: '', icon: '' }] },
+    });
+    expect(out.startScreen.greeting).toBe('Hi');
+    expect(out.startScreen.starterPrompts).toEqual([]);
+  });
 });
