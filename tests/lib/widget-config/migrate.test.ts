@@ -127,4 +127,55 @@ describe('migrateConfig', () => {
     const out = migrateConfig(null);
     expect(out.schemaVersion).toBe(CONFIG_SCHEMA_VERSION);
   });
+
+  // C-01: leaf-level repair preserves valid sibling data
+  it('preserves valid sibling leaves when one leaf fails (C-01)', () => {
+    const out = migrateConfig({
+      schemaVersion: 2,
+      branding: { companyName: 'Acme Corp', logoUrl: 'javascript:alert(1)' },
+    });
+    expect(out.branding.companyName).toBe('Acme Corp');
+    expect(out.branding.logoUrl).toBeNull();
+  });
+
+  // C-02: invalid enum in style section doesn't poison valid hex in same section
+  it('preserves primaryColor when style.theme is an invalid enum value (C-02)', () => {
+    const out = migrateConfig({
+      style: { theme: 'system', primaryColor: '#FF0000' },
+    });
+    expect(out.theme.colors.primary).toBe('#FF0000');
+    expect(out.theme.mode).toBe('light'); // 'system' is invalid → default
+  });
+
+  // C-03: canonical keys win over legacy flat keys
+  it('canonical features.attachments wins over legacy fileAttachments (C-03)', () => {
+    const out = migrateConfig({
+      features: {
+        fileAttachments: true,
+        attachments: { enabled: false, maxFileSizeMB: 20 },
+      },
+    });
+    expect(out.features.attachments.enabled).toBe(false);
+    expect(out.features.attachments.maxFileSizeMB).toBe(20);
+  });
+
+  // C-03: canonical theme.colors.primary wins over legacy style.primaryColor
+  it('canonical theme.colors.primary wins over legacy style.primaryColor (C-03)', () => {
+    const out = migrateConfig({
+      theme: { colors: { primary: '#AABBCC' } },
+      style: { primaryColor: '#FF0000' },
+    });
+    expect(out.theme.colors.primary).toBe('#AABBCC');
+  });
+
+  // C-03: playground themeMode vs canonical theme.mode and legacy style.theme
+  it('canonical theme.mode wins over playground themeMode; playground themeMode wins over legacy style.theme (C-03/C-04)', () => {
+    // Playground themeMode beats legacy style.theme
+    const out1 = migrateConfig({ themeMode: 'dark', style: { theme: 'light' } });
+    expect(out1.theme.mode).toBe('dark');
+
+    // Canonical theme.mode beats playground themeMode
+    const out2 = migrateConfig({ theme: { mode: 'auto' }, themeMode: 'dark' });
+    expect(out2.theme.mode).toBe('auto');
+  });
 });

@@ -19,6 +19,7 @@
  * `{ schemaVersion: 2, kind: 'display' }` fails the `kind` literal and is
  * repaired to chat defaults — that is the intended contract.
  */
+import { z } from 'zod';
 import {
   chatWidgetConfigSchema,
   CONFIG_SCHEMA_VERSION,
@@ -32,22 +33,67 @@ function isHex(v: unknown): v is string {
 }
 
 /**
- * Drop invalid leaves by safeParsing each section independently, falling back
- * to the section default when a section fails to parse. This tolerates configs
- * where top-level unknown keys (like `style`) are present — Zod strips unknown
- * keys by default, so they disappear from the output cleanly.
+ * Surgically repair a single section by deleting only the offending leaf values
+ * that Zod rejects, rather than replacing the entire section with defaults.
+ * This preserves all valid sibling data when one leaf is invalid.
  *
- * Both exits double-parse so the result is a strict fixed point of the schema:
- * a single Zod parse is not idempotent here (e.g. `darkOverride.colors: {}`
- * inflates to full per-field defaults on the next parse), but parse(parse(x))
- * converges. Double-parsing means migrateConfig output never changes if it is
- * migrated again.
+ * Algorithm: repeatedly safeParse → delete each invalid leaf path → repeat until
+ * success, capped at 25 iterations. Falls back to section defaults only if the
+ * section is itself the wrong type or the iteration cap is hit.
+ */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function repairSection(sectionSchema: z.ZodTypeAny, raw: unknown): unknown {
+  const candidate: AnyRecord =
+    raw && typeof raw === 'object' ? (structuredClone(raw) as AnyRecord) : {};
+
+  for (let i = 0; i < 25; i++) {
+    const r = sectionSchema.safeParse(candidate);
+    if (r.success) return r.data;
+
+    let deleted = false;
+    for (const issue of r.error.issues) {
+      // Section itself is the wrong type — no point deleting leaves
+      if (issue.path.length === 0) return sectionSchema.parse({});
+
+      // Walk to the parent of the offending leaf and delete it
+      let cursor: AnyRecord | null = candidate;
+      for (let k = 0; k < issue.path.length - 1; k++) {
+        const key = issue.path[k] as string;
+        if (cursor![key] == null || typeof cursor![key] !== 'object') {
+          cursor = null;
+          break;
+        }
+        cursor = cursor![key] as AnyRecord;
+      }
+      if (cursor) {
+        delete cursor[issue.path[issue.path.length - 1] as string];
+        deleted = true;
+      }
+    }
+    if (!deleted) return sectionSchema.parse({});
+  }
+
+  return sectionSchema.parse({});
+}
+
+/**
+ * Drop invalid leaves by safeParsing each section independently, repairing
+ * only the specific invalid leaves rather than replacing whole sections.
+ * This tolerates configs where top-level unknown keys (like `style`) are
+ * present — Zod strips unknown keys by default, so they disappear cleanly.
+ *
+ * Both exits double-parse so the result is a strict fixed point of the schema.
+ * The mechanism: the first parse leaves `darkOverride.colors: {}` as-is
+ * (partial allows the empty object); on the second parse `{}` is explicit input
+ * and partial's per-field defaults inflate it; parse∘parse is therefore the
+ * fixed point. This convergence ensures migrateConfig output is always
+ * idempotent under a second call.
  */
 function lenientParse(candidate: AnyRecord): ChatWidgetConfig {
   const direct = chatWidgetConfigSchema.safeParse(candidate);
   if (direct.success) return chatWidgetConfigSchema.parse(direct.data);
 
-  // Per-section fallback: keep sections that parse clean, default the ones that don't.
+  // Per-section leaf-level repair: preserve valid sibling data, delete only bad leaves.
   const sections = [
     'branding',
     'theme',
@@ -63,13 +109,31 @@ function lenientParse(candidate: AnyRecord): ChatWidgetConfig {
   for (const s of sections) {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const sectionSchema = (chatWidgetConfigSchema.shape as any)[s];
-    const r = sectionSchema.safeParse(candidate[s] ?? {});
-    repaired[s] = r.success ? r.data : sectionSchema.parse({});
+    repaired[s] = repairSection(sectionSchema, candidate[s] ?? {});
   }
 
   return chatWidgetConfigSchema.parse(chatWidgetConfigSchema.parse(repaired));
 }
 
+/**
+ * Normalize any raw config shape to the canonical ChatWidgetConfig (schemaVersion 2).
+ *
+ * Precedence (highest → lowest) for any given canonical field:
+ *   1. Structured canonical  — explicit nested keys already in the canonical sections
+ *      (e.g. `theme.colors.primary`, `features.attachments.enabled`).
+ *   2. Playground flat fields — top-level shorthand (`themeMode`, `accentColor`,
+ *      `greeting`, `starterPrompts`, `placeholder`, `n8nWebhookUrl`). Beat legacy
+ *      store keys when both are present and canonical is absent.
+ *   3. Legacy store shape    — `style.*`, top-level `typography.*`,
+ *      `features.fileAttachments` / `allowedExtensions` / `maxFileSize`.
+ *
+ * Implementation note: each tier is applied in reverse precedence order (3 → 2 → 1),
+ * so later writes WIN. This means canonical values are written last and always win.
+ *
+ * Hot read-path note: callers should cache the result of migrateConfig, keyed on
+ * the widget's (version, updatedAt) pair, to avoid re-parsing unchanged configs on
+ * every request.
+ */
 export function migrateConfig(raw: unknown): ChatWidgetConfig {
   const src: AnyRecord = (raw && typeof raw === 'object' ? raw : {}) as AnyRecord;
 
@@ -92,11 +156,27 @@ export function migrateConfig(raw: unknown): ChatWidgetConfig {
     composer: { ...(src.composer && typeof src.composer === 'object' ? (src.composer as AnyRecord) : {}) },
   };
 
-  // ---- (a) legacy store shape: style.* / top-level typography.* ----
+  // ---- Capture canonical theme.colors and theme.mode BEFORE any legacy writes ----
+  // Used below to enforce canonical > playground > legacy precedence.
+  const canonicalTheme = (src.theme && typeof src.theme === 'object' ? src.theme : {}) as AnyRecord;
+  const canonicalColors = (canonicalTheme.colors && typeof canonicalTheme.colors === 'object'
+    ? canonicalTheme.colors
+    : {}) as AnyRecord;
+  const hasCanonicalMode = canonicalTheme.mode !== undefined;
+  const hasCanonicalPrimary = canonicalColors.primary !== undefined;
+
+  // ---- Capture canonical features.attachments BEFORE any legacy writes ----
+  const canonicalFeat = (src.features && typeof src.features === 'object' ? src.features : {}) as AnyRecord;
+  const canonicalAttachments = (canonicalFeat.attachments && typeof canonicalFeat.attachments === 'object'
+    ? canonicalFeat.attachments
+    : {}) as AnyRecord;
+
+  // ---- (3) Legacy store shape: style.* / top-level typography.* ----
+  // Applied first so playground (2) and canonical (1) can overwrite.
   const style = (src.style && typeof src.style === 'object' ? src.style : {}) as AnyRecord;
 
-  if (style.theme) (candidate.theme as AnyRecord).mode = style.theme;
-  if (isHex(style.primaryColor)) {
+  if (style.theme && !hasCanonicalMode) (candidate.theme as AnyRecord).mode = style.theme;
+  if (isHex(style.primaryColor) && !hasCanonicalPrimary) {
     (candidate.theme as AnyRecord).colors = {
       ...((candidate.theme as AnyRecord).colors && typeof (candidate.theme as AnyRecord).colors === 'object'
         ? ((candidate.theme as AnyRecord).colors as AnyRecord)
@@ -145,18 +225,30 @@ export function migrateConfig(raw: unknown): ChatWidgetConfig {
     };
   }
 
-  // Legacy features shape: fileAttachments / allowedExtensions / maxFileSize
+  // Legacy features shape: fileAttachments / allowedExtensions / maxFileSize.
+  // Only write to attachments keys that are NOT already defined in the canonical
+  // features.attachments object — canonical wins.
   const feat = candidate.features as AnyRecord;
   if (
     typeof feat.fileAttachments === 'boolean' ||
     feat.allowedExtensions !== undefined ||
     feat.maxFileSize !== undefined
   ) {
+    const existingAttachments = (feat.attachments && typeof feat.attachments === 'object'
+      ? (feat.attachments as AnyRecord)
+      : {});
     feat.attachments = {
-      ...(feat.attachments && typeof feat.attachments === 'object' ? (feat.attachments as AnyRecord) : {}),
-      ...(typeof feat.fileAttachments === 'boolean' ? { enabled: feat.fileAttachments } : {}),
-      ...(Array.isArray(feat.allowedExtensions) ? { allowedExtensions: feat.allowedExtensions } : {}),
-      ...(typeof feat.maxFileSize === 'number' ? { maxFileSizeMB: feat.maxFileSize } : {}),
+      ...(typeof feat.fileAttachments === 'boolean' && canonicalAttachments.enabled === undefined
+        ? { enabled: feat.fileAttachments }
+        : {}),
+      ...(Array.isArray(feat.allowedExtensions) && canonicalAttachments.allowedExtensions === undefined
+        ? { allowedExtensions: feat.allowedExtensions }
+        : {}),
+      ...(typeof feat.maxFileSize === 'number' && canonicalAttachments.maxFileSizeMB === undefined
+        ? { maxFileSizeMB: feat.maxFileSize }
+        : {}),
+      // Canonical attachment keys always win — spread them last
+      ...existingAttachments,
     };
     // Remove legacy keys so the canonical features section parses cleanly
     delete feat.fileAttachments;
@@ -171,9 +263,11 @@ export function migrateConfig(raw: unknown): ChatWidgetConfig {
   }
   delete conn.routeParam;
 
-  // ---- (b) playground flat fields ----
-  if (src.themeMode) (candidate.theme as AnyRecord).mode = src.themeMode;
-  if (isHex(src.accentColor)) {
+  // ---- (2) Playground flat fields — beat legacy, but not canonical ----
+  // theme.mode: playground themeMode beats legacy style.theme, but not canonical theme.mode
+  if (src.themeMode && !hasCanonicalMode) (candidate.theme as AnyRecord).mode = src.themeMode;
+  // theme.colors.primary: playground accentColor beats legacy style.primaryColor, but not canonical
+  if (isHex(src.accentColor) && !hasCanonicalPrimary) {
     (candidate.theme as AnyRecord).colors = {
       ...((candidate.theme as AnyRecord).colors && typeof (candidate.theme as AnyRecord).colors === 'object'
         ? ((candidate.theme as AnyRecord).colors as AnyRecord)
