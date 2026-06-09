@@ -15,7 +15,9 @@
  * fallback (invalid leaf values are replaced by defaults).
  *
  * Display-kind configs are NOT routed through migrateConfig — callers check
- * `widget.kind` first. This module handles chat only.
+ * `widget.kind` first. This module handles chat only. A blob mistagged as
+ * `{ schemaVersion: 2, kind: 'display' }` fails the `kind` literal and is
+ * repaired to chat defaults — that is the intended contract.
  */
 import {
   chatWidgetConfigSchema,
@@ -34,10 +36,16 @@ function isHex(v: unknown): v is string {
  * to the section default when a section fails to parse. This tolerates configs
  * where top-level unknown keys (like `style`) are present — Zod strips unknown
  * keys by default, so they disappear from the output cleanly.
+ *
+ * Both exits double-parse so the result is a strict fixed point of the schema:
+ * a single Zod parse is not idempotent here (e.g. `darkOverride.colors: {}`
+ * inflates to full per-field defaults on the next parse), but parse(parse(x))
+ * converges. Double-parsing means migrateConfig output never changes if it is
+ * migrated again.
  */
 function lenientParse(candidate: AnyRecord): ChatWidgetConfig {
   const direct = chatWidgetConfigSchema.safeParse(candidate);
-  if (direct.success) return direct.data;
+  if (direct.success) return chatWidgetConfigSchema.parse(direct.data);
 
   // Per-section fallback: keep sections that parse clean, default the ones that don't.
   const sections = [
@@ -59,18 +67,17 @@ function lenientParse(candidate: AnyRecord): ChatWidgetConfig {
     repaired[s] = r.success ? r.data : sectionSchema.parse({});
   }
 
-  return chatWidgetConfigSchema.parse(repaired);
+  return chatWidgetConfigSchema.parse(chatWidgetConfigSchema.parse(repaired));
 }
 
 export function migrateConfig(raw: unknown): ChatWidgetConfig {
   const src: AnyRecord = (raw && typeof raw === 'object' ? raw : {}) as AnyRecord;
 
-  // Already canonical → return as-is. Zod re-parsing of a valid v2 config is
-  // NOT guaranteed to be idempotent (e.g. darkOverride.colors: {} inflates to
-  // full defaults on a second parse), so we trust the existing shape rather than
-  // running it through lenientParse again. Callers that need repair should call
-  // lenientParse directly.
-  if (src.schemaVersion === CONFIG_SCHEMA_VERSION) return src as ChatWidgetConfig;
+  // Already tagged canonical → still validate. A v2 tag is a claim, not proof:
+  // the blob may carry invalid leaves (bad colors, javascript: URLs) or missing
+  // sections, so it goes through lenientParse like everything else. lenientParse
+  // double-parses to a fixed point, so this stays idempotent under toEqual.
+  if (src.schemaVersion === CONFIG_SCHEMA_VERSION) return lenientParse(src);
 
   const candidate: AnyRecord = {
     schemaVersion: CONFIG_SCHEMA_VERSION,

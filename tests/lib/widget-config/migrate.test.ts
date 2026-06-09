@@ -79,6 +79,48 @@ describe('migrateConfig', () => {
     expect(twice).toEqual(once);
   });
 
+  it('repairs invalid leaves in a v2-tagged config (no validation bypass)', () => {
+    const out = migrateConfig({ schemaVersion: 2, theme: { colors: { primary: 'not-a-color' } } });
+    expect(out.theme.colors.primary).toBe('#4F46E5');
+  });
+
+  it('fills out a bare v2-tagged blob to a complete config', () => {
+    const out = migrateConfig({ schemaVersion: 2 });
+    expect(out.theme.colors.primary).toBeDefined();
+    expect(out.branding).toBeDefined();
+    expect(out.advancedStyling).toBeDefined();
+    expect(out.behavior).toBeDefined();
+    expect(out.connection).toBeDefined();
+    expect(out.features).toBeDefined();
+    expect(out.startScreen).toBeDefined();
+    expect(out.composer).toBeDefined();
+    expect(out.kind).toBe('chat');
+  });
+
+  it('is idempotent on a v2 config containing darkOverride.colors: {}', () => {
+    const v2 = migrateConfig({});
+    // Force the shape a single Zod parse would inflate on the next pass
+    v2.theme.darkOverride.colors = {};
+    const once = migrateConfig(v2);
+    const twice = migrateConfig(once);
+    expect(twice).toEqual(once);
+  });
+
+  it('migrates an already-structured config without schemaVersion, preserving values', () => {
+    const out = migrateConfig({
+      branding: { companyName: 'Structured Co' },
+      theme: { colors: { primary: '#ABCDEF' } },
+      connection: { webhookUrl: 'https://n8n.example.com/webhook/s' },
+    });
+    expect(out.schemaVersion).toBe(CONFIG_SCHEMA_VERSION);
+    expect(out.branding.companyName).toBe('Structured Co');
+    expect(out.theme.colors.primary).toBe('#ABCDEF');
+    expect(out.connection.webhookUrl).toBe('https://n8n.example.com/webhook/s');
+    // missing sections are filled with defaults
+    expect(out.startScreen).toBeDefined();
+    expect(out.composer).toBeDefined();
+  });
+
   it('handles null/undefined gracefully', () => {
     expect(() => migrateConfig(null)).not.toThrow();
     expect(() => migrateConfig(undefined)).not.toThrow();
