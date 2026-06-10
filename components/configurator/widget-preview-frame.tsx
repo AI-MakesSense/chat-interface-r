@@ -64,9 +64,15 @@ export const WidgetPreviewFrame: React.FC<WidgetPreviewFrameProps> = ({
       t,
       CHATKIT_UI_ENABLED
     );
+    // targetOrigin MUST be '*': the iframe uses sandbox="allow-scripts" without
+    // allow-same-origin, so its document origin is `null`. A specific targetOrigin
+    // (e.g. our own origin) would never match `null`, and the browser would silently
+    // DROP the message — the bridge would never receive config and the preview would
+    // stay permanently blank. Inbound is still safe: the message listener guards on
+    // event.source === iframeRef.current?.contentWindow.
     frame.contentWindow.postMessage(
       { type: 'widget:config', kind: k, config: translated, tier: t },
-      window.location.origin
+      '*'
     );
   }, []);
 

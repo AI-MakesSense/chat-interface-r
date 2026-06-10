@@ -49,7 +49,9 @@ describe('WidgetPreviewFrame', () => {
 
     expect(postSpy).toHaveBeenCalledTimes(1);
     const [message, targetOrigin] = postSpy.mock.calls[0];
-    expect(targetOrigin).toBe(window.location.origin);
+    // Must be '*': the sandboxed iframe has a `null` origin, so a specific targetOrigin
+    // would be silently dropped by the browser and the bridge would never mount.
+    expect(targetOrigin).toBe('*');
     expect(message).toMatchObject({
       type: 'widget:config',
       kind: 'chat',
@@ -81,5 +83,26 @@ describe('WidgetPreviewFrame', () => {
     });
 
     expect(postSpy).not.toHaveBeenCalled();
+  });
+
+  it('shows the error overlay when the bridge reports widget:error', () => {
+    const { container } = render(
+      <WidgetPreviewFrame kind="chat" config={config} tier="agency" />
+    );
+    const iframe = container.querySelector('iframe') as HTMLIFrameElement;
+    const cw = iframe.contentWindow!;
+
+    expect(container.textContent).not.toContain('Preview error');
+
+    act(() => {
+      const evt = new MessageEvent('message', {
+        data: { type: 'widget:error', message: 'boom: renderer failed' },
+        source: cw as unknown as Window,
+      });
+      window.dispatchEvent(evt);
+    });
+
+    expect(container.textContent).toContain('Preview error');
+    expect(container.textContent).toContain('boom: renderer failed');
   });
 });

@@ -33,6 +33,9 @@ export function initPreviewBridge(): boolean {
   let dispose: (() => Promise<void> | void) | null = null;
   let mounted = false;
   // Assigned just below; declared here so the (async) message handler can clear it.
+  // No TDZ risk in practice: readyTimer is assigned before the first 'widget:ready' is
+  // ever posted, so any 'widget:config' the parent sends back arrives strictly after the
+  // assignment — the handler's clearInterval(readyTimer) always sees a defined value.
   let readyTimer: ReturnType<typeof setInterval>;
 
   window.addEventListener('message', async (event: MessageEvent) => {
