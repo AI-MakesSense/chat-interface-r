@@ -100,7 +100,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     const requestHost = request.headers.get('host') || '';
 
     const clientIP = getClientIP(request);
-    const ipRate = checkRateLimit('chat-relay:ip', clientIP, RELAY_IP_LIMIT);
+    const ipRate = await checkRateLimit('chat-relay:ip', clientIP, RELAY_IP_LIMIT);
     if (!ipRate.allowed) {
       return new NextResponse(
         JSON.stringify({ error: 'Too many relay requests' }),
@@ -131,7 +131,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     const { widget, user } = resolved;
     const userTier = user.tier || 'free';
 
-    const widgetRate = checkRateLimit(
+    const widgetRate = await checkRateLimit(
       'chat-relay:widget',
       widget.widgetKey || widget.id,
       RELAY_WIDGET_LIMIT

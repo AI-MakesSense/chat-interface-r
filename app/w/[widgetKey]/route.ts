@@ -23,7 +23,7 @@ import { getWidgetByKeyWithUser } from '@/lib/db/queries';
 import { normalizeDomain } from '@/lib/license/domain';
 import { extractDomainFromReferer, createResponseHeaders } from '@/lib/widget/headers';
 import { createErrorScript, logWidgetError, ErrorType } from '@/lib/widget/error';
-import { checkRateLimit } from '@/lib/widget/rate-limit';
+import { checkRateLimit } from '@/lib/security/rate-limit';
 import { serveWidgetBundle } from '@/lib/widget/serve';
 import { CHATKIT_SERVER_ENABLED } from '@/lib/feature-flags';
 
@@ -111,7 +111,7 @@ export async function GET(
     const clientIP = getClientIP(request);
 
     // Step 5: Check IP rate limit (10 req/sec)
-    const ipRateLimit = checkRateLimit(clientIP, 'ip');
+    const ipRateLimit = await checkRateLimit('widget-serve:ip', clientIP, { limit: 10, windowMs: 1000 });
     if (!ipRateLimit.allowed) {
       const errorScript = createErrorScript('INTERNAL_ERROR');
       return new NextResponse(errorScript, {
@@ -134,7 +134,7 @@ export async function GET(
     }
 
     // Step 7: Check widget rate limit (100 req/min)
-    const widgetRateLimit = checkRateLimit(cleanWidgetKey, 'license');
+    const widgetRateLimit = await checkRateLimit('widget-serve:widget', cleanWidgetKey, { limit: 100, windowMs: 60_000 });
     if (!widgetRateLimit.allowed) {
       const errorScript = createErrorScript('INTERNAL_ERROR');
       return new NextResponse(errorScript, {

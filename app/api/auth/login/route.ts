@@ -40,7 +40,7 @@ function getClientIP(request: NextRequest): string {
 export async function POST(request: NextRequest) {
   try {
     const clientIP = getClientIP(request);
-    const ipRate = checkRateLimit('auth:login:ip', clientIP, LOGIN_IP_LIMIT);
+    const ipRate = await checkRateLimit('auth:login:ip', clientIP, LOGIN_IP_LIMIT);
     if (!ipRate.allowed) {
       return Response.json(
         { error: 'Too many login attempts. Please try again later.' },
@@ -55,7 +55,7 @@ export async function POST(request: NextRequest) {
     const body = await request.json();
     const { email, password } = LoginSchema.parse(body);
 
-    const emailRate = checkRateLimit(
+    const emailRate = await checkRateLimit(
       'auth:login:email',
       email.toLowerCase(),
       LOGIN_EMAIL_LIMIT
