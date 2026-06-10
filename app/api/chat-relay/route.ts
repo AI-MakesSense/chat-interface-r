@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
 import {
-  getLicenseByKey,
   getUserById,
   getWidgetById,
   getWidgetByKeyWithUser,
@@ -168,14 +167,28 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     if (!widget && widgetId) {
       const widgetById = await getWidgetById(widgetId);
       if (widgetById) {
-        widget = widgetById;
-
-        if (widgetById.userId) {
-          user = await getUserById(widgetById.userId);
+        // Legacy widgetId+licenseKey embeds are no longer supported (Task 9 finalizes this).
+        // widgets.licenseId was dropped in Schema v2.0, so the old licenseKey-belongs-to-widget
+        // check cannot be performed — reject rather than accepting unauthenticated.
+        if (!isWidgetKey) {
+          return new NextResponse(
+            JSON.stringify({ error: 'This widget must be embedded using its widget key. Re-copy the embed code from your dashboard.' }),
+            { status: 403, headers: { 'Content-Type': 'application/json', ...corsHeaders } }
+          );
         }
 
-        // Legacy path removed: widgets no longer carry licenseId (Schema v2.0).
-        // Task 9 will clean up this entire branch.
+        // licenseKey is widgetKey-shaped but didn't resolve via the v2 path —
+        // require it to match this widget's own key so a random 16-char string
+        // cannot authorize an arbitrary widget UUID.
+        if (widgetById.widgetKey !== licenseKey) {
+          return new NextResponse(
+            JSON.stringify({ error: 'Unauthorized widget-license pairing' }),
+            { status: 403, headers: { 'Content-Type': 'application/json', ...corsHeaders } }
+          );
+        }
+
+        widget = widgetById;
+        user = await getUserById(widgetById.userId);
       }
     }
 
