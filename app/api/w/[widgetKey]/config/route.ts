@@ -11,182 +11,151 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getWidgetByKeyWithUser } from '@/lib/db/queries';
 import { normalizeDomain } from '@/lib/license/domain';
 import { CHATKIT_SERVER_ENABLED } from '@/lib/feature-flags';
+import { migrateConfig } from '@/lib/widget-config/migrate';
 import { translateDisplayConfig } from '@/lib/widget/translate-display-config';
 import type { WidgetConfig } from '@/widget/src/types';
+import type { ChatWidgetConfig } from '@/lib/widget-config/schema';
 
 /**
- * Translate database config to widget format
- * Same translation logic as the legacy config endpoint
+ * Translate a CANONICAL (schemaVersion 2) ChatWidgetConfig to the public WidgetConfig
+ * runtime format. All fields are read exclusively from canonical paths — there are no
+ * legacy-field fallbacks. Call migrateConfig() on the raw DB record before passing here.
+ *
+ * SECURITY: webhookUrl and apiKey are NEVER included in this output.
  */
-function translateConfig(dbConfig: any, requestUrl: string, widgetKey: string, userTier: string): WidgetConfig {
-  // Map theme mode
-  let themeMode = 'light';
-  if (dbConfig.themeMode) {
-    themeMode = dbConfig.themeMode === 'dark' ? 'dark' : 'light';
-  } else if (dbConfig.style?.theme) {
-    themeMode = dbConfig.style.theme === 'dark' ? 'dark' : 'light';
-  }
+function translateConfig(cfg: ChatWidgetConfig, requestUrl: string, widgetKey: string, userTier: string): WidgetConfig {
+  // Theme mode: canonical theme.mode ('light' | 'dark' | 'auto')
+  const themeMode: 'light' | 'dark' = cfg.theme.mode === 'dark' ? 'dark' : 'light';
 
-  // Calculate primary color
-  let primaryColor = '#0066FF';
-  if (dbConfig.useAccent && dbConfig.accentColor) {
-    primaryColor = dbConfig.accentColor;
-  } else if (dbConfig.style?.primaryColor) {
-    primaryColor = dbConfig.style.primaryColor;
-  }
-
-  // Calculate background color
-  let backgroundColor = themeMode === 'dark' ? '#1a1a1a' : '#ffffff';
-  if (dbConfig.useCustomSurfaceColors && dbConfig.surfaceBackgroundColor) {
-    backgroundColor = dbConfig.surfaceBackgroundColor;
-  } else if (dbConfig.style?.backgroundColor) {
-    backgroundColor = dbConfig.style.backgroundColor;
-  }
-
-  // Calculate text color
-  let textColor = themeMode === 'dark' ? '#e5e5e5' : '#111827';
-  if (dbConfig.useCustomTextColor && dbConfig.customTextColor) {
-    textColor = dbConfig.customTextColor;
-  } else if (dbConfig.style?.textColor) {
-    textColor = dbConfig.style.textColor;
-  }
-
-  // Get radius option
-  const radius = dbConfig.radius || 'medium';
-  const radiusMap: Record<string, number> = {
-    'none': 0,
-    'small': 6,
-    'medium': 12,
-    'large': 18,
-    'pill': 24
-  };
-  const cornerRadius = radiusMap[radius] || dbConfig.style?.cornerRadius || 12;
-
-  // Build theme configuration
+  // Build theme configuration from canonical paths
   const theme: WidgetConfig['theme'] = {
-    colorScheme: themeMode as 'light' | 'dark',
-    radius: radius as 'none' | 'small' | 'medium' | 'large' | 'pill',
-    density: (dbConfig.density || 'normal') as 'compact' | 'normal' | 'spacious',
+    colorScheme: themeMode,
+    radius: cfg.theme.radius,
+    density: cfg.theme.density,
   };
 
-  // Typography
-  if (dbConfig.fontFamily || dbConfig.fontSize || dbConfig.customFontCss) {
+  // Typography: canonical theme.typography.*
+  const typo = cfg.theme.typography;
+  if (typo.fontFamily !== 'system-ui' || typo.fontSize !== 14 || typo.customFontCss) {
     theme.typography = {
-      fontFamily: dbConfig.fontFamily || 'system-ui',
-      baseSize: dbConfig.fontSize || 16,
+      fontFamily: typo.fontFamily,
+      baseSize: typo.fontSize,
     };
-    if (dbConfig.customFontCss) {
+    if (typo.useCustomFont && typo.customFontCss) {
       theme.typography.fontSources = [{
-        family: dbConfig.fontFamily || 'Custom',
-        src: dbConfig.customFontCss,
+        family: typo.customFontName || typo.fontFamily,
+        src: typo.customFontCss,
       }];
     }
   }
 
-  // Colors
+  // Colors: canonical colorSystem.*
   theme.color = {};
+  const cs = cfg.colorSystem;
 
-  if (dbConfig.useTintedGrayscale || dbConfig.tintHue !== undefined || dbConfig.grayHue !== undefined) {
+  if (cs.useTintedGrayscale) {
     theme.color.grayscale = {
-      hue: dbConfig.tintHue ?? dbConfig.grayHue ?? 220,
-      tint: dbConfig.tintLevel ?? dbConfig.grayTint ?? 10,
-      shade: dbConfig.shadeLevel ?? dbConfig.grayShade ?? 50,
+      hue: cs.tintHue,
+      tint: cs.tintLevel,
+      shade: cs.shadeLevel,
     };
   }
 
-  if (dbConfig.useAccent && dbConfig.accentColor) {
+  if (cs.useAccent) {
     theme.color.accent = {
-      primary: dbConfig.accentColor,
-      level: dbConfig.accentLevel ?? 1,
+      primary: cs.accentColor,
+      level: cfg.chatkit.accentLevel,
     };
   }
 
-  if (dbConfig.useCustomSurfaceColors && (dbConfig.surfaceBackgroundColor || dbConfig.surfaceForegroundColor)) {
+  if (cs.useCustomSurfaceColors) {
     theme.color.surface = {
-      background: dbConfig.surfaceBackgroundColor || backgroundColor,
-      foreground: dbConfig.surfaceForegroundColor || (themeMode === 'dark' ? '#2a2a2a' : '#f8fafc'),
+      background: cs.surfaceBackgroundColor,
+      foreground: cs.surfaceForegroundColor,
     };
   }
 
-  if (dbConfig.iconColor) {
-    theme.color.icon = dbConfig.iconColor;
+  if (cs.useCustomIconColor) {
+    theme.color.icon = cs.customIconColor;
   }
 
-  if (dbConfig.useCustomUserMessageColors && (dbConfig.userMessageTextColor || dbConfig.userMessageBgColor)) {
+  if (cs.useCustomUserMessageColors) {
     theme.color.userMessage = {
-      text: dbConfig.userMessageTextColor || '#ffffff',
-      background: dbConfig.userMessageBgColor || primaryColor,
+      text: cs.customUserMessageTextColor,
+      background: cs.customUserMessageBackgroundColor,
     };
   }
 
-  // Start screen
+  // Start screen: canonical startScreen.*
   let startScreen: WidgetConfig['startScreen'];
-  if (dbConfig.greeting || (dbConfig.starterPrompts && dbConfig.starterPrompts.length > 0)) {
+  if (cfg.startScreen.greeting || cfg.startScreen.starterPrompts.length > 0) {
     startScreen = {
-      greeting: dbConfig.greeting,
-      prompts: dbConfig.starterPrompts?.map((p: any) => ({
-        label: typeof p === 'string' ? p : p.label,
-        icon: typeof p === 'object' ? p.icon : undefined,
-        prompt: typeof p === 'object' ? (p.prompt || p.label) : p,
+      greeting: cfg.startScreen.greeting || undefined,
+      prompts: cfg.startScreen.starterPrompts.map((p) => ({
+        label: p.label,
+        icon: p.icon,
+        prompt: p.label,
       })),
     };
   }
 
-  // Composer
+  // Composer: canonical composer.*
   let composer: WidgetConfig['composer'];
-  if (dbConfig.placeholder || dbConfig.disclaimer || dbConfig.enableAttachments) {
+  const hasComposer = cfg.composer.placeholder !== 'Type your message...' ||
+    !!cfg.composer.disclaimer ||
+    cfg.features.attachments.enabled;
+  if (hasComposer) {
     composer = {
-      placeholder: dbConfig.placeholder || 'Type your message...',
-      disclaimer: dbConfig.disclaimer,
+      placeholder: cfg.composer.placeholder,
+      disclaimer: cfg.composer.disclaimer || undefined,
     };
-    if (dbConfig.enableAttachments) {
+    if (cfg.features.attachments.enabled) {
       composer.attachments = {
         enabled: true,
-        maxSize: dbConfig.maxFileSize || 5 * 1024 * 1024,
-        maxCount: dbConfig.maxFileCount || 5,
-        accept: dbConfig.allowedExtensions || ['pdf', 'doc', 'docx', 'txt', 'png', 'jpg', 'jpeg'],
+        maxSize: cfg.features.attachments.maxFileSizeMB * 1024 * 1024,
+        maxCount: 5,
+        accept: cfg.features.attachments.allowedExtensions,
       };
     }
   }
 
   return {
-    widgetId: dbConfig.widgetId,
-    // Schema v2.0: Use widgetKey as the license key
+    widgetId: undefined, // not exposed in v2 (widgetKey is the identifier)
     license: {
       key: widgetKey,
       active: true,
-      plan: userTier
+      plan: userTier,
     },
     branding: {
-      companyName: dbConfig.branding?.companyName || 'Chat Assistant',
-      logoUrl: dbConfig.branding?.logoUrl,
-      welcomeText: dbConfig.greeting || dbConfig.branding?.welcomeText || 'How can I help you today?',
-      firstMessage: dbConfig.branding?.firstMessage || '',
+      companyName: cfg.branding.companyName,
+      logoUrl: cfg.branding.logoUrl ?? undefined,
+      welcomeText: cfg.branding.welcomeText,
+      firstMessage: cfg.branding.firstMessage,
     },
     style: {
-      position: dbConfig.style?.position || 'bottom-right',
+      position: cfg.theme.position.position,
     },
     features: {
-      fileAttachmentsEnabled: dbConfig.enableAttachments || dbConfig.features?.fileAttachments || false,
-      allowedExtensions: dbConfig.features?.allowedExtensions || ['pdf', 'doc', 'docx', 'txt', 'png', 'jpg', 'jpeg'],
-      maxFileSizeKB: dbConfig.features?.maxFileSize || 5120,
+      fileAttachmentsEnabled: cfg.features.attachments.enabled,
+      allowedExtensions: cfg.features.attachments.allowedExtensions,
+      maxFileSizeKB: cfg.features.attachments.maxFileSizeMB * 1024,
     },
     connection: {
       relayEndpoint: `${new URL(requestUrl).origin}/api/chat-relay`,
     },
-    agentKit: CHATKIT_SERVER_ENABLED && dbConfig.enableAgentKit ? {
+    agentKit: CHATKIT_SERVER_ENABLED && cfg.connection.provider === 'chatkit' ? {
       enabled: true,
       relayEndpoint: `${new URL(requestUrl).origin}/api/chat-relay/openai`,
-      hasWorkflowId: !!dbConfig.agentKitWorkflowId,
-      hasApiKey: !!dbConfig.agentKitApiKey,
+      hasWorkflowId: !!cfg.connection.workflowId,
+      hasApiKey: !!cfg.connection.apiKey,
     } : {
       enabled: false,
     },
     theme,
     startScreen,
     composer,
-    advancedStyling: dbConfig.advancedStyling,
-    behavior: dbConfig.behavior,
+    advancedStyling: cfg.advancedStyling,
+    behavior: cfg.behavior,
   };
 }
 
@@ -324,16 +293,16 @@ export async function GET(
       }
     }
 
-    // Translate config
+    // Translate config.
+    // For chat widgets: run migrateConfig first to normalize any legacy stored shape
+    // to the canonical schemaVersion 2 form, then translate canonical paths only.
+    // For display widgets: pass through to translateDisplayConfig unchanged.
     const dbConfig = widget.config as any;
     const config =
       widget.kind === 'display'
         ? translateDisplayConfig(dbConfig, request.url)
         : translateConfig(
-            {
-              ...dbConfig,
-              widgetId: widget.id,
-            },
+            migrateConfig(dbConfig),
             request.url,
             widgetKey,
             userTier

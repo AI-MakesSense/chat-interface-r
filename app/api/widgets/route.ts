@@ -28,8 +28,9 @@ import {
   getUserById,
 } from '@/lib/db/queries';
 import { createDefaultConfig } from '@/lib/config/defaults';
-import { getWidgetConfigSchemaForKind, normalizeTier } from '@/lib/validation/widget-schema';
-import { deepMerge, forceN8nProviderConfig, stripLegacyConfigProperties } from '@/lib/utils/config-helpers';
+import { getSchemaForKind, normalizeTier } from '@/lib/widget-config/schema';
+import { migrateConfig } from '@/lib/widget-config/migrate';
+import { deepMerge, forceN8nProviderConfig } from '@/lib/utils/config-helpers';
 import { CHATKIT_SERVER_ENABLED } from '@/lib/feature-flags';
 import { generateEmbedCode, resolveEmbedBaseUrlFromRequest, type EmbedType as GeneratedEmbedType } from '@/lib/embed';
 import { z } from 'zod';
@@ -139,22 +140,39 @@ export async function POST(request: NextRequest) {
     }
 
     // 5. Generate config (use defaults if not provided, merge if provided)
+    // For chat widgets: start from migrated defaults so the stored object is
+    // always canonical (schemaVersion 2) regardless of what createDefaultConfig
+    // returns. For display widgets: pass through as-is (migrateConfig is
+    // chat-only).
     let finalConfig;
     if (userConfig) {
-      // Deep merge user config with defaults
-      const defaults = createDefaultConfig(tier as any, kind);
-      finalConfig = deepMerge(defaults, userConfig);
+      if (kind === 'chat') {
+        const defaults = migrateConfig(createDefaultConfig(tier as any, kind));
+        finalConfig = deepMerge(defaults, userConfig);
+      } else {
+        const defaults = createDefaultConfig(tier as any, kind);
+        finalConfig = deepMerge(defaults, userConfig);
+      }
     } else {
-      finalConfig = createDefaultConfig(tier as any, kind);
+      finalConfig = kind === 'chat'
+        ? migrateConfig(createDefaultConfig(tier as any, kind))
+        : createDefaultConfig(tier as any, kind);
     }
 
-    // 6. Validate final config against tier restrictions
-    const configSchema = getWidgetConfigSchemaForKind(kind, normalizeTier(tier), true);
-    // Assign back the validated parse result (parse returns the validated/transformed value)
-    finalConfig = configSchema.parse(finalConfig);
-
-    // 7. Clean legacy properties that might conflict with new structure
-    let cleanedConfig = stripLegacyConfigProperties(finalConfig, kind);
+    // 6. Validate final config against tier restrictions using canonical schema.
+    // brandingRequired = true for basic/free tiers (branding cannot be disabled).
+    const normalizedTier = normalizeTier(tier);
+    const brandingRequired = normalizedTier === 'basic';
+    const configSchema = getSchemaForKind(kind, normalizedTier, brandingRequired);
+    const parsed = configSchema.safeParse(finalConfig);
+    if (!parsed.success) {
+      return NextResponse.json(
+        { error: 'Invalid widget configuration', details: parsed.error.flatten() },
+        { status: 400 }
+      );
+    }
+    // Use the canonical validated result — includes schemaVersion: 2 and all defaults
+    let cleanedConfig: any = parsed.data;
     if (!CHATKIT_SERVER_ENABLED) {
       cleanedConfig = forceN8nProviderConfig(cleanedConfig);
     }
@@ -294,9 +312,12 @@ export async function GET(request: NextRequest) {
         widgets: result.widgets.map(w => {
           const widgetKey = (w as any).widgetKey;
           const widgetEmbedType = (w as any).embedType || 'popup';
+          // READ boundary: migrate chat-kind configs to canonical shape on the way out
+          const rawConfig = (w as any).config;
+          const migratedConfig = (w as any).kind === 'chat' ? migrateConfig(rawConfig) : rawConfig;
           const normalizedConfig = !CHATKIT_SERVER_ENABLED
-            ? forceN8nProviderConfig((w as any).config)
-            : (w as any).config;
+            ? forceN8nProviderConfig(migratedConfig)
+            : migratedConfig;
           return {
             ...w,
             config: normalizedConfig,
@@ -332,9 +353,12 @@ export async function GET(request: NextRequest) {
         widgets: result.widgets.map(w => {
           const widgetKey = (w as any).widgetKey;
           const widgetEmbedType = (w as any).embedType || 'popup';
+          // READ boundary: migrate chat-kind configs to canonical shape on the way out
+          const rawConfig = (w as any).config;
+          const migratedConfig = (w as any).kind === 'chat' ? migrateConfig(rawConfig) : rawConfig;
           const normalizedConfig = !CHATKIT_SERVER_ENABLED
-            ? forceN8nProviderConfig((w as any).config)
-            : (w as any).config;
+            ? forceN8nProviderConfig(migratedConfig)
+            : migratedConfig;
           return {
             ...w,
             config: normalizedConfig,

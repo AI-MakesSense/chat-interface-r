@@ -1,8 +1,12 @@
 /**
  * Unit Tests for config-helpers.ts
  *
- * Tests kind-aware behavior of:
- * - stripLegacyConfigProperties: preserves theme for display, strips for chat
+ * With the canonical schema (schemaVersion 2), stripLegacyConfigProperties is a
+ * passthrough — `theme`, `behavior`, and `advancedStyling` are REAL canonical
+ * sections for chat configs and must not be stripped.
+ *
+ * Tests:
+ * - stripLegacyConfigProperties: now a passthrough for both chat and display
  * - createDefaultConfig: returns display-shaped config for kind=display
  */
 
@@ -10,7 +14,7 @@ import { stripLegacyConfigProperties } from '@/lib/utils/config-helpers';
 import { createDefaultConfig } from '@/lib/config/defaults';
 
 describe('stripLegacyConfigProperties', () => {
-  it('preserves theme when kind=display', () => {
+  it('preserves theme for display widgets', () => {
     const config = {
       kind: 'display',
       theme: { colorScheme: 'light', color: { accent: '#06f' } },
@@ -20,40 +24,52 @@ describe('stripLegacyConfigProperties', () => {
     expect(result.theme).toEqual({ colorScheme: 'light', color: { accent: '#06f' } });
   });
 
-  it('deletes theme when kind=chat (regression check)', () => {
-    const config = { theme: { mode: 'old' }, branding: { companyName: 'X' } };
+  it('preserves theme for chat widgets (canonical section — must NOT be stripped)', () => {
+    const config = {
+      schemaVersion: 2,
+      kind: 'chat',
+      theme: { mode: 'light', colors: { primary: '#4F46E5' } },
+      branding: { companyName: 'X' },
+    };
     const result = stripLegacyConfigProperties(config, 'chat');
-    expect(result.theme).toBeUndefined();
+    expect(result.theme).toBeDefined();
+    expect(result.theme.mode).toBe('light');
   });
 
-  it('defaults to chat behavior when kind is omitted (backward compat)', () => {
-    const config = { theme: { mode: 'old' }, branding: { companyName: 'X' } };
+  it('preserves theme when kind is omitted (passthrough)', () => {
+    const config = { theme: { mode: 'light' }, branding: { companyName: 'X' } };
     const result = stripLegacyConfigProperties(config);
-    expect(result.theme).toBeUndefined();
+    expect(result.theme).toBeDefined();
   });
 
-  it('strips behavior and advancedStyling for chat', () => {
+  it('preserves behavior and advancedStyling for chat (canonical sections)', () => {
     const config = {
       branding: { companyName: 'X' },
       behavior: { autoOpen: true },
       advancedStyling: { enabled: true },
     };
     const result = stripLegacyConfigProperties(config, 'chat');
-    expect(result.behavior).toBeUndefined();
-    expect(result.advancedStyling).toBeUndefined();
+    expect(result.behavior).toEqual({ autoOpen: true });
+    expect(result.advancedStyling).toEqual({ enabled: true });
   });
 
-  it('preserves behavior and advancedStyling for display (if present)', () => {
+  it('preserves all fields for display widgets', () => {
     const config = {
       kind: 'display',
       theme: { colorScheme: 'light' },
       branding: { companyName: 'X' },
-      // display configs wouldn't normally have these, but the function should not delete them
       someDisplayField: { foo: 'bar' },
     };
     const result = stripLegacyConfigProperties(config, 'display');
     expect(result.someDisplayField).toEqual({ foo: 'bar' });
     expect(result.theme).toBeDefined();
+  });
+
+  it('returns a shallow copy (does not mutate input)', () => {
+    const config = { branding: { companyName: 'X' }, theme: { mode: 'light' } };
+    const result = stripLegacyConfigProperties(config, 'chat');
+    expect(result).not.toBe(config);
+    expect(result.branding).toEqual({ companyName: 'X' });
   });
 });
 

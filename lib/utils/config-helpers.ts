@@ -26,36 +26,22 @@ export function deepMerge(target: any, source: any): any {
 }
 
 /**
- * Strip legacy config properties that conflict with new structure
+ * Strip legacy config properties that conflict with new structure.
  *
- * Removes old nested objects like:
- * - theme.mode (old) vs themeMode (new)
- * - theme.colors (old) vs color system (new)
- * - behavior, advancedStyling, etc.
+ * With the canonical schema (schemaVersion 2) `theme`, `behavior`, and
+ * `advancedStyling` ARE the real top-level sections for chat configs — they
+ * must NOT be stripped. This function is now a no-op for chat widgets and
+ * only retains a passthrough for display widgets (where the caller still
+ * calls it for symmetry). It is kept for call-site compatibility.
  *
  * @param config - The widget configuration to clean
  * @param kind - Widget kind ('chat' | 'display'). Defaults to 'chat' for backward compatibility.
- *               Display widgets retain their `theme` object; chat widgets strip it (legacy cleanup).
  */
 export function stripLegacyConfigProperties(config: any, kind: 'chat' | 'display' = 'chat'): any {
-  const cleaned = { ...config };
-
-  // Remove legacy nested theme object if it exists.
-  // Chat widgets use flat themeMode/color properties — the nested `theme` object is legacy.
-  // Display widgets use a structured `theme` object (colorScheme, radius, density, color) — preserve it.
-  if (kind !== 'display') {
-    if (cleaned.theme && typeof cleaned.theme === 'object') {
-      delete cleaned.theme;
-    }
-  }
-
-  // Remove other legacy nested structures (chat-only concepts)
-  if (kind !== 'display') {
-    delete cleaned.behavior;
-    delete cleaned.advancedStyling;
-  }
-
-  return cleaned;
+  // Both chat and display configs pass through unmodified.
+  // The canonical migrateConfig() handles all shape normalization before this
+  // point; nothing left to strip here.
+  return { ...config };
 }
 
 /**

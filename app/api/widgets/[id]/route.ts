@@ -15,8 +15,9 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { requireAuth } from '@/lib/auth/guard';
 import { getWidgetById, getWidgetWithLicense, updateWidget, deleteWidget, getUserById } from '@/lib/db/queries';
-import { getWidgetConfigSchemaForKind, normalizeTier } from '@/lib/validation/widget-schema';
-import { deepMerge, stripLegacyConfigProperties, sanitizeConfig, forceN8nProviderConfig } from '@/lib/utils/config-helpers';
+import { getSchemaForKind, normalizeTier } from '@/lib/widget-config/schema';
+import { migrateConfig } from '@/lib/widget-config/migrate';
+import { deepMerge, sanitizeConfig, forceN8nProviderConfig } from '@/lib/utils/config-helpers';
 import { CHATKIT_SERVER_ENABLED } from '@/lib/feature-flags';
 import { logActivity } from '@/lib/db/admin-queries';
 import { z } from 'zod';
@@ -110,14 +111,21 @@ export async function GET(
       return NextResponse.json({ error: 'Widget not found' }, { status: 404 });
     }
 
-    // 4. Return widget data with licenseKey/widgetKey
+    // 4. READ boundary: migrate chat-kind configs to canonical shape on the way out
+    const rawConfig = (result.widget as any).config;
+    const widgetKind: 'chat' | 'display' = (result.widget as any).kind === 'display' ? 'display' : 'chat';
+    const migratedConfig = widgetKind === 'chat' ? migrateConfig(rawConfig) : rawConfig;
+
     const normalizedWidget = !CHATKIT_SERVER_ENABLED
       ? {
           ...result.widget,
-          config: forceN8nProviderConfig((result.widget as any).config),
+          config: forceN8nProviderConfig(migratedConfig),
           widgetType: 'n8n',
         }
-      : result.widget;
+      : {
+          ...result.widget,
+          config: migratedConfig,
+        };
 
     return NextResponse.json({
       widget: {
@@ -213,21 +221,34 @@ export async function PATCH(
 
     // Handle config updates with deep merge and validation
     if (updates.config !== undefined) {
-      // Deep merge new config with existing config
-      const mergedConfig = deepMerge(widget.config, updates.config);
-
       // Determine the widget's kind from the existing row — never trust the request body for this
       const existingKind: 'chat' | 'display' = (widget.kind === 'display') ? 'display' : 'chat';
+
+      // WRITE boundary: migrate existing config FIRST (canonical shape), then deep-merge
+      // the incoming partial on top. This ensures a legacy stored config is normalized
+      // before the merge so canonical paths always win.
+      const existingCanonical = existingKind === 'chat'
+        ? migrateConfig(widget.config)
+        : widget.config;
+      const mergedConfig = deepMerge(existingCanonical, updates.config);
 
       // SANITIZATION: Enforce tier restrictions and fix data integrity
       const sanitizedConfig = sanitizeConfig(mergedConfig, tier, existingKind);
 
-      // Validate merged config against tier restrictions, using the existing widget's kind
-      const configSchema = getWidgetConfigSchemaForKind(existingKind, normalizeTier(tier), true);
-      configSchema.parse(sanitizedConfig);
+      // Validate merged config against tier restrictions using canonical schema.
+      // brandingRequired = true for basic/free tiers.
+      const normalizedTier = normalizeTier(tier);
+      const brandingRequired = normalizedTier === 'basic';
+      const configSchema = getSchemaForKind(existingKind, normalizedTier, brandingRequired);
+      const parsed = configSchema.safeParse(sanitizedConfig);
+      if (!parsed.success) {
+        return NextResponse.json(
+          { error: 'Invalid widget configuration', details: parsed.error.flatten() },
+          { status: 400 }
+        );
+      }
 
-      // Strip legacy properties that might conflict with new structure
-      let cleanedConfig = stripLegacyConfigProperties(sanitizedConfig, existingKind);
+      let cleanedConfig: any = parsed.data;
       if (!CHATKIT_SERVER_ENABLED) {
         cleanedConfig = forceN8nProviderConfig(cleanedConfig);
       }
