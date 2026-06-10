@@ -197,6 +197,47 @@ describe('Widget Serve Route (compat bootstrap)', () => {
     });
   });
 
+  describe('first-party allowance comes from NEXT_PUBLIC_APP_URL, not the Host header', () => {
+    const ORIGINAL_APP_URL = process.env.NEXT_PUBLIC_APP_URL;
+
+    afterEach(() => {
+      if (ORIGINAL_APP_URL === undefined) delete process.env.NEXT_PUBLIC_APP_URL;
+      else process.env.NEXT_PUBLIC_APP_URL = ORIGINAL_APP_URL;
+    });
+
+    it('rejects Origin attacker.com even when the Host header matches it (old bypass)', async () => {
+      process.env.NEXT_PUBLIC_APP_URL = 'https://app.example.io';
+      dbQueries.getWidgetByKeyWithUser.mockResolvedValue(
+        n8nWidget({ allowedDomains: ['customer.com'] })
+      );
+
+      // attacker.com is neither the app domain nor in allowedDomains. The old
+      // code trusted the client-controlled Host header and allowed this.
+      const response = await GET(
+        makeRequest({ origin: 'https://attacker.com', host: 'attacker.com' }),
+        { params: Promise.resolve({ widgetKey: `${widgetKey}.js` }) }
+      );
+
+      expect(response.status).toBe(403);
+      const body = await response.text();
+      expect(body).not.toContain('/widget/loader.js');
+    });
+
+    it('allows a request whose origin matches NEXT_PUBLIC_APP_URL regardless of Host', async () => {
+      process.env.NEXT_PUBLIC_APP_URL = 'https://app.example.io';
+      dbQueries.getWidgetByKeyWithUser.mockResolvedValue(
+        n8nWidget({ allowedDomains: ['customer.com'] })
+      );
+
+      const response = await GET(
+        makeRequest({ origin: 'https://app.example.io', host: 'something-else.test' }),
+        { params: Promise.resolve({ widgetKey: `${widgetKey}.js` }) }
+      );
+
+      expect(response.status).toBe(200);
+    });
+  });
+
   it('serves the ChatKit iframe injector for a chatkit widget when the flag is enabled', async () => {
     jest.resetModules();
     jest.doMock('@/lib/feature-flags', () => ({ CHATKIT_SERVER_ENABLED: true }));

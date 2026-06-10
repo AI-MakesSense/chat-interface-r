@@ -24,6 +24,7 @@ import { normalizeDomain } from '@/lib/license/domain';
 import { extractDomainFromReferer, createResponseHeaders } from '@/lib/widget/headers';
 import { createErrorScript, logWidgetError, ErrorType } from '@/lib/widget/error';
 import { checkRateLimit } from '@/lib/security/rate-limit';
+import { isDomainAllowed } from '@/lib/widget/resolve-widget';
 import { CHATKIT_SERVER_ENABLED } from '@/lib/feature-flags';
 
 /**
@@ -204,39 +205,21 @@ export async function GET(
       );
     } else {
       const normalizedRequestDomain = normalizeDomain(domain!);
-      const hostHeader = request.headers.get('host') || '';
-      const requestHostDomain = normalizeDomain(hostHeader.split(':')[0] || '');
-      const isFirstPartyRequest =
-        normalizedRequestDomain !== 'unknown' &&
-        requestHostDomain !== 'unknown' &&
-        normalizedRequestDomain === requestHostDomain;
 
-      // Agency tier or empty allowedDomains allows any domain.
-      if (
-        userTier !== 'agency' &&
-        allowedDomains.length > 0 &&
-        !isFirstPartyRequest
-      ) {
-        // localhost bypass is only for non-production environments, matching
-        // resolve-widget.ts. In production a ChatKit widget must not be embeddable
-        // from localhost (this route serves the full iframe embed with no downstream
-        // re-validation).
-        const localhostBypass =
-          normalizedRequestDomain === 'localhost' && process.env.NODE_ENV !== 'production';
-        const isAuthorized = localhostBypass || allowedDomains.some((allowedDomain: string) => {
-          const normalizedAllowed = normalizeDomain(allowedDomain);
-          return normalizedAllowed === normalizedRequestDomain ||
-            normalizedRequestDomain.endsWith('.' + normalizedAllowed);
+      // Single source of truth for domain authorization (lib/widget/resolve-widget.ts):
+      // agency-tier bypass, empty-allowedDomains bypass, NEXT_PUBLIC_APP_URL-derived
+      // first-party allowance, non-production localhost bypass, exact/subdomain match.
+      //
+      // SECURITY: this route previously derived a first-party allowance from the
+      // client-controlled Host header — the same allowedDomains bypass fixed in
+      // resolve-widget.ts. The first-party domain now comes from server config only.
+      if (!isDomainAllowed(normalizedRequestDomain, allowedDomains, userTier)) {
+        return createErrorResponse('DOMAIN_UNAUTHORIZED', {
+          widgetKey: cleanWidgetKey,
+          domain: normalizedRequestDomain,
+          allowedDomains,
+          ip: clientIP
         });
-
-        if (!isAuthorized) {
-          return createErrorResponse('DOMAIN_UNAUTHORIZED', {
-            widgetKey: cleanWidgetKey,
-            domain: normalizedRequestDomain,
-            allowedDomains,
-            ip: clientIP
-          });
-        }
       }
     }
 
