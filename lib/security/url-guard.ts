@@ -119,6 +119,25 @@ function isDevLocalhost(u: URL): boolean {
  * Throws an Error with a descriptive message on any violation.
  * Returns the parsed URL on success.
  */
+/**
+ * Returns true when `raw` is the must-replace placeholder webhook sentinel that
+ * createDefaultDisplayConfig seeds ('https://example.com/webhook'), or any URL on
+ * the example.com reserved domain.
+ *
+ * assertPublicWebhookUrl ALLOWS this URL (example.com resolves to a public IP), so
+ * SSRF won't block it — but a widget must never DEPLOY pointing at the placeholder.
+ * This check is used ONLY by the deploy route; SAVE/create allows it (mid-setup).
+ */
+export function isPlaceholderWebhook(raw: string): boolean {
+  if (raw === 'https://example.com/webhook') return true;
+  try {
+    const host = stripBrackets(new URL(raw).hostname).toLowerCase();
+    return host === 'example.com' || host.endsWith('.example.com');
+  } catch {
+    return false;
+  }
+}
+
 export async function assertPublicWebhookUrl(raw: string): Promise<URL> {
   // 1. Parse
   let url: URL;

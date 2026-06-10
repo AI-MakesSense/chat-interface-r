@@ -2,7 +2,11 @@ import { NextRequest, NextResponse } from 'next/server';
 import { normalizeDomain } from '@/lib/license/domain';
 import { resolveAuthorizedWidget } from '@/lib/widget/resolve-widget';
 import { checkRateLimit } from '@/lib/security/rate-limit';
+import { assertPublicWebhookUrl } from '@/lib/security/url-guard';
 import { CHATKIT_SERVER_ENABLED } from '@/lib/feature-flags';
+
+/** Upstream fetch timeout for the n8n webhook (ms). */
+const N8N_FETCH_TIMEOUT_MS = 15_000;
 
 interface RelayBody {
   widgetId?: string;
@@ -201,14 +205,39 @@ async function handleN8nRelay(
     );
   }
 
+  // SSRF guard: validate the user-controlled webhook URL before any fetch.
+  // Rejects non-https, private-IP literals, and hostnames that DNS-resolve to
+  // private addresses. Without this the relay would happily POST to internal
+  // services (metadata endpoints, localhost, RFC1918) on the embedder's behalf.
+  let safeUrl: URL;
+  try {
+    safeUrl = await assertPublicWebhookUrl(webhookUrl);
+  } catch (err) {
+    console.error('[Chat Relay] Webhook URL rejected:', (err as Error).message);
+    return new NextResponse(
+      JSON.stringify({ error: 'Webhook URL rejected by security policy' }),
+      { status: 502, headers: { 'Content-Type': 'application/json', ...corsHeaders } }
+    );
+  }
+
+  // Explicit allowlist instead of `...body` spread: a malicious embedder must not
+  // be able to inject arbitrary top-level keys into the n8n payload. Only the
+  // fields the widget client legitimately sends (see buildRelayPayload) are
+  // forwarded. metadata.tier is server-derived and always overrides any client value.
+  const bodyAny = body as any;
   const payload = {
-    ...body,
     message: body.message,
     chatInput: body.message,
+    sessionId: body.sessionId,
+    threadId: bodyAny.threadId,
     // widgetId is forwarded to n8n for workflow use only — NOT an authorization input
     // (resolution is by widgetKey).
     widgetId: body.widgetId,
     licenseKey: body.licenseKey,
+    attachments: bodyAny.attachments,
+    context: bodyAny.context,
+    customContext: bodyAny.customContext,
+    extraInputs: bodyAny.extraInputs,
     metadata: {
       ...(body.metadata || {}),
       tier: userTier,
@@ -216,10 +245,11 @@ async function handleN8nRelay(
   };
 
   try {
-    const response = await fetch(webhookUrl, {
+    const response = await fetch(safeUrl, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload),
+      signal: AbortSignal.timeout(N8N_FETCH_TIMEOUT_MS),
     });
 
     const responseText = await response.text();
@@ -244,6 +274,14 @@ async function handleN8nRelay(
       headers: { 'Content-Type': 'application/json', ...corsHeaders },
     });
   } catch (networkError) {
+    const errName = (networkError as Error)?.name;
+    if (errName === 'TimeoutError' || errName === 'AbortError') {
+      console.error('[Chat Relay] N8n request timed out:', errName);
+      return new NextResponse(
+        JSON.stringify({ error: 'Workflow backend timed out' }),
+        { status: 504, headers: { 'Content-Type': 'application/json', ...corsHeaders } }
+      );
+    }
     console.error('[Chat Relay] N8n Network Error:', networkError);
     return new NextResponse(
       JSON.stringify({ error: 'Failed to connect to workflow backend' }),

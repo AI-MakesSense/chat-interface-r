@@ -33,7 +33,36 @@ import { TIER_LIMITS, canCreateWidget, normalizeUserTier } from '@/lib/license/t
 import { deepMerge, forceN8nProviderConfig } from '@/lib/utils/config-helpers';
 import { CHATKIT_SERVER_ENABLED } from '@/lib/feature-flags';
 import { generateEmbedCode, resolveEmbedBaseUrlFromRequest, type EmbedType as GeneratedEmbedType } from '@/lib/embed';
+import { assertPublicWebhookUrl, isPlaceholderWebhook } from '@/lib/security/url-guard';
 import { z } from 'zod';
+
+/**
+ * SAVE-time SSRF defense-in-depth: validate a configured webhook URL when one is
+ * present. The display sentinel ('https://example.com/webhook') is ALLOWED here —
+ * the user may be mid-setup. The placeholder is rejected only at DEPLOY time.
+ * Returns a 400 NextResponse on rejection, or null when the URL is acceptable
+ * (or absent).
+ */
+async function rejectUnsafeWebhook(config: any): Promise<NextResponse | null> {
+  const webhookUrl = config?.connection?.webhookUrl;
+  if (!webhookUrl || typeof webhookUrl !== 'string') return null;
+  // Allow the placeholder at save/create time (deploy enforces a real URL).
+  if (isPlaceholderWebhook(webhookUrl)) return null;
+  try {
+    await assertPublicWebhookUrl(webhookUrl);
+    return null;
+  } catch (err) {
+    return NextResponse.json(
+      {
+        error: 'Invalid widget configuration',
+        details: {
+          fieldErrors: { 'connection.webhookUrl': [(err as Error).message] },
+        },
+      },
+      { status: 400 }
+    );
+  }
+}
 
 // =============================================================================
 // Helpers
@@ -184,6 +213,11 @@ export async function POST(request: NextRequest) {
     if (!CHATKIT_SERVER_ENABLED) {
       cleanedConfig = forceN8nProviderConfig(cleanedConfig);
     }
+
+    // 7. SSRF defense-in-depth: reject a private/non-https webhook at save time
+    // (placeholder sentinel allowed — see rejectUnsafeWebhook).
+    const webhookRejection = await rejectUnsafeWebhook(cleanedConfig);
+    if (webhookRejection) return webhookRejection;
 
     // 8. Determine widget type
     const finalWidgetType = CHATKIT_SERVER_ENABLED

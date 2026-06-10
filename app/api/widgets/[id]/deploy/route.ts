@@ -17,6 +17,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { requireAuth } from '@/lib/auth/guard';
 import { getWidgetById, getUserById, deployWidget } from '@/lib/db/queries';
 import { getWidgetConfigSchemaForKind, normalizeTier } from '@/lib/validation/widget-schema';
+import { assertPublicWebhookUrl, isPlaceholderWebhook } from '@/lib/security/url-guard';
 import { z } from 'zod';
 
 // =============================================================================
@@ -103,31 +104,49 @@ export async function POST(
       );
     }
 
-    // Check if webhookUrl is HTTPS or localhost (use URL-parse to prevent substring-match bypasses)
-    const isValidDeployUrl = (() => {
-      try {
-        const parsed = new URL(webhookUrl);
-        if (parsed.protocol === 'https:') return true;
-        if (parsed.protocol === 'http:' && (parsed.hostname === 'localhost' || parsed.hostname === '127.0.0.1')) return true;
-        return false;
-      } catch {
-        return false;
-      }
-    })();
-
-    if (!isValidDeployUrl) {
+    // The display sentinel ('https://example.com/webhook') is allowed at SAVE
+    // time (user is mid-setup) but a widget must NOT deploy pointing at the
+    // placeholder. Reject it with a clear message before the SSRF guard (which
+    // would otherwise let example.com through as a public host).
+    const provider = (widget.config as any)?.connection?.provider ?? 'n8n';
+    if (isPlaceholderWebhook(webhookUrl)) {
       return NextResponse.json(
         {
           error: 'Widget configuration is not ready for deployment',
           details: [
             {
               path: ['connection', 'webhookUrl'],
-              message: 'Webhook URL must use HTTPS (or localhost for development)',
+              message: 'Configure your webhook URL before deploying (the placeholder URL is not a real endpoint)',
             },
           ],
         },
         { status: 400 }
       );
+    }
+
+    // SSRF + scheme validation for the n8n webhook. Replaces the old
+    // protocol-only check: assertPublicWebhookUrl enforces https (localhost
+    // exempt outside production) AND rejects private-IP literals / hostnames
+    // that DNS-resolve to private addresses. ChatKit/display widgets without a
+    // real n8n webhook still reach here only if a webhookUrl is present, so the
+    // guard is scoped to n8n providers.
+    if (provider === 'n8n') {
+      try {
+        await assertPublicWebhookUrl(webhookUrl);
+      } catch (err) {
+        return NextResponse.json(
+          {
+            error: 'Widget configuration is not ready for deployment',
+            details: [
+              {
+                path: ['connection', 'webhookUrl'],
+                message: (err as Error).message,
+              },
+            ],
+          },
+          { status: 400 }
+        );
+      }
     }
 
     // 8. Deploy widget (sets deployedAt if not already set, activates if paused)

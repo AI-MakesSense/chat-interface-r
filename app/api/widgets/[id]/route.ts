@@ -20,6 +20,7 @@ import { TIER_LIMITS, normalizeUserTier } from '@/lib/license/tiers';
 import { migrateConfig } from '@/lib/widget-config/migrate';
 import { deepMerge, sanitizeConfig, forceN8nProviderConfig } from '@/lib/utils/config-helpers';
 import { CHATKIT_SERVER_ENABLED } from '@/lib/feature-flags';
+import { assertPublicWebhookUrl, isPlaceholderWebhook } from '@/lib/security/url-guard';
 import { logActivity } from '@/lib/db/admin-queries';
 import { z } from 'zod';
 
@@ -240,6 +241,24 @@ export async function PATCH(
       let cleanedConfig: any = parsed.data;
       if (!CHATKIT_SERVER_ENABLED) {
         cleanedConfig = forceN8nProviderConfig(cleanedConfig);
+      }
+
+      // SSRF defense-in-depth: reject a private/non-https webhook at save time.
+      // The placeholder sentinel ('https://example.com/webhook') is allowed here
+      // (the user may be mid-setup); deploy enforces a real, public endpoint.
+      const webhookUrl = cleanedConfig?.connection?.webhookUrl;
+      if (webhookUrl && typeof webhookUrl === 'string' && !isPlaceholderWebhook(webhookUrl)) {
+        try {
+          await assertPublicWebhookUrl(webhookUrl);
+        } catch (err) {
+          return NextResponse.json(
+            {
+              error: (err as Error).message,
+              fieldPath: 'connection.webhookUrl',
+            },
+            { status: 400 }
+          );
+        }
       }
 
       updateData.config = cleanedConfig;

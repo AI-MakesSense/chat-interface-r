@@ -23,7 +23,7 @@ jest.mock('node:dns/promises', () => ({
   }),
 }));
 
-import { assertPublicWebhookUrl, isPrivateIp } from '@/lib/security/url-guard';
+import { assertPublicWebhookUrl, isPrivateIp, isPlaceholderWebhook } from '@/lib/security/url-guard';
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -109,6 +109,35 @@ describe('isPrivateIp', () => {
 
   it('allows fec0::1 as public (outside /10 — deprecated site-local, not link-local)', () => {
     expect(isPrivateIp('fec0::1')).toBe(false);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// isPlaceholderWebhook — deploy-only sentinel check
+// ---------------------------------------------------------------------------
+
+describe('isPlaceholderWebhook', () => {
+  it('flags the exact display sentinel', () => {
+    expect(isPlaceholderWebhook('https://example.com/webhook')).toBe(true);
+  });
+
+  it.each([
+    'https://example.com/anything',
+    'https://api.example.com/webhook',
+    'http://example.com/webhook',
+  ])('flags %s (example.com domain)', (url) =>
+    expect(isPlaceholderWebhook(url)).toBe(true)
+  );
+
+  it.each([
+    'https://n8n.mycompany.com/webhook/abc',
+    'https://hooks.example.org/webhook',
+  ])('allows real endpoint %s', (url) =>
+    expect(isPlaceholderWebhook(url)).toBe(false)
+  );
+
+  it('returns false for an unparseable URL', () => {
+    expect(isPlaceholderWebhook('not-a-url')).toBe(false);
   });
 });
 
@@ -261,6 +290,22 @@ describe('assertPublicWebhookUrl', () => {
     mockDns('93.184.216.34', 4);
     const result = await assertPublicWebhookUrl('https://n8n.example.com/webhook/abc');
     expect(result.href).toBe('https://n8n.example.com/webhook/abc');
+  });
+
+  // ── Numeric-IP encodings (decimal/hex loopback) ────────────────────────
+  // Node >= 20 normalises `https://2130706433/` and `https://0x7f000001/` to
+  // hostname '127.0.0.1' (isIP === 4), so these are caught by the IP-literal
+  // private check WITHOUT a DNS lookup. Hermetic — no network involved.
+  it('rejects https://2130706433/ (decimal-encoded loopback)', async () => {
+    await expect(
+      assertPublicWebhookUrl('https://2130706433/')
+    ).rejects.toThrow(/private/i);
+  });
+
+  it('rejects https://0x7f000001/ (hex-encoded loopback)', async () => {
+    await expect(
+      assertPublicWebhookUrl('https://0x7f000001/')
+    ).rejects.toThrow(/private/i);
   });
 
   // ── Malformed input ────────────────────────────────────────────────────
