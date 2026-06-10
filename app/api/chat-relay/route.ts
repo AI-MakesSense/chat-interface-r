@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { normalizeDomain } from '@/lib/license/domain';
-import { resolveAuthorizedWidget } from '@/lib/widget/resolve-widget';
+import { getRequestDomain, resolveAuthorizedWidget } from '@/lib/widget/resolve-widget';
 import { checkRateLimit } from '@/lib/security/rate-limit';
 import { assertPublicWebhookUrl } from '@/lib/security/url-guard';
 import { CHATKIT_SERVER_ENABLED } from '@/lib/feature-flags';
@@ -45,29 +44,6 @@ function getClientIP(request: NextRequest): string {
   }
 
   return 'unknown';
-}
-
-/**
- * Extract a normalized domain from an Origin or Referer header value.
- * Returns null when the header is absent or the URL is unparseable.
- */
-function normalizeDomainFromHeader(urlHeader: string | null): string | null {
-  if (!urlHeader) return null;
-
-  try {
-    const hostname = new URL(urlHeader).hostname;
-    const normalized = normalizeDomain(hostname);
-    return normalized || null;
-  } catch {
-    return null;
-  }
-}
-
-function getRequestDomain(request: NextRequest): string | null {
-  return (
-    normalizeDomainFromHeader(request.headers.get('origin')) ||
-    normalizeDomainFromHeader(request.headers.get('referer'))
-  );
 }
 
 /**

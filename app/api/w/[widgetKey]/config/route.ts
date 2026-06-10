@@ -8,8 +8,7 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import { resolveAuthorizedWidget } from '@/lib/widget/resolve-widget';
-import { normalizeDomain } from '@/lib/license/domain';
+import { getRequestDomain, resolveAuthorizedWidget } from '@/lib/widget/resolve-widget';
 import { CHATKIT_SERVER_ENABLED } from '@/lib/feature-flags';
 import { migrateConfig } from '@/lib/widget-config/migrate';
 import { translateDisplayConfig } from '@/lib/widget/translate-display-config';
@@ -17,22 +16,6 @@ import { getBundlePath } from '@/lib/widget/manifest';
 import { TIER_LIMITS, normalizeUserTier } from '@/lib/license/tiers';
 import { translateConfig } from '@/lib/widget/translate-config';
 import type { WidgetConfig } from '@/widget/src/types';
-
-/**
- * Extract a normalized request domain from Origin/Referer headers.
- * Returns null when both headers are absent or unparseable.
- */
-function getRequestDomain(request: NextRequest): string | null {
-  const origin = request.headers.get('origin');
-  const referer = request.headers.get('referer');
-  const ctx = origin || referer;
-  if (!ctx) return null;
-  try {
-    return normalizeDomain(new URL(ctx).hostname) || null;
-  } catch {
-    return null;
-  }
-}
 
 export async function GET(
   request: NextRequest,

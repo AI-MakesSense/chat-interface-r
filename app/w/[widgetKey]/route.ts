@@ -235,6 +235,7 @@ export async function GET(
         });
       }
 
+      // Host used for URL construction only — NEVER for authorization (see isDomainAllowed).
       const host = request.headers.get('host') || 'localhost:3000';
       const protocol = host.includes('localhost') ? 'http' : 'https';
       // Use the new v2.0 ChatKit route that uses widgetKey

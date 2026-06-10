@@ -21,6 +21,38 @@ import type { Widget, User } from '@/lib/db/schema';
 /** A widget joined with its owning user — the shape getWidgetByKeyWithUser returns. */
 export type WidgetWithUser = Widget & { user: User };
 
+/** Minimal header-bag interface so this lib module does not import next/server. */
+interface HeaderCarrier {
+  headers: { get(name: string): string | null };
+}
+
+/**
+ * Extract a normalized domain from an Origin or Referer header value.
+ * Returns null when the header is absent or the URL is unparseable.
+ */
+function normalizeDomainFromHeader(urlHeader: string | null): string | null {
+  if (!urlHeader) return null;
+  try {
+    const normalized = normalizeDomain(new URL(urlHeader).hostname);
+    return normalized || null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Normalized request domain from Origin (preferred) or Referer (fallback).
+ * Falls back to Referer even when Origin is PRESENT but unparseable (e.g.
+ * 'null' from sandboxed iframes) — the previous config-route copy did not,
+ * which was a behavioral divergence between the two routes.
+ */
+export function getRequestDomain(request: HeaderCarrier): string | null {
+  return (
+    normalizeDomainFromHeader(request.headers.get('origin')) ||
+    normalizeDomainFromHeader(request.headers.get('referer'))
+  );
+}
+
 export type ResolveResult =
   | { ok: true; widget: WidgetWithUser; user: User }
   | { ok: false; status: number; error: string };
@@ -76,7 +108,7 @@ export function isDomainAllowed(
   if (TIER_LIMITS[normalizeUserTier(userTier)].unlimitedDomains || allowedDomains.length === 0) return true;
 
   const firstParty = getFirstPartyDomain();
-  if (firstParty && requestDomain !== 'unknown' && requestDomain === firstParty) return true;
+  if (firstParty && requestDomain === firstParty) return true;
 
   // localhost bypass is only for non-production environments.
   // In production this gate is CLOSED to prevent embed-key abuse.

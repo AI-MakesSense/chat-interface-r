@@ -66,6 +66,29 @@ describe('Public Config Security Hardening', () => {
     expect(config.agentKit?.workflowId).toBeUndefined();
   });
 
+  it('falls back to referer when origin is present but unparseable (sandboxed iframe)', async () => {
+    // `Origin: null` is what sandboxed iframes send. The shared getRequestDomain
+    // (lib/widget/resolve-widget.ts) falls back to Referer in this case — the old
+    // per-route copy in the config route did not, which made the config route
+    // stricter than the chat relay for the same embed.
+    const request = new NextRequest(
+      `https://chat-interface-r.vercel.app/api/w/${widgetKey}/config`,
+      {
+        method: 'GET',
+        headers: {
+          origin: 'null',
+          referer: 'https://example.com/some/page',
+        },
+      }
+    );
+
+    const response = await GET(request, {
+      params: Promise.resolve({ widgetKey }),
+    });
+
+    expect(response.status).toBe(200);
+  });
+
   it('fails closed when origin context is missing', async () => {
     const request = new NextRequest(
       `https://chat-interface-r.vercel.app/api/w/${widgetKey}/config`,

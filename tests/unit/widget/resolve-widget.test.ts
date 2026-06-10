@@ -17,6 +17,7 @@ const {
   resolveAuthorizedWidget,
   isDomainAllowed,
   isSubscriptionActive,
+  getRequestDomain,
 } = require('@/lib/widget/resolve-widget');
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
@@ -256,6 +257,25 @@ describe('isDomainAllowed', () => {
       process.env.NEXT_PUBLIC_APP_URL = 'not a url';
       expect(isDomainAllowed('not a url', ['customer.com'], 'pro')).toBe(false);
     });
+  });
+});
+
+// ── getRequestDomain ─────────────────────────────────────────────────────────
+
+describe('getRequestDomain', () => {
+  const req = (headers: Record<string, string>) =>
+    ({ headers: { get: (k: string) => headers[k.toLowerCase()] ?? null } });
+
+  it('prefers origin over referer', () => {
+    expect(getRequestDomain(req({ origin: 'https://a.com', referer: 'https://b.com/page' }))).toBe('a.com');
+  });
+
+  it('falls back to referer when origin is unparseable', () => {
+    expect(getRequestDomain(req({ origin: 'null', referer: 'https://b.com/page' }))).toBe('b.com');
+  });
+
+  it('returns null when both are absent', () => {
+    expect(getRequestDomain(req({}))).toBeNull();
   });
 });
 
