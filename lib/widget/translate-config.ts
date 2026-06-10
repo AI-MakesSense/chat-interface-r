@@ -65,7 +65,10 @@ export function translateConfig(
   if (cs.useTintedGrayscale) {
     theme.color.grayscale = {
       hue: cs.tintHue,
-      tint: cs.tintLevel,
+      // Canonical tintLevel is a 0-20 slider; runtime GrayscaleConfig.tint is
+      // 0-9 (css-variables.ts applies tint*2 % saturation). Map linearly:
+      // 0→0, 20→9. Same boundary-conversion rationale as shade below.
+      tint: Math.round(cs.tintLevel * 0.45),
       // Canonical shadeLevel is a 0-20 slider (10 = neutral); the runtime
       // GrayscaleConfig.shade is -4..4 (css-variables.ts applies shade*2 %
       // lightness). Map linearly: 0→-4, 10→0, 20→+4. Conversion lives HERE,
