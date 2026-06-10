@@ -14,7 +14,7 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { requireAuth } from '@/lib/auth/guard';
-import { getWidgetById, getWidgetWithLicense, updateWidget, deleteWidget, getUserById } from '@/lib/db/queries';
+import { getWidgetById, updateWidget, deleteWidget, getUserById } from '@/lib/db/queries';
 import { getSchemaForKind, normalizeTier } from '@/lib/widget-config/schema';
 import { migrateConfig } from '@/lib/widget-config/migrate';
 import { deepMerge, sanitizeConfig, forceN8nProviderConfig } from '@/lib/utils/config-helpers';
@@ -55,21 +55,7 @@ async function getWidgetWithOwnership(widgetId: string, userId: string): Promise
     };
   }
 
-  // Legacy (v1): Check ownership through license
-  if (widget.licenseId) {
-    const widgetWithLicense = await getWidgetWithLicense(widgetId);
-    if (!widgetWithLicense || widgetWithLicense.license.userId !== userId) {
-      return null; // Not owner
-    }
-
-    return {
-      widget: widgetWithLicense,
-      tier: widgetWithLicense.license.tier,
-      licenseKey: widgetWithLicense.license.licenseKey,
-    };
-  }
-
-  // Widget has neither userId nor licenseId - orphaned
+  // Widget has no userId — orphaned (licenseId column removed in Schema v2.0)
   return null;
 }
 

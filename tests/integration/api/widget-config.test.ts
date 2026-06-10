@@ -53,11 +53,12 @@ describe('GET /api/widget/:license/config - Widget Configuration', () => {
             .returning();
         activeLicense = license;
 
-        // Create widget
+        // Create widget (Schema v2.0: userId instead of licenseId)
         const [w] = await db
             .insert(widgets)
             .values({
-                licenseId: activeLicense.id,
+                userId: testUser.id,
+                widgetKey: crypto.randomBytes(8).toString('hex'),
                 name: 'Test Widget',
                 status: 'active',
                 config: {

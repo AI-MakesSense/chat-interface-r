@@ -174,19 +174,8 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
           user = await getUserById(widgetById.userId);
         }
 
-        // Legacy path: ensure supplied licenseKey is valid and belongs to this widget.
-        if (!isWidgetKey && widgetById.licenseId) {
-          const legacyLicense = await getLicenseByKey(licenseKey);
-          if (!legacyLicense || legacyLicense.id !== widgetById.licenseId) {
-            return new NextResponse(
-              JSON.stringify({ error: 'Unauthorized widget-license pairing' }),
-              { status: 403, headers: { 'Content-Type': 'application/json', ...corsHeaders } }
-            );
-          }
-          if (!user) {
-            user = await getUserById(legacyLicense.userId);
-          }
-        }
+        // Legacy path removed: widgets no longer carry licenseId (Schema v2.0).
+        // Task 9 will clean up this entire branch.
       }
     }
 

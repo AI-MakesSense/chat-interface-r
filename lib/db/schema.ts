@@ -6,8 +6,12 @@
  * Tables:
  * - users: User accounts with authentication
  * - licenses: Widget licenses with domain restrictions
- * - widget_configs: Widget configuration storage (JSONB)
  * - analytics_events: Usage tracking (optional for MVP)
+ *
+ * Schema v2.0 Notes:
+ * - widget_configs table has been DROPPED (superseded by widgets.config JSONB column)
+ * - widgets.licenseId column has been DROPPED (widgets now belong directly to users via userId)
+ * - widgets.userId and widgets.widgetKey are NOT NULL (backfill via pnpm db:backfill-v2 before migration)
  */
 
 import { pgTable, uuid, varchar, text, boolean, timestamp, integer, jsonb, index } from 'drizzle-orm/pg-core';
@@ -64,34 +68,15 @@ export const licenses = pgTable('licenses', {
 });
 
 /**
- * Widget Configurations Table
- * Stores the full widget configuration as JSONB for flexibility
- *
- * Config structure includes:
- * - branding: logo, company name, welcome text, etc.
- * - style: theme, colors, position, typography
- * - connection: N8n webhook URL
- * - features: file attachments, allowed extensions, etc.
- */
-export const widgetConfigs = pgTable('widget_configs', {
-  id: uuid('id').primaryKey().defaultRandom(),
-  licenseId: uuid('license_id').references(() => licenses.id, { onDelete: 'cascade' }).notNull(),
-  config: jsonb('config').notNull(), // Full configuration object
-  version: integer('version').default(1).notNull(), // Version tracking for config changes
-  createdAt: timestamp('created_at').defaultNow().notNull(),
-  updatedAt: timestamp('updated_at').defaultNow().notNull(),
-});
-
-/**
  * Widgets Table (Schema v2.0)
  * Stores widget instances with their configurations
  *
  * Schema v2.0 Changes:
- * - Direct user relationship (userId) - widgets belong directly to users
- * - widgetKey: 16-char alphanumeric key for embed URLs
+ * - Direct user relationship (userId NOT NULL) - widgets belong directly to users
+ * - widgetKey: 16-char alphanumeric key for embed URLs (NOT NULL)
  * - embedType: How widget is deployed (popup/inline/fullpage/portal)
  * - allowedDomains: Per-widget domain whitelist (optional)
- * - licenseId: Now optional (kept for backward compatibility)
+ * - licenseId column DROPPED (use userId directly)
  *
  * JSONB Config Structure:
  * - branding: Company name, logo, welcome text
@@ -104,11 +89,11 @@ export const widgets = pgTable('widgets', {
   // Primary Key
   id: uuid('id').primaryKey().defaultRandom(),
 
-  // Direct user relationship (Schema v2.0)
-  userId: uuid('user_id').references(() => users.id, { onDelete: 'cascade' }),
+  // Direct user relationship (Schema v2.0) - NOT NULL enforced after backfill
+  userId: uuid('user_id').references(() => users.id, { onDelete: 'cascade' }).notNull(),
 
-  // Widget identification (Schema v2.0)
-  widgetKey: varchar('widget_key', { length: 16 }).unique(), // 16-char alphanumeric for embed URLs
+  // Widget identification (Schema v2.0) - NOT NULL enforced after backfill
+  widgetKey: varchar('widget_key', { length: 16 }).unique().notNull(), // 16-char alphanumeric for embed URLs
 
   // Core Fields
   name: varchar('name', { length: 100 }).notNull(), // User-friendly name ("Homepage Chat", "Support Widget")
@@ -132,14 +117,10 @@ export const widgets = pgTable('widgets', {
   // Timestamps
   createdAt: timestamp('created_at').defaultNow().notNull(),
   updatedAt: timestamp('updated_at').defaultNow().notNull(),
-
-  // Legacy: Keep for backward compatibility during migration
-  licenseId: uuid('license_id').references(() => licenses.id, { onDelete: 'cascade' }),
 }, (table) => ({
   // Indexes for performance
   widgetKeyIdx: index('widgets_widget_key_idx').on(table.widgetKey),
   userIdIdx: index('widgets_user_id_idx').on(table.userId),
-  licenseIdIdx: index('widgets_license_id_idx').on(table.licenseId),
   statusIdx: index('widgets_status_idx').on(table.status),
   embedTypeIdx: index('widgets_embed_type_idx').on(table.embedType),
   // GIN index for JSONB queries
@@ -149,10 +130,14 @@ export const widgets = pgTable('widgets', {
 /**
  * Analytics Events Table (Optional for MVP)
  * Tracks widget usage and events for analytics
+ *
+ * Schema v2.0: licenseId replaced by userId + widgetId direct references.
+ * Data loss on analyticsEvents.licenseId is acceptable (analytics only).
  */
 export const analyticsEvents = pgTable('analytics_events', {
   id: uuid('id').primaryKey().defaultRandom(),
-  licenseId: uuid('license_id').references(() => licenses.id, { onDelete: 'cascade' }),
+  userId: uuid('user_id').references(() => users.id, { onDelete: 'cascade' }),
+  widgetId: uuid('widget_id').references(() => widgets.id, { onDelete: 'cascade' }),
   eventType: varchar('event_type', { length: 50 }).notNull(), // 'widget_load', 'message_sent', etc.
   domain: varchar('domain', { length: 255 }),
   metadata: jsonb('metadata'), // Flexible event data
@@ -215,20 +200,10 @@ export const usersRelations = relations(users, ({ many }) => ({
   sentInvitations: many(invitations),
 }));
 
-export const licensesRelations = relations(licenses, ({ one, many }) => ({
+export const licensesRelations = relations(licenses, ({ one }) => ({
   user: one(users, {
     fields: [licenses.userId],
     references: [users.id],
-  }),
-  widgetConfig: one(widgetConfigs),
-  widgets: many(widgets), // NEW: One license → many widgets
-  analyticsEvents: many(analyticsEvents),
-}));
-
-export const widgetConfigsRelations = relations(widgetConfigs, ({ one }) => ({
-  license: one(licenses, {
-    fields: [widgetConfigs.licenseId],
-    references: [licenses.id],
   }),
 }));
 
@@ -238,17 +213,16 @@ export const widgetsRelations = relations(widgets, ({ one }) => ({
     fields: [widgets.userId],
     references: [users.id],
   }),
-  // Legacy: License relationship (for backward compatibility)
-  license: one(licenses, {
-    fields: [widgets.licenseId],
-    references: [licenses.id],
-  }),
 }));
 
 export const analyticsEventsRelations = relations(analyticsEvents, ({ one }) => ({
-  license: one(licenses, {
-    fields: [analyticsEvents.licenseId],
-    references: [licenses.id],
+  user: one(users, {
+    fields: [analyticsEvents.userId],
+    references: [users.id],
+  }),
+  widget: one(widgets, {
+    fields: [analyticsEvents.widgetId],
+    references: [widgets.id],
   }),
 }));
 
@@ -279,9 +253,6 @@ export type NewUser = typeof users.$inferInsert;
 
 export type License = typeof licenses.$inferSelect;
 export type NewLicense = typeof licenses.$inferInsert;
-
-export type WidgetConfig = typeof widgetConfigs.$inferSelect;
-export type NewWidgetConfig = typeof widgetConfigs.$inferInsert;
 
 export type Widget = typeof widgets.$inferSelect;
 export type NewWidget = typeof widgets.$inferInsert;

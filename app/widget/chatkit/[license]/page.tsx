@@ -33,11 +33,11 @@ export default async function ChatKitWidgetPage({ params }: PageProps) {
         );
     }
 
-    // Fetch widgets for this license
+    // Fetch widgets for this license's user (Schema v2.0: licenseId removed from widgets)
     const licenseWidgets = await db
         .select()
         .from(widgets)
-        .where(eq(widgets.licenseId, license.id));
+        .where(eq(widgets.userId, license.userId));
 
     // Find the active widget
     const widget = licenseWidgets.find(w => w.status === 'active') || licenseWidgets[0];

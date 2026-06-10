@@ -185,9 +185,10 @@ export async function POST(request: NextRequest) {
     // 9. Create widget using appropriate method
     let widget;
     if (licenseId && license) {
-      // Legacy path: Create with licenseId
+      // Legacy path: licenseId was provided but widgets no longer carry licenseId —
+      // create via userId directly. Task 9 will remove this branch entirely.
       widget = await createWidget({
-        licenseId,
+        userId: authUser.sub,
         name,
         config: cleanedConfig,
         widgetType: finalWidgetType,
