@@ -226,7 +226,13 @@ async function main() {
     if (noKey.length > 0) {
       console.error('  Widgets missing widgetKey:', noKey.map((r) => r.id).join(', '));
     }
-    if (dangling.length > 0 && noUser.length === dangling.length && noKey.length === 0) {
+    const noUserIds = new Set(noUser.map((w) => w.id));
+    if (
+      dangling.length > 0 &&
+      dangling.every((d) => noUserIds.has(d.id)) &&
+      noUser.length === dangling.length &&
+      noKey.length === 0
+    ) {
       // Everything unresolved is accounted for by dangling widgets — this is
       // the "manual review required" outcome, not a script failure.
       // Exit codes: 0 = complete, 2 = dangling widgets need manual action,

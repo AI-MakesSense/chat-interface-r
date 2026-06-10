@@ -23,6 +23,18 @@ DO $$ BEGIN
   END IF;
 END $$;
 --> statement-breakpoint
+-- ACCESS EXCLUSIVE locks below (SET NOT NULL, DROP COLUMN) on the hot widgets
+-- table: bound the lock WAIT so a long-running query at deploy time fails this
+-- migration fast (retryable) instead of stalling it while it blocks all
+-- traffic queued behind the lock.
+--
+-- Session persistence: `pnpm db:migrate` (drizzle-kit migrate) uses the
+-- neon-serverless driver (Pool, max=1) and drizzle-orm PgDialect.migrate,
+-- which executes EVERY statement of this file on one connection inside a
+-- single transaction — so this plain SET applies to all statements below.
+-- On lock timeout the whole transaction rolls back; just re-run the migration.
+SET lock_timeout = '3s';
+--> statement-breakpoint
 DROP TABLE IF EXISTS "widget_configs";
 --> statement-breakpoint
 ALTER TABLE "widgets" ALTER COLUMN "user_id" SET NOT NULL;

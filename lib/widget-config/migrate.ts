@@ -202,7 +202,7 @@ function lenientParse(candidate: AnyRecord): ChatWidgetConfig {
   for (const s of sections) {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const sectionSchema = (chatWidgetConfigSchema.shape as any)[s];
-    repaired[s] = repairSection(s, sectionSchema, candidate[s] ?? {});
+    repaired[s] = repairSection(s, sectionSchema, candidate[s]);
   }
 
   return chatWidgetConfigSchema.parse(chatWidgetConfigSchema.parse(repaired));
