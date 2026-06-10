@@ -2,6 +2,7 @@
 
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { createPortal } from 'react-dom';
+import { CHATKIT_UI_ENABLED } from '@/lib/feature-flags';
 import {
   HelpCircle,
   Box,
@@ -77,9 +78,26 @@ export const AVAILABLE_ICONS: { id: string; icon: LucideIcon }[] = [
   { id: 'phone', icon: Phone },
 ];
 
+/**
+ * ChatKit only renders a fixed set of built-in icons; ids outside this set are
+ * dropped from the picker when the active provider is ChatKit. Ids here that
+ * map (loosely) to a supported ChatKit glyph stay selectable. Kept as a guard
+ * so adding ChatKit-unsupported icons to AVAILABLE_ICONS later won't silently
+ * offer an icon ChatKit can't render.
+ */
+const CHATKIT_SUPPORTED_ICON_IDS = new Set<string>([
+  'help', 'box', 'sparkles', 'pen', 'server', 'zap', 'image', 'terminal',
+  'flag', 'heart', 'message', 'rocket', 'lightbulb', 'search', 'globe', 'cpu',
+  'database', 'wrench', 'compass', 'mapPin', 'camera', 'mic', 'book',
+  'briefcase', 'coffee', 'cloud', 'shield', 'bell', 'calendar', 'clock',
+  'gift', 'creditCard', 'user', 'phone',
+]);
+
 interface IconPickerProps {
   value: string;
   onChange: (value: string) => void;
+  /** Active connection provider; ChatKit limits the available icon set. */
+  provider?: 'chatkit' | 'n8n' | string;
 }
 
 interface DropdownPosition {
@@ -87,7 +105,7 @@ interface DropdownPosition {
   left: number;
 }
 
-export const IconPicker: React.FC<IconPickerProps> = ({ value, onChange }) => {
+export const IconPicker: React.FC<IconPickerProps> = ({ value, onChange, provider }) => {
   const [isOpen, setIsOpen] = useState(false);
   const [position, setPosition] = useState<DropdownPosition>({ top: 0, left: 0 });
   const [mounted, setMounted] = useState(false);
@@ -95,6 +113,12 @@ export const IconPicker: React.FC<IconPickerProps> = ({ value, onChange }) => {
   const dropdownRef = useRef<HTMLDivElement>(null);
 
   const SelectedIcon = AVAILABLE_ICONS.find((i) => i.id === value)?.icon || HelpCircle;
+
+  // ChatKit supports only a fixed glyph set; filter the grid when it's active.
+  const isChatKit = CHATKIT_UI_ENABLED && provider === 'chatkit';
+  const visibleIcons = isChatKit
+    ? AVAILABLE_ICONS.filter((i) => CHATKIT_SUPPORTED_ICON_IDS.has(i.id))
+    : AVAILABLE_ICONS;
 
   // Wait for client-side mount for portal
   useEffect(() => {
@@ -177,7 +201,7 @@ export const IconPicker: React.FC<IconPickerProps> = ({ value, onChange }) => {
         zIndex: 9999,
       }}
     >
-      {AVAILABLE_ICONS.map((item) => (
+      {visibleIcons.map((item) => (
         <button
           key={item.id}
           onClick={() => {

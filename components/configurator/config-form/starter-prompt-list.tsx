@@ -11,9 +11,13 @@ interface StarterPromptListProps {
   value: StarterPrompt[];
   onChange: (next: StarterPrompt[]) => void;
   disabled?: boolean;
+  /** Active connection provider; ChatKit limits the available icon set. */
+  provider?: 'chatkit' | 'n8n' | string;
 }
 
-const MAX_PROMPTS = 5;
+// Schema (lib/widget-config/schema.ts) allows up to 6 starter prompts; the UI
+// must not be more restrictive than the schema.
+const MAX_PROMPTS = 6;
 
 /**
  * Starter-prompt editor extracted from the legacy config-sidebar
@@ -23,7 +27,7 @@ const MAX_PROMPTS = 5;
  * replace the old count-slider but produce the same StarterPrompt[] shape the
  * store expects: { label, icon }.
  */
-export function StarterPromptList({ value, onChange, disabled }: StarterPromptListProps) {
+export function StarterPromptList({ value, onChange, disabled, provider }: StarterPromptListProps) {
   const prompts = value || [];
 
   // Keep parity with the legacy behaviour: a ref tracking the last count so
@@ -57,6 +61,7 @@ export function StarterPromptList({ value, onChange, disabled }: StarterPromptLi
               <IconPicker
                 value={prompt.icon}
                 onChange={(val) => updatePrompt(index, 'icon', val)}
+                provider={provider}
               />
               <Input
                 type="text"

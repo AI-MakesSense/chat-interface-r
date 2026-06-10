@@ -27,6 +27,8 @@ export interface User {
   name: string | null;
   emailVerified: boolean;
   createdAt: string;
+  /** Subscription tier ('free' | 'basic' | 'pro' | 'agency'). Gates pro-only configurator controls. */
+  tier?: string;
   isAdmin?: boolean;
 }
 

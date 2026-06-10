@@ -316,7 +316,7 @@ function ConfiguratorPage() {
           onReset={resetConfig}
           widgetName={currentWidget?.name}
           lockedProvider="n8n"
-          tier={currentWidget?.license?.tier}
+          tier={user?.tier}
         />
 
         {/* Preview Canvas */}

@@ -122,6 +122,74 @@ function WebhookUrlControl({
 }
 
 /**
+ * Draft-buffered text/textarea control. Required fields (schema min(1)) reject
+ * an empty value at the store, leaving currentConfig unchanged. With a fully
+ * controlled input the field would snap back mid-edit and couldn't be cleared
+ * to retype. This holds a local draft, commits on every change (the store keeps
+ * the last valid value if the change is rejected), and on blur reverts the
+ * draft to the committed value only if the commit didn't take — so editing is
+ * smooth and an invalid value never sticks visually.
+ */
+function TextDraftControl({
+  value,
+  multiline,
+  type = 'text',
+  disabled,
+  placeholder,
+  onCommit,
+}: {
+  value: string;
+  multiline?: boolean;
+  type?: string;
+  disabled?: boolean;
+  placeholder?: string;
+  onCommit: (v: string) => void;
+}) {
+  const [draft, setDraft] = useState(value);
+  const [lastValue, setLastValue] = useState(value);
+  // Sync the draft when the committed value changes externally (render-phase
+  // adjustment — avoids setState-in-effect).
+  if (value !== lastValue) {
+    setLastValue(value);
+    setDraft(value);
+  }
+
+  const handleChange = (v: string) => {
+    setDraft(v);
+    onCommit(v);
+  };
+
+  // On blur, if the committed value never advanced to the draft (the store
+  // rejected it, e.g. empty for a required field), revert to the last good value.
+  const handleBlur = () => {
+    if (draft !== value) setDraft(value);
+  };
+
+  if (multiline) {
+    return (
+      <Textarea
+        value={draft}
+        disabled={disabled}
+        placeholder={placeholder}
+        onChange={(e) => handleChange(e.target.value)}
+        onBlur={handleBlur}
+      />
+    );
+  }
+
+  return (
+    <Input
+      type={type}
+      value={draft}
+      disabled={disabled}
+      placeholder={placeholder}
+      onChange={(e) => handleChange(e.target.value)}
+      onBlur={handleBlur}
+    />
+  );
+}
+
+/**
  * Renders ONE config field from its FieldDef. Reads the current value via
  * getAtPath(config, field.path); writes via onChange(path, value).
  */
@@ -144,12 +212,12 @@ export function FieldControl({ field, config, disabled, onChange }: FieldControl
   switch (field.control) {
     case 'text':
       control = (
-        <Input
+        <TextDraftControl
           type={field.masked ? 'password' : 'text'}
           value={(raw as string) ?? ''}
           disabled={disabled}
           placeholder={field.placeholder}
-          onChange={(e) => onChange(field.path, e.target.value)}
+          onCommit={(v) => onChange(field.path, v)}
         />
       );
       break;
@@ -175,11 +243,12 @@ export function FieldControl({ field, config, disabled, onChange }: FieldControl
 
     case 'textarea':
       control = (
-        <Textarea
+        <TextDraftControl
+          multiline
           value={(raw as string) ?? ''}
           disabled={disabled}
           placeholder={field.placeholder}
-          onChange={(e) => onChange(field.path, e.target.value)}
+          onCommit={(v) => onChange(field.path, v)}
         />
       );
       break;
@@ -255,6 +324,7 @@ export function FieldControl({ field, config, disabled, onChange }: FieldControl
         <IconPicker
           value={(raw as string) ?? 'message'}
           onChange={(v) => onChange(field.path, v)}
+          provider={config.connection?.provider}
         />
       );
       break;
@@ -268,6 +338,7 @@ export function FieldControl({ field, config, disabled, onChange }: FieldControl
             value={(raw as StarterPrompt[]) ?? []}
             disabled={disabled}
             onChange={(next) => onChange(field.path, next)}
+            provider={config.connection?.provider}
           />
         </div>
       );

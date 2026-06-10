@@ -32,6 +32,7 @@ export async function GET(request: NextRequest) {
         name: user.name,
         emailVerified: user.emailVerified,
         createdAt: user.createdAt,
+        tier: user.tier ?? 'free',
         isAdmin: isAdminEmail(user.email),
       },
     });
