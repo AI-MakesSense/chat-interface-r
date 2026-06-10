@@ -14,7 +14,7 @@ describe('ChatRenderer', () => {
     (createChatWidget as jest.Mock).mockClear();
   });
 
-  it('forwards mount() to createChatWidget with the runtime config (container is intentionally not passed — createChatWidget self-attaches)', async () => {
+  it('forwards mount() to createChatWidget with the runtime config (container is intentionally not passed — createChatWidget self-attaches; fetcher is undefined when no options)', async () => {
     const renderer = new ChatRenderer();
     const config = {
       uiConfig: { branding: { companyName: 'X' } },
@@ -26,10 +26,11 @@ describe('ChatRenderer', () => {
     await renderer.mount(config, container);
 
     expect(createChatWidget).toHaveBeenCalledTimes(1);
-    expect(createChatWidget).toHaveBeenCalledWith(config);
+    // Second arg (fetcher) is undefined → createChatWidget falls back to global fetch.
+    expect(createChatWidget).toHaveBeenCalledWith(config, undefined);
   });
 
-  it('accepts a fetcher option and still calls createChatWidget with the config (fetcher is ignored by chat renderer)', async () => {
+  it('forwards the fetcher option through to createChatWidget (preview mode routes relay calls through the mock)', async () => {
     const renderer = new ChatRenderer();
     const config = {
       uiConfig: { branding: { companyName: 'Y' } },
@@ -41,7 +42,7 @@ describe('ChatRenderer', () => {
     await renderer.mount(config, container, { fetcher: stubFetcher });
 
     expect(createChatWidget).toHaveBeenCalledTimes(1);
-    expect(createChatWidget).toHaveBeenCalledWith(config);
+    expect(createChatWidget).toHaveBeenCalledWith(config, stubFetcher);
   });
 
   it('dispose() invokes destroy() on the cleanup handle returned by createChatWidget', async () => {

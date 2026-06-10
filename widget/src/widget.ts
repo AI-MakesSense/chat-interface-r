@@ -209,12 +209,20 @@ export function normalizeMaxFileSizeKB(config: Partial<WidgetConfig>): number {
     : config.features?.maxFileSizeKB ?? 10240;
 }
 
-export function createChatWidget(runtimeConfig: WidgetRuntimeConfig): WidgetCleanup {
+export function createChatWidget(
+  runtimeConfig: WidgetRuntimeConfig,
+  fetcher?: (input: RequestInfo | URL, init?: RequestInit) => Promise<Response>
+): WidgetCleanup {
   const messages: Message[] = [];
   let isOpen = false;
   let messageIdCounter = 0;
   let selectedFiles: File[] = [];
   const config = runtimeConfig.uiConfig || ({} as WidgetConfig);
+
+  // Network access goes through this. Defaults to the global fetch in production;
+  // the preview bridge supplies a mock so the configurator preview never hits a
+  // real webhook.
+  const doFetch = fetcher ?? globalThis.fetch.bind(globalThis);
 
   // AbortController for all event listeners — call abort() to remove them all
   const ac = new AbortController();
@@ -1451,7 +1459,7 @@ export function createChatWidget(runtimeConfig: WidgetRuntimeConfig): WidgetClea
         attachments: fileAttachments,
       });
 
-      const response = await fetch(relayUrl, {
+      const response = await doFetch(relayUrl, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload),

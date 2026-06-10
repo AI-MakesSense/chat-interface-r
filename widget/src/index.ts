@@ -5,10 +5,10 @@
  * Responsibility: Initialize widget, create UI, handle user interaction
  */
 
-import { ChatRenderer } from './renderers/chat/chat-renderer';
-import { DisplayRenderer } from './renderers/display/display-renderer';
+import { createRenderer } from './core/create-renderer';
 import { WidgetRuntimeConfig, WidgetConfig } from './types';
 import { Widget as WidgetConstructor } from './core/widget';
+import { initPreviewBridge } from './preview/preview-bridge';
 
 // Expose the Widget constructor globally for portal/embedded modes.
 if (typeof window !== 'undefined') {
@@ -19,6 +19,12 @@ if (typeof window !== 'undefined') {
 
 (function () {
   'use strict';
+
+  // Preview mode (configurator iframe, ?preview=1): the parent frame drives
+  // mounting via postMessage. Skip the normal embed bootstrap entirely.
+  if (initPreviewBridge()) {
+    return;
+  }
 
   console.log('%c[N8n Chat Widget] Script Loaded', 'background: #222; color: #bada55; padding: 4px; border-radius: 4px;');
 
@@ -109,7 +115,7 @@ if (typeof window !== 'undefined') {
         }
         const fastConfig = injectedConfig.uiConfig ?? injectedConfig;
         const isDisplay = (fastConfig as any).kind === 'display';
-        const fastRenderer = isDisplay ? new DisplayRenderer() : new ChatRenderer();
+        const fastRenderer = createRenderer(isDisplay ? 'display' : 'chat');
         await fastRenderer.mount(
           { ...(injectedConfig as WidgetRuntimeConfig), display: displayConfig },
           document.body
@@ -214,7 +220,7 @@ if (typeof window !== 'undefined') {
 
       // 6. Initialize — dispatch on config.kind
       const isDisplay = remoteConfig.kind === 'display';
-      const renderer = isDisplay ? new DisplayRenderer() : new ChatRenderer();
+      const renderer = createRenderer(isDisplay ? 'display' : 'chat');
       await renderer.mount(runtimeConfig, document.body);
       exposeTeardown(renderer);
 

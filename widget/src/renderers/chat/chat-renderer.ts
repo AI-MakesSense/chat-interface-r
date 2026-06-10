@@ -12,9 +12,10 @@ import type { WidgetCleanup } from '../../widget';
  * to the document (it locates or creates its own container based on display mode).
  * It is part of the Renderer signature for use by other renderer kinds.
  *
- * The `_options` argument (including any `fetcher`) is intentionally unused:
- * ChatRenderer delegates entirely to createChatWidget which manages its own
- * internal fetch calls. A custom fetcher would have no effect here.
+ * The `_container` argument is intentionally unused: createChatWidget self-attaches.
+ * The optional `options.fetcher` IS forwarded to createChatWidget so preview mode
+ * can route relay calls through a mock fetcher (no real webhook hit). Production
+ * callers omit it and createChatWidget falls back to the global fetch.
  */
 export class ChatRenderer implements Renderer {
   private cleanup: WidgetCleanup | null = null;
@@ -22,9 +23,9 @@ export class ChatRenderer implements Renderer {
   async mount(
     runtimeConfig: WidgetRuntimeConfig,
     _container: HTMLElement,
-    _options?: RendererMountOptions
+    options?: RendererMountOptions
   ): Promise<void> {
-    this.cleanup = createChatWidget(runtimeConfig);
+    this.cleanup = createChatWidget(runtimeConfig, options?.fetcher);
   }
 
   async dispose(): Promise<void> {
