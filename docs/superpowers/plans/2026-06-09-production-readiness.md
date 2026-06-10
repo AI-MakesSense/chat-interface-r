@@ -708,6 +708,8 @@ git commit -m "feat(config): defaults derived from canonical schema; old modules
 
 ---
 
+> **AMENDMENT (discovered in execution):** the store's `WidgetConfig` carries ~30 playground/ChatKit runtime fields (accent/tint color system, radius/density, custom fonts, inline sizing, chatkit settings, pdfLightbox, customCss) with no canonical home, consumed by ~29 files. Before Task 4 runs, execute **Task 4a**: extend `lib/widget-config/schema.ts` with canonical sections for these (colorSystem, chatkit, theme.radius/density, typography extras, size.inlineWidth/Height, features.pdfLightbox, advanced.customCss), defaults matching the store's current values, and extend `migrateConfig` to map the legacy flat keys into them. Then Task 4 proceeds as written with the enlarged path-mapping table.
+
 ### Task 4: Point the Zustand store at the canonical config
 
 **Files:**

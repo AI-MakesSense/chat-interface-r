@@ -519,3 +519,27 @@ Following strict RED → GREEN → REFACTOR methodology:
 ---
 
 **Last Updated:** 2025-11-12 (Day 7-8 Complete)
+
+---
+
+## 2026-06-10 — Production-readiness branch (feat/production-readiness)
+
+Executed a 26-task production-readiness plan (docs/superpowers/plans/2026-06-09-production-readiness.md) via subagent-driven development (implementer → spec review → quality review per task). 156 commits.
+
+**Phase 1 — Canonical config:** `lib/widget-config/` (schema/migrate/defaults) is the single source of truth; 4 duplicate WidgetConfig definitions + 3 default sources collapsed to one; store, API, and widget runtime consume it; legacy modules are deprecated shims. (ADR-018)
+
+**Phase 2 — v1→v2 identity:** widgets owned by users (userId/widgetKey NOT NULL, licenseId + widgetConfigs dropped); idempotent backfill script + guarded drizzle migration 0001; single resolveAuthorizedWidget; single tier-entitlements module. (ADR-019)
+
+**Phase 3 — Security:** Upstash Redis rate limiting (fail-open, memory fallback); SSRF guard on relay+save+deploy (15s timeout, no-follow redirects, payload allowlist); fail-fast env validation; billing gated behind BILLING_ENABLED (removed a free-tier-upgrade privilege-escalation path). (ADR-021)
+
+**Phase 4 — Serving:** content-hashed immutable bundle + ~730B loader + JSON config endpoint; injection pipeline deleted; obfuscator removed (183KB→~93KB). (ADR-020)
+
+**Phase 5 — Preview:** configurator preview mounts the real bundle in a sandboxed iframe (postMessage + mock fetcher); 976-line chat-preview.tsx re-implementation deleted; translateConfig shared client/server.
+
+**Phase 6 — Configurator:** declarative field registry drives a generated sidebar (1669→158 lines); three configurator pages collapsed into one [kind] route.
+
+**Phase 7 — Cleanup + CI:** removed legacy playground/scratch; GitHub Actions gate (type-check + 46 jest suites + widget/app builds; lint advisory pending a pre-existing 479-error backlog; 55 vitest-syntax test files documented as migration debt in docs/development/test-migration-debt.md).
+
+**Final state:** type-check clean; 46 jest suites / 580 tests green; `pnpm build` + `pnpm build:widget` succeed. Deploy: run `pnpm db:deploy-v2` (backfill then migrate) before serving.
+
+**Out of scope (deferred):** real Stripe integration; converting the 55 vitest-syntax test files to jest; the widget.ts monolith refactor.

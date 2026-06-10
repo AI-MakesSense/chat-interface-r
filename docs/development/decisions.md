@@ -911,5 +911,47 @@ export class MarkdownPipeline {
 
 ---
 
-**Last Updated:** 2025-11-12
-**Total Decisions:** 17
+## ADR-018: Canonical widget config schema (single source of truth)
+
+**Date:** 2026-06-10 · **Status:** Accepted
+
+**Context:** `WidgetConfig` was defined 4 times (store, widget runtime, lib/types, playground) with 3 conflicting default sources and a 555-line Zod schema the store never used. Configs drifted; the same widget could render differently before vs after a refresh.
+
+**Decision:** `lib/widget-config/` is the only definition. `schema.ts` (canonical Zod schema with per-parse factory defaults) yields the TypeScript type (`z.infer`), the defaults (`createDefaultConfig`), tier-aware validation, and a `migrateConfig()` that normalizes every legacy stored shape to `schemaVersion: 2` (idempotent, leaf-level repair). Old modules became deprecated re-export shims. API boundaries migrate-on-read and validate-on-write.
+
+**Impact:** Eliminated ~1,200 lines of duplicate type definitions; configs validate identically everywhere; adding an option is a one-file change.
+
+## ADR-019: One identity model — users own widgets (v1→v2 finished)
+
+**Date:** 2026-06-10 · **Status:** Accepted
+
+**Context:** Widgets had two nullable ownership paths (`userId` + `licenseId`), a dead `widgetConfigs` table, and three config endpoints with divergent domain checks.
+
+**Decision:** Widgets are owned directly by users (`userId`/`widgetKey` NOT NULL, `licenseId` dropped, `widgetConfigs` dropped). One `resolveAuthorizedWidget()` decides "may this domain use this widget?" for the config endpoint, relay, and compat adapter. Licenses remain a billing-entitlement record only; `users.tier` is the sole gating input. A backfill script runs before the destructive migration (guarded by a pre-flight check that aborts if backfill was skipped).
+
+**Impact:** Removed the dual-path complexity and ~1,000 lines of duplicate serving code; one authorization chokepoint.
+
+## ADR-020: Static loader + content-hashed bundle (serving), obfuscation removed
+
+**Date:** 2026-06-10 · **Status:** Accepted
+
+**Context:** The serve route prepended per-license JavaScript to a 183KB obfuscated bundle on every request — uncacheable, silently fragile, un-canaried, and the obfuscator bloated/slowed the bundle for negligible protection.
+
+**Decision:** Ship a ~730B stable `loader.js` that fetches config JSON (`/api/w/[widgetKey]/config` → `{ bundlePath, runtime }`) and injects an immutable, content-hashed bundle (`/widget/v/chat-widget.<hash>.js`, cached `immutable`). Obfuscation removed (bundle 183KB→~93KB). The configurator preview mounts the SAME real bundle in a sandboxed iframe via postMessage, so preview is pixel-identical to production by construction.
+
+**Impact:** Real CDN caching + version pinning; the 976-line React preview re-implementation deleted; config failures are debuggable JSON, not injected-script mysteries.
+
+## ADR-021: Distributed rate limiting + SSRF hardening
+
+**Date:** 2026-06-10 · **Status:** Accepted
+
+**Context:** Rate limiting was in-memory (a no-op across serverless instances) and the relay fetched user-controlled webhook URLs with no scheme/IP validation, no timeout, and a blind body spread.
+
+**Decision:** Upstash Redis sliding-window rate limiting (fails open on backend error, memory fallback in dev). An SSRF guard (`assertPublicWebhookUrl`) enforces https-only + private-range blocking (incl. DNS resolution and IPv6 forms) on the relay, save, and deploy paths, with a 15s timeout, no-follow redirects, and an allowlisted relay payload.
+
+**Impact:** Rate limits hold under horizontal scaling; the relay can no longer be turned into an internal-network/metadata SSRF vector.
+
+---
+
+**Last Updated:** 2026-06-10
+**Total Decisions:** 21
