@@ -41,8 +41,6 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 
-# drizzle
-drizzle/
 
 # generated widget
 public/widget/chat-widget.iife.js

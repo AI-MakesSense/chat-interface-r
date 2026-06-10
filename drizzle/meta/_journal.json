@@ -1,0 +1,20 @@
+{
+  "version": "7",
+  "dialect": "postgresql",
+  "entries": [
+    {
+      "idx": 0,
+      "version": "7",
+      "when": 1778934567883,
+      "tag": "0000_living_blink",
+      "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1749484800000,
+      "tag": "0001_drop_widget_configs_and_license_id",
+      "breakpoints": true
+    }
+  ]
+}
