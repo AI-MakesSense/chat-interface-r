@@ -30,6 +30,23 @@ interface RateEntry {
 
 const memoryStores = new Map<string, Map<string, RateEntry>>();
 
+// Cap per-namespace entries on the memory fallback path to bound growth under
+// unique-identifier load (e.g. many distinct IPs). Only relevant when running
+// without Redis; production should use Redis.
+const MEMORY_STORE_CAP = 10_000;
+
+/**
+ * Sweep expired entries from a store, then drop overflow if still over cap.
+ * Cheap: only runs when a store is about to exceed the cap.
+ */
+function pruneStore(store: Map<string, RateEntry>, windowMs: number, now: number): void {
+  for (const [id, entry] of store) {
+    if (entry.windowStart + windowMs < now) {
+      store.delete(id);
+    }
+  }
+}
+
 function memoryCheck(
   namespace: string,
   identifier: string,
@@ -44,6 +61,10 @@ function memoryCheck(
   const current = store.get(identifier);
 
   if (!current || now - current.windowStart >= config.windowMs) {
+    // Bound growth before inserting a new identifier: sweep expired entries.
+    if (!current && store.size >= MEMORY_STORE_CAP) {
+      pruneStore(store, config.windowMs, now);
+    }
     store.set(identifier, { count: 1, windowStart: now });
     return { allowed: true, remaining: Math.max(config.limit - 1, 0) };
   }
@@ -138,17 +159,23 @@ export async function checkRateLimit(
 
   const limiterKey = `${namespace}:${config.limit}:${config.windowMs}`;
   let limiter = limiters.get(limiterKey);
-  if (!limiter) {
-    const { Ratelimit } = await import('@upstash/ratelimit');
-    limiter = new Ratelimit({
-      redis,
-      limiter: Ratelimit.slidingWindow(config.limit, `${config.windowMs} ms`),
-      prefix: `rl:${namespace}`,
-    });
-    limiters.set(limiterKey, limiter);
-  }
 
+  // The whole construction + limit() call is wrapped so ANY failure (dynamic
+  // import, constructor, slidingWindow duration parse, or the limit() request)
+  // fails OPEN — a broken limiter must never take down chat/auth with a 500.
   try {
+    if (!limiter) {
+      const { Ratelimit } = await import('@upstash/ratelimit');
+      limiter = new Ratelimit({
+        redis,
+        limiter: Ratelimit.slidingWindow(config.limit, `${config.windowMs} ms`),
+        prefix: `rl:${namespace}`,
+      });
+      // Cold-start race: concurrent requests may each build a limiter for the
+      // same key before the first set() lands. Acceptable — the clients are
+      // stateless REST wrappers, the last write wins, and counting is in Redis.
+      limiters.set(limiterKey, limiter);
+    }
     const r = await limiter.limit(safeId);
     return {
       allowed: r.success,
@@ -178,4 +205,13 @@ export function resetRateLimit(namespace?: string): void {
   redisInitialized = false;
   redisClient = null;
   limiters.clear();
+  warnedProdMemory = false;
+}
+
+/**
+ * Test-only: number of live entries in a namespace's memory store.
+ * Used to assert the fallback path stays bounded under unique-id load.
+ */
+export function __getMemoryStoreSize(namespace: string): number {
+  return memoryStores.get(namespace)?.size ?? 0;
 }
