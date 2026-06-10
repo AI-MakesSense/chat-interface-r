@@ -277,4 +277,85 @@ describe('Chat Relay Security Hardening', () => {
     expect(sentPayload.widgetId).toBe('widget-1');
     expect(sentPayload.metadata.tier).toBe('pro');
   });
+
+  // Mirrors migrateConfig semantics on the hot path: a legacy/typo provider
+  // value must degrade to the 'n8n' default instead of bricking the widget
+  // with a permanent 400 'Unsupported provider'.
+  describe('relay provider normalization (legacy configs)', () => {
+    const mockWidgetWithConfig = (config: Record<string, unknown>) => {
+      dbQueries.getWidgetByKeyWithUser.mockResolvedValue({
+        id: 'widget-1',
+        widgetKey,
+        status: 'active',
+        allowedDomains: ['example.com'],
+        config,
+        user: {
+          id: 'user-1',
+          tier: 'pro',
+          subscriptionStatus: 'active',
+        },
+      });
+    };
+
+    const relayRequest = () =>
+      createRequest(
+        { licenseKey: widgetKey, message: 'hello', widgetId: 'widget-1' },
+        { origin: 'https://example.com' }
+      );
+
+    it('treats an unknown legacy provider as n8n instead of 400', async () => {
+      // widget.config has a legacy provider value and a v1 flat webhook url
+      mockWidgetWithConfig({
+        connection: { provider: 'webhook' }, // legacy value, not in the v2 enum
+        n8nWebhookUrl: 'https://n8n.example.com/webhook/abc',
+      });
+
+      const response = await POST(relayRequest());
+
+      // Must NOT be 400 "Unsupported provider" — it should attempt the n8n relay.
+      expect(response.status).not.toBe(400);
+      expect(response.status).toBe(200);
+      expect(urlGuard.assertPublicWebhookUrl).toHaveBeenCalledWith(
+        'https://n8n.example.com/webhook/abc'
+      );
+    });
+
+    it('uppercase provider value is normalized', async () => {
+      mockWidgetWithConfig({
+        connection: { provider: 'N8N', webhookUrl: 'https://n8n.example.com/webhook/abc' },
+      });
+
+      const response = await POST(relayRequest());
+
+      expect(response.status).not.toBe(400);
+      expect(response.status).toBe(200);
+    });
+
+    it('relays a v1 config with no connection object at all (flat n8nWebhookUrl)', async () => {
+      mockWidgetWithConfig({
+        n8nWebhookUrl: 'https://n8n.example.com/webhook/v1-flat',
+      });
+
+      const response = await POST(relayRequest());
+
+      expect(response.status).toBe(200);
+      expect(urlGuard.assertPublicWebhookUrl).toHaveBeenCalledWith(
+        'https://n8n.example.com/webhook/v1-flat'
+      );
+    });
+
+    it('canonical connection.webhookUrl wins over legacy n8nWebhookUrl (ADV-008)', async () => {
+      mockWidgetWithConfig({
+        connection: { provider: 'n8n', webhookUrl: 'https://n8n.example.com/webhook/v2' },
+        n8nWebhookUrl: 'https://n8n.example.com/webhook/v1-stale',
+      });
+
+      const response = await POST(relayRequest());
+
+      expect(response.status).toBe(200);
+      expect(urlGuard.assertPublicWebhookUrl).toHaveBeenCalledWith(
+        'https://n8n.example.com/webhook/v2'
+      );
+    });
+  });
 });

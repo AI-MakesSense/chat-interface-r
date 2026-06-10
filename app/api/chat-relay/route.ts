@@ -67,6 +67,26 @@ function getRequestDomain(request: NextRequest): string | null {
   );
 }
 
+/**
+ * Normalize the connection block from a possibly-legacy stored config WITHOUT
+ * running the full migrateConfig on the hot relay path.
+ *
+ * Mirrors migrateConfig semantics for exactly the two fields the relay needs:
+ *  - provider: case-insensitive; anything that is not 'chatkit' is treated as
+ *    'n8n' (the schema default). A legacy/typo value must degrade to the
+ *    default, NOT brick the widget with a permanent 400.
+ *  - webhookUrl: canonical v2 path first, then the v1 flat field.
+ */
+function getRelayConnection(config: any): { provider: 'n8n' | 'chatkit'; webhookUrl?: string } {
+  const rawProvider = config?.connection?.provider;
+  const provider =
+    typeof rawProvider === 'string' && rawProvider.trim().toLowerCase() === 'chatkit'
+      ? 'chatkit'
+      : 'n8n';
+  const webhookUrl = config?.connection?.webhookUrl || config?.n8nWebhookUrl;
+  return { provider, webhookUrl };
+}
+
 export async function OPTIONS(request: NextRequest) {
   return new NextResponse(null, {
     status: 204,
@@ -154,11 +174,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     }
 
     const config = widget.config as any;
-    const provider = config?.connection?.provider || 'n8n';
-
-    if (provider === 'n8n') {
-      return handleN8nRelay(config, body, userTier, corsHeaders);
-    }
+    const { provider, webhookUrl } = getRelayConnection(config);
 
     if (provider === 'chatkit') {
       if (!CHATKIT_SERVER_ENABLED) {
@@ -176,10 +192,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
       );
     }
 
-    return new NextResponse(
-      JSON.stringify({ error: `Unsupported provider: ${provider}` }),
-      { status: 400, headers: { 'Content-Type': 'application/json', ...corsHeaders } }
-    );
+    return handleN8nRelay(webhookUrl, body, userTier, corsHeaders);
   } catch (err) {
     console.error('[Chat Relay] Internal Server Error:', err);
     return new NextResponse(JSON.stringify({ error: 'Internal server error' }), {
@@ -190,13 +203,11 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
 }
 
 async function handleN8nRelay(
-  config: any,
+  webhookUrl: string | undefined,
   body: RelayBody,
   userTier: string,
   corsHeaders: Record<string, string>
 ): Promise<NextResponse> {
-  const webhookUrl = config?.n8nWebhookUrl || config?.connection?.webhookUrl;
-
   if (!webhookUrl) {
     return new NextResponse(
       JSON.stringify({ error: 'Webhook URL not configured for this widget' }),
