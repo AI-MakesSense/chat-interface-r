@@ -9,6 +9,9 @@
  *     Previously the bypass was unconditional — an auth hole on prod.
  *   - Domain check is skipped ONLY when allowedDomains is empty (allow all)
  *     or when userTier is 'agency'.
+ *   - First-party allowance is derived from NEXT_PUBLIC_APP_URL (server config),
+ *     NOT from the request's Host header. Host is client-controlled on
+ *     self-hosted deployments and trusting it allowed an allowedDomains bypass.
  */
 import { getWidgetByKeyWithUser } from '@/lib/db/queries';
 import { normalizeDomain } from '@/lib/license/domain';
@@ -37,30 +40,43 @@ export function isSubscriptionActive(user: User): boolean {
 }
 
 /**
+ * Resolve the platform's own first-party domain from NEXT_PUBLIC_APP_URL.
+ * Returns null when unset/unparseable (no first-party allowance — fail closed).
+ *
+ * SECURITY: this must come from server config, NEVER from the request's Host
+ * header — Host is client-controlled on self-hosted deployments, and trusting
+ * it let any origin bypass allowedDomains by sending a matching Host.
+ * Read per-call (not module-cached) so tests can vary the env.
+ */
+function getFirstPartyDomain(): string | null {
+  const appUrl = process.env.NEXT_PUBLIC_APP_URL;
+  if (!appUrl) return null;
+  try {
+    return normalizeDomain(new URL(appUrl).hostname) || null;
+  } catch {
+    return null;
+  }
+}
+
+/**
  * Returns true when `requestDomain` is authorized to use the widget.
  *
  * Rules (short-circuit order):
  *  1. Agency tier → always allowed.
  *  2. No allowedDomains configured (empty array) → always allowed.
- *  3. First-party: request origin === server host → allowed.
+ *  3. First-party: request origin matches NEXT_PUBLIC_APP_URL's domain → allowed.
  *  4. localhost → allowed in development only (NODE_ENV !== 'production').
  *  5. allowedDomains list → exact match or subdomain suffix.
  */
 export function isDomainAllowed(
   requestDomain: string,
   allowedDomains: string[],
-  userTier: string,
-  requestHost: string
+  userTier: string
 ): boolean {
   if (TIER_LIMITS[normalizeUserTier(userTier)].unlimitedDomains || allowedDomains.length === 0) return true;
 
-  const normalizedHost = normalizeDomain((requestHost || '').split(':')[0] || '');
-  const isFirstPartyRequest =
-    requestDomain !== 'unknown' &&
-    normalizedHost !== 'unknown' &&
-    requestDomain === normalizedHost;
-
-  if (isFirstPartyRequest) return true;
+  const firstParty = getFirstPartyDomain();
+  if (firstParty && requestDomain !== 'unknown' && requestDomain === firstParty) return true;
 
   // localhost bypass is only for non-production environments.
   // In production this gate is CLOSED to prevent embed-key abuse.
@@ -84,8 +100,7 @@ export function isDomainAllowed(
  */
 export async function resolveAuthorizedWidget(
   widgetKey: string,
-  requestDomain: string | null,
-  requestHost: string
+  requestDomain: string | null
 ): Promise<ResolveResult> {
   if (!/^[A-Za-z0-9]{16}$/.test(widgetKey)) {
     return { ok: false, status: 404, error: 'Widget not found' };
@@ -110,7 +125,7 @@ export async function resolveAuthorizedWidget(
   }
 
   const allowed = Array.isArray(widget.allowedDomains) ? widget.allowedDomains : [];
-  if (!isDomainAllowed(requestDomain, allowed, user.tier || 'free', requestHost)) {
+  if (!isDomainAllowed(requestDomain, allowed, user.tier || 'free')) {
     return { ok: false, status: 403, error: 'Domain not authorized for this widget' };
   }
 

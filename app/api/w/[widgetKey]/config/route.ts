@@ -42,9 +42,8 @@ export async function GET(
     const { widgetKey } = await params;
 
     const requestDomain = getRequestDomain(request);
-    const requestHost = request.headers.get('host') || '';
 
-    const resolved = await resolveAuthorizedWidget(widgetKey, requestDomain, requestHost);
+    const resolved = await resolveAuthorizedWidget(widgetKey, requestDomain);
 
     if (!resolved.ok) {
       return NextResponse.json(

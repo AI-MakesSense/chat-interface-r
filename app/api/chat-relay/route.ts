@@ -101,7 +101,6 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     }
 
     const requestDomain = getRequestDomain(request);
-    const requestHost = request.headers.get('host') || '';
 
     const clientIP = getClientIP(request);
     const ipRate = await checkRateLimit('chat-relay:ip', clientIP, RELAY_IP_LIMIT);
@@ -123,7 +122,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     // status, subscription, and domain authorization in one place.
     // requestDomain is passed as-is; if null the resolver returns 403
     // with 'Origin or referer header is required'.
-    const resolved = await resolveAuthorizedWidget(licenseKey, requestDomain, requestHost);
+    const resolved = await resolveAuthorizedWidget(licenseKey, requestDomain);
 
     if (!resolved.ok) {
       return new NextResponse(

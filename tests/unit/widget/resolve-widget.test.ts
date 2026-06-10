@@ -56,7 +56,7 @@ describe('resolveAuthorizedWidget', () => {
   it('resolves an active widget for an allowed domain', async () => {
     dbQueries.getWidgetByKeyWithUser.mockResolvedValue(makeWidget());
 
-    const result = await resolveAuthorizedWidget(VALID_KEY, 'example.com', 'api.myapp.com');
+    const result = await resolveAuthorizedWidget(VALID_KEY, 'example.com');
 
     expect(result.ok).toBe(true);
     if (result.ok) {
@@ -66,7 +66,7 @@ describe('resolveAuthorizedWidget', () => {
   });
 
   it('returns 404 for a key that does not match the 16-char alphanumeric pattern', async () => {
-    const result = await resolveAuthorizedWidget('short', 'example.com', 'host');
+    const result = await resolveAuthorizedWidget('short', 'example.com');
 
     expect(result.ok).toBe(false);
     if (!result.ok) {
@@ -80,7 +80,7 @@ describe('resolveAuthorizedWidget', () => {
   it('returns 404 for a valid-pattern key that resolves to nothing in the DB', async () => {
     dbQueries.getWidgetByKeyWithUser.mockResolvedValue(null);
 
-    const result = await resolveAuthorizedWidget(VALID_KEY, 'example.com', 'host');
+    const result = await resolveAuthorizedWidget(VALID_KEY, 'example.com');
 
     expect(result.ok).toBe(false);
     if (!result.ok) {
@@ -92,7 +92,7 @@ describe('resolveAuthorizedWidget', () => {
   it('returns 403 for a paused widget', async () => {
     dbQueries.getWidgetByKeyWithUser.mockResolvedValue(makeWidget({ status: 'paused' }));
 
-    const result = await resolveAuthorizedWidget(VALID_KEY, 'example.com', 'host');
+    const result = await resolveAuthorizedWidget(VALID_KEY, 'example.com');
 
     expect(result.ok).toBe(false);
     if (!result.ok) {
@@ -114,7 +114,7 @@ describe('resolveAuthorizedWidget', () => {
       })
     );
 
-    const result = await resolveAuthorizedWidget(VALID_KEY, 'example.com', 'host');
+    const result = await resolveAuthorizedWidget(VALID_KEY, 'example.com');
 
     expect(result.ok).toBe(false);
     if (!result.ok) {
@@ -126,7 +126,7 @@ describe('resolveAuthorizedWidget', () => {
   it('returns 403 when origin/referer is missing (requestDomain is null)', async () => {
     dbQueries.getWidgetByKeyWithUser.mockResolvedValue(makeWidget());
 
-    const result = await resolveAuthorizedWidget(VALID_KEY, null, 'api.myapp.com');
+    const result = await resolveAuthorizedWidget(VALID_KEY, null);
 
     expect(result.ok).toBe(false);
     if (!result.ok) {
@@ -140,7 +140,7 @@ describe('resolveAuthorizedWidget', () => {
       makeWidget({ allowedDomains: ['example.com'] })
     );
 
-    const result = await resolveAuthorizedWidget(VALID_KEY, 'evil.com', 'api.myapp.com');
+    const result = await resolveAuthorizedWidget(VALID_KEY, 'evil.com');
 
     expect(result.ok).toBe(false);
     if (!result.ok) {
@@ -158,7 +158,7 @@ describe('resolveAuthorizedWidget', () => {
     );
 
     // 'evil.com' is not in allowedDomains, but agency bypasses
-    const result = await resolveAuthorizedWidget(VALID_KEY, 'evil.com', 'api.myapp.com');
+    const result = await resolveAuthorizedWidget(VALID_KEY, 'evil.com');
 
     expect(result.ok).toBe(true);
   });
@@ -168,7 +168,7 @@ describe('resolveAuthorizedWidget', () => {
       makeWidget({ allowedDomains: [] })
     );
 
-    const result = await resolveAuthorizedWidget(VALID_KEY, 'any-domain.io', 'api.myapp.com');
+    const result = await resolveAuthorizedWidget(VALID_KEY, 'any-domain.io');
 
     expect(result.ok).toBe(true);
   });
@@ -179,7 +179,7 @@ describe('resolveAuthorizedWidget', () => {
       makeWidget({ allowedDomains: ['example.com'] })
     );
 
-    const result = await resolveAuthorizedWidget(VALID_KEY, 'localhost', 'api.myapp.com');
+    const result = await resolveAuthorizedWidget(VALID_KEY, 'localhost');
 
     expect(result.ok).toBe(true);
   });
@@ -190,7 +190,7 @@ describe('resolveAuthorizedWidget', () => {
       makeWidget({ allowedDomains: ['example.com'] })
     );
 
-    const result = await resolveAuthorizedWidget(VALID_KEY, 'localhost', 'api.myapp.com');
+    const result = await resolveAuthorizedWidget(VALID_KEY, 'localhost');
 
     expect(result.ok).toBe(false);
     if (!result.ok) {
@@ -209,28 +209,53 @@ describe('isDomainAllowed', () => {
   });
 
   it('allows any domain for agency tier regardless of list', () => {
-    expect(isDomainAllowed('evil.com', ['example.com'], 'agency', 'api.myapp.com')).toBe(true);
+    expect(isDomainAllowed('evil.com', ['example.com'], 'agency')).toBe(true);
   });
 
   it('allows any domain when allowedDomains is empty', () => {
-    expect(isDomainAllowed('any.io', [], 'pro', 'api.myapp.com')).toBe(true);
+    expect(isDomainAllowed('any.io', [], 'pro')).toBe(true);
   });
 
   it('allows exact domain match', () => {
-    expect(isDomainAllowed('example.com', ['example.com'], 'pro', 'other.host')).toBe(true);
+    expect(isDomainAllowed('example.com', ['example.com'], 'pro')).toBe(true);
   });
 
   it('allows subdomain match', () => {
-    expect(isDomainAllowed('sub.example.com', ['example.com'], 'pro', 'other.host')).toBe(true);
+    expect(isDomainAllowed('sub.example.com', ['example.com'], 'pro')).toBe(true);
   });
 
   it('rejects non-matching domain', () => {
-    expect(isDomainAllowed('evil.com', ['example.com'], 'pro', 'other.host')).toBe(false);
+    expect(isDomainAllowed('evil.com', ['example.com'], 'pro')).toBe(false);
   });
 
-  it('allows first-party request (origin === host)', () => {
-    // request is from the same host as the server — first-party bypass
-    expect(isDomainAllowed('myapp.com', ['example.com'], 'pro', 'myapp.com')).toBe(true);
+  describe('first-party domain (NEXT_PUBLIC_APP_URL)', () => {
+    const ORIGINAL_APP_URL = process.env.NEXT_PUBLIC_APP_URL;
+
+    afterEach(() => {
+      if (ORIGINAL_APP_URL === undefined) delete process.env.NEXT_PUBLIC_APP_URL;
+      else process.env.NEXT_PUBLIC_APP_URL = ORIGINAL_APP_URL;
+    });
+
+    it('allows the app own domain when NEXT_PUBLIC_APP_URL matches', () => {
+      process.env.NEXT_PUBLIC_APP_URL = 'https://app.example.io';
+      expect(isDomainAllowed('app.example.io', ['customer.com'], 'pro')).toBe(true);
+    });
+
+    it('does NOT allow a domain just because the request Host header matched (old bypass)', () => {
+      process.env.NEXT_PUBLIC_APP_URL = 'https://app.example.io';
+      // attacker.com is neither the app domain nor in allowedDomains
+      expect(isDomainAllowed('attacker.com', ['customer.com'], 'pro')).toBe(false);
+    });
+
+    it('fails closed when NEXT_PUBLIC_APP_URL is unset', () => {
+      delete process.env.NEXT_PUBLIC_APP_URL;
+      expect(isDomainAllowed('app.example.io', ['customer.com'], 'pro')).toBe(false);
+    });
+
+    it('fails closed when NEXT_PUBLIC_APP_URL is unparseable', () => {
+      process.env.NEXT_PUBLIC_APP_URL = 'not a url';
+      expect(isDomainAllowed('not a url', ['customer.com'], 'pro')).toBe(false);
+    });
   });
 });
 
