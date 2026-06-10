@@ -12,6 +12,7 @@
  */
 import { getWidgetByKeyWithUser } from '@/lib/db/queries';
 import { normalizeDomain } from '@/lib/license/domain';
+import { TIER_LIMITS, normalizeUserTier } from '@/lib/license/tiers';
 import type { Widget, User } from '@/lib/db/schema';
 
 /** A widget joined with its owning user — the shape getWidgetByKeyWithUser returns. */
@@ -51,7 +52,7 @@ export function isDomainAllowed(
   userTier: string,
   requestHost: string
 ): boolean {
-  if (userTier === 'agency' || allowedDomains.length === 0) return true;
+  if (TIER_LIMITS[normalizeUserTier(userTier)].unlimitedDomains || allowedDomains.length === 0) return true;
 
   const normalizedHost = normalizeDomain((requestHost || '').split(':')[0] || '');
   const isFirstPartyRequest =

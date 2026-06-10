@@ -15,13 +15,12 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { requireAuth } from '@/lib/auth/guard';
 import { db } from '@/lib/db/client';
-import { licenses, widgets, users } from '@/lib/db/schema';
+import { licenses, widgets } from '@/lib/db/schema';
 import { eq } from 'drizzle-orm';
 import { logActivity } from '@/lib/db/admin-queries';
 import {
   createWidget,
   createWidgetV2,
-  getActiveWidgetCount,
   getActiveWidgetCountForUser,
   getWidgetsPaginated,
   getWidgetsPaginatedV2,
@@ -30,6 +29,7 @@ import {
 import { createDefaultConfig } from '@/lib/config/defaults';
 import { getSchemaForKind, normalizeTier } from '@/lib/widget-config/schema';
 import { migrateConfig } from '@/lib/widget-config/migrate';
+import { TIER_LIMITS, canCreateWidget, normalizeUserTier } from '@/lib/license/tiers';
 import { deepMerge, forceN8nProviderConfig } from '@/lib/utils/config-helpers';
 import { CHATKIT_SERVER_ENABLED } from '@/lib/feature-flags';
 import { generateEmbedCode, resolveEmbedBaseUrlFromRequest, type EmbedType as GeneratedEmbedType } from '@/lib/embed';
@@ -49,19 +49,6 @@ function normalizeWidgetConfig(rawConfig: any, kind: string): any {
   const migratedConfig = kind === 'chat' ? migrateConfig(rawConfig) : rawConfig;
   return !CHATKIT_SERVER_ENABLED ? forceN8nProviderConfig(migratedConfig) : migratedConfig;
 }
-
-// =============================================================================
-// Tier Features Configuration (Schema v2.0)
-// =============================================================================
-
-const TIER_LIMITS = {
-  free: { widgetLimit: 3 },
-  basic: { widgetLimit: 5 },
-  pro: { widgetLimit: -1 }, // Unlimited
-  agency: { widgetLimit: -1 }, // Unlimited
-} as const;
-
-type SubscriptionTier = keyof typeof TIER_LIMITS;
 
 // =============================================================================
 // Request Validation Schemas
@@ -110,17 +97,22 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'User not found' }, { status: 404 });
     }
 
-    // Get tier from user (Schema v2.0) or 'free' default
-    const userTier = (user.tier || 'free') as SubscriptionTier;
+    // Get tier from user (Schema v2.0) or 'free' default.
+    // normalizeUserTier handles null/unknown → 'free'.
+    const userTier = normalizeUserTier(user.tier);
 
-    // 4. Determine widget limit and check quota
-    let tier: SubscriptionTier;
-    let limit: number;
-    let activeCount: number;
+    // 4. Determine active tier and check quota.
+    // Both legacy and v2 paths count widgets per-user (not per-license) so the
+    // limit reflects the user's actual usage across all widgets. The legacy
+    // getActiveWidgetCount(licenseId) over-counted — it already resolved to the
+    // user total anyway, but its name was misleading. We now call
+    // getActiveWidgetCountForUser(userId) directly in both branches.
+    let tier = userTier;
     let license: any = null;
 
     if (licenseId) {
-      // Legacy path: Use license-based limits
+      // Legacy path: licenseId provided — verify ownership, carry license for
+      // response metadata. Tier comes from users.tier (v2 identity model).
       const [foundLicense] = await db
         .select()
         .from(licenses)
@@ -136,18 +128,17 @@ export async function POST(request: NextRequest) {
       }
 
       license = foundLicense;
-      tier = license.tier as SubscriptionTier;
-      limit = license.widgetLimit;
-      activeCount = await getActiveWidgetCount(licenseId);
-    } else {
-      // Schema v2.0 path: Use user-level tier limits
-      tier = userTier;
-      limit = TIER_LIMITS[tier].widgetLimit;
-      activeCount = await getActiveWidgetCountForUser(authUser.sub);
+      // Tier is always from users.tier; licenses.tier is billing metadata only.
     }
 
-    // Check widget limit
-    if (limit !== -1 && activeCount >= limit) {
+    // Count per-user (fix Task-8 over-count: getActiveWidgetCount resolved via
+    // license → userId anyway, so semantics are the same, but using
+    // getActiveWidgetCountForUser is explicit and correct for both paths).
+    const activeCount = await getActiveWidgetCountForUser(authUser.sub);
+
+    // Check widget limit via the central entitlements module.
+    if (!canCreateWidget(tier, activeCount)) {
+      const limit = TIER_LIMITS[tier].maxWidgets;
       return NextResponse.json(
         { error: `Widget limit exceeded for ${tier} tier (max: ${limit})` },
         { status: 403 }
@@ -175,9 +166,11 @@ export async function POST(request: NextRequest) {
     }
 
     // 6. Validate final config against tier restrictions using canonical schema.
-    // brandingRequired = true for basic/free tiers (branding cannot be disabled).
+    // brandingRequired = true when the tier does not allow branding removal.
+    // normalizeTier maps 'free'/'garbage' → 'basic' for the config-schema layer
+    // (LicenseTier); TIER_LIMITS drives the entitlement decision here.
     const normalizedTier = normalizeTier(tier);
-    const brandingRequired = normalizedTier === 'basic';
+    const brandingRequired = !TIER_LIMITS[tier].brandingRemovable;
     const configSchema = getSchemaForKind(kind, normalizedTier, brandingRequired);
     const parsed = configSchema.safeParse(finalConfig);
     if (!parsed.success) {

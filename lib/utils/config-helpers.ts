@@ -9,6 +9,7 @@
 // The old inline implementation assigned `undefined` values (incorrectly clobbering
 // base values); the shared one skips `undefined`, which is the correct semantics.
 export { deepMerge } from '@/lib/utils/deep-merge';
+import { TIER_LIMITS, normalizeUserTier } from '@/lib/license/tiers';
 
 /**
  * Sanitize configuration to ensure it passes validation
@@ -43,8 +44,8 @@ export function sanitizeConfig(config: any, tier: string, kind: 'chat' | 'displa
     return null;
   };
 
-  // 1. Tier Restrictions (Basic/Free)
-  if (tier === 'basic' || tier === 'free') {
+  // 1. Tier Restrictions — enforce via the central entitlements module.
+  if (!TIER_LIMITS[normalizeUserTier(tier)].brandingRemovable) {
     // advancedStyling and features are chat-only; guard ensures no-op for display configs
     if (kind === 'chat') {
       if (sanitized.advancedStyling) sanitized.advancedStyling.enabled = false;

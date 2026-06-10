@@ -16,6 +16,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { requireAuth } from '@/lib/auth/guard';
 import { getWidgetById, updateWidget, deleteWidget, getUserById } from '@/lib/db/queries';
 import { getSchemaForKind, normalizeTier } from '@/lib/widget-config/schema';
+import { TIER_LIMITS, normalizeUserTier } from '@/lib/license/tiers';
 import { migrateConfig } from '@/lib/widget-config/migrate';
 import { deepMerge, sanitizeConfig, forceN8nProviderConfig } from '@/lib/utils/config-helpers';
 import { CHATKIT_SERVER_ENABLED } from '@/lib/feature-flags';
@@ -222,9 +223,11 @@ export async function PATCH(
       const sanitizedConfig = sanitizeConfig(mergedConfig, tier, existingKind);
 
       // Validate merged config against tier restrictions using canonical schema.
-      // brandingRequired = true for basic/free tiers.
+      // brandingRequired = true when the tier does not allow branding removal.
+      // normalizeTier maps 'free'/'garbage' → 'basic' for the config-schema layer;
+      // TIER_LIMITS drives the entitlement decision.
       const normalizedTier = normalizeTier(tier);
-      const brandingRequired = normalizedTier === 'basic';
+      const brandingRequired = !TIER_LIMITS[normalizeUserTier(tier)].brandingRemovable;
       const configSchema = getSchemaForKind(existingKind, normalizedTier, brandingRequired);
       const parsed = configSchema.safeParse(sanitizedConfig);
       if (!parsed.success) {
