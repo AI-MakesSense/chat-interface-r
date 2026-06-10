@@ -5,25 +5,10 @@
  * Used by both widget creation and update API routes.
  */
 
-/**
- * Deep merge two objects recursively
- * Used to merge user config with defaults while preserving nested structure
- */
-export function deepMerge(target: any, source: any): any {
-  const output = { ...target };
-
-  for (const key in source) {
-    if (source[key] && typeof source[key] === 'object' && !Array.isArray(source[key])) {
-      // Recursively merge nested objects
-      output[key] = deepMerge(target[key] || {}, source[key]);
-    } else {
-      // Direct assignment for primitives and arrays
-      output[key] = source[key];
-    }
-  }
-
-  return output;
-}
+// Re-export the canonical shared deepMerge so existing call sites keep working.
+// The old inline implementation assigned `undefined` values (incorrectly clobbering
+// base values); the shared one skips `undefined`, which is the correct semantics.
+export { deepMerge } from '@/lib/utils/deep-merge';
 
 /**
  * Sanitize configuration to ensure it passes validation

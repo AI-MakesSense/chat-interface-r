@@ -1,12 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
-import {
-  getUserById,
-  getWidgetById,
-  getWidgetByKeyWithUser,
-} from '@/lib/db/queries';
-import { CHATKIT_SERVER_ENABLED } from '@/lib/feature-flags';
 import { normalizeDomain } from '@/lib/license/domain';
+import { resolveAuthorizedWidget } from '@/lib/widget/resolve-widget';
 import { checkRateLimit } from '@/lib/security/rate-limit';
+import { CHATKIT_SERVER_ENABLED } from '@/lib/feature-flags';
 
 interface RelayBody {
   widgetId?: string;
@@ -44,6 +40,10 @@ function getClientIP(request: NextRequest): string {
   return 'unknown';
 }
 
+/**
+ * Extract a normalized domain from an Origin or Referer header value.
+ * Returns null when the header is absent or the URL is unparseable.
+ */
 function normalizeDomainFromHeader(urlHeader: string | null): string | null {
   if (!urlHeader) return null;
 
@@ -63,50 +63,6 @@ function getRequestDomain(request: NextRequest): string | null {
   );
 }
 
-function isSubscriptionActive(user: any): boolean {
-  const subscriptionStatus = user?.subscriptionStatus || 'active';
-  const currentPeriodEnd = user?.currentPeriodEnd;
-
-  if (subscriptionStatus === 'active' || subscriptionStatus === 'past_due') {
-    return true;
-  }
-
-  if (subscriptionStatus === 'canceled') {
-    return Boolean(currentPeriodEnd && new Date(currentPeriodEnd) > new Date());
-  }
-
-  return false;
-}
-
-function isDomainAllowed(
-  requestDomain: string,
-  allowedDomains: string[],
-  userTier: string,
-  requestHost: string
-): boolean {
-  if (userTier === 'agency' || allowedDomains.length === 0) {
-    return true;
-  }
-
-  const normalizedHost = normalizeDomain((requestHost || '').split(':')[0] || '');
-  const isFirstPartyRequest =
-    requestDomain !== 'unknown' &&
-    normalizedHost !== 'unknown' &&
-    requestDomain === normalizedHost;
-
-  if (isFirstPartyRequest || requestDomain === 'localhost') {
-    return true;
-  }
-
-  return allowedDomains.some((allowed) => {
-    const normalizedAllowed = normalizeDomain(allowed);
-    return (
-      normalizedAllowed === requestDomain ||
-      requestDomain.endsWith(`.${normalizedAllowed}`)
-    );
-  });
-}
-
 export async function OPTIONS(request: NextRequest) {
   return new NextResponse(null, {
     status: 204,
@@ -119,7 +75,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
 
   try {
     const body: RelayBody = await request.json();
-    const { widgetId, licenseKey, message } = body;
+    const { licenseKey, message } = body;
 
     if (!licenseKey || !message) {
       return new NextResponse(
@@ -128,13 +84,20 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
       );
     }
 
-    const requestDomain = getRequestDomain(request);
-    if (!requestDomain) {
+    // Legacy widgetId+licenseKey embeds (non-widgetKey-shaped licenseKey) are no
+    // longer supported. Widgets must be embedded using their widgetKey.
+    // The @deprecated getWidgetWithLicense shim is NOT used here — a non-widgetKey
+    // licenseKey cannot be resolved and is rejected immediately.
+    const isWidgetKey = /^[A-Za-z0-9]{16}$/.test(licenseKey);
+    if (!isWidgetKey) {
       return new NextResponse(
-        JSON.stringify({ error: 'Origin or referer header is required' }),
+        JSON.stringify({ error: 'This widget must be embedded using its widget key. Re-copy the embed code from your dashboard.' }),
         { status: 403, headers: { 'Content-Type': 'application/json', ...corsHeaders } }
       );
     }
+
+    const requestDomain = getRequestDomain(request);
+    const requestHost = request.headers.get('host') || '';
 
     const clientIP = getClientIP(request);
     const ipRate = checkRateLimit('chat-relay:ip', clientIP, RELAY_IP_LIMIT);
@@ -152,77 +115,21 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
       );
     }
 
-    let widget: any = null;
-    let user: any = null;
-    const isWidgetKey = /^[A-Za-z0-9]{16}$/.test(licenseKey);
+    // Single resolution path: resolveAuthorizedWidget handles lookup,
+    // status, subscription, and domain authorization in one place.
+    // requestDomain is passed as-is; if null the resolver returns 403
+    // with 'Origin or referer header is required'.
+    const resolved = await resolveAuthorizedWidget(licenseKey, requestDomain, requestHost);
 
-    if (isWidgetKey) {
-      const widgetWithUser = await getWidgetByKeyWithUser(licenseKey);
-      if (widgetWithUser) {
-        widget = widgetWithUser;
-        user = widgetWithUser.user;
-      }
-    }
-
-    if (!widget && widgetId) {
-      const widgetById = await getWidgetById(widgetId);
-      if (widgetById) {
-        // Legacy widgetId+licenseKey embeds are no longer supported (Task 9 finalizes this).
-        // widgets.licenseId was dropped in Schema v2.0, so the old licenseKey-belongs-to-widget
-        // check cannot be performed — reject rather than accepting unauthenticated.
-        if (!isWidgetKey) {
-          return new NextResponse(
-            JSON.stringify({ error: 'This widget must be embedded using its widget key. Re-copy the embed code from your dashboard.' }),
-            { status: 403, headers: { 'Content-Type': 'application/json', ...corsHeaders } }
-          );
-        }
-
-        // licenseKey is widgetKey-shaped but didn't resolve via the v2 path —
-        // require it to match this widget's own key so a random 16-char string
-        // cannot authorize an arbitrary widget UUID.
-        if (widgetById.widgetKey !== licenseKey) {
-          return new NextResponse(
-            JSON.stringify({ error: 'Unauthorized widget-license pairing' }),
-            { status: 403, headers: { 'Content-Type': 'application/json', ...corsHeaders } }
-          );
-        }
-
-        widget = widgetById;
-        user = await getUserById(widgetById.userId);
-      }
-    }
-
-    if (!widget) {
+    if (!resolved.ok) {
       return new NextResponse(
-        JSON.stringify({ error: 'Widget not found' }),
-        { status: 404, headers: { 'Content-Type': 'application/json', ...corsHeaders } }
+        JSON.stringify({ error: resolved.error }),
+        { status: resolved.status, headers: { 'Content-Type': 'application/json', ...corsHeaders } }
       );
     }
 
-    if (widget.status !== 'active') {
-      return new NextResponse(
-        JSON.stringify({ error: 'Widget is not active' }),
-        { status: 403, headers: { 'Content-Type': 'application/json', ...corsHeaders } }
-      );
-    }
-
-    if (!user || !isSubscriptionActive(user)) {
-      return new NextResponse(
-        JSON.stringify({ error: 'Subscription is not active' }),
-        { status: 403, headers: { 'Content-Type': 'application/json', ...corsHeaders } }
-      );
-    }
-
-    const allowedDomains = Array.isArray(widget.allowedDomains) ? widget.allowedDomains : [];
+    const { widget, user } = resolved;
     const userTier = user.tier || 'free';
-    const hostHeader = request.headers.get('host') || '';
-
-    if (!isDomainAllowed(requestDomain, allowedDomains, userTier, hostHeader)) {
-      return new NextResponse(
-        JSON.stringify({ error: 'Domain not authorized for this widget' }),
-        { status: 403, headers: { 'Content-Type': 'application/json', ...corsHeaders } }
-      );
-    }
 
     const widgetRate = checkRateLimit(
       'chat-relay:widget',

@@ -8,11 +8,12 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import { getWidgetByKeyWithUser } from '@/lib/db/queries';
+import { resolveAuthorizedWidget } from '@/lib/widget/resolve-widget';
 import { normalizeDomain } from '@/lib/license/domain';
 import { CHATKIT_SERVER_ENABLED } from '@/lib/feature-flags';
 import { migrateConfig } from '@/lib/widget-config/migrate';
 import { translateDisplayConfig } from '@/lib/widget/translate-display-config';
+import { COMPOSER_DEFAULT_PLACEHOLDER } from '@/lib/widget-config/schema';
 import type { WidgetConfig } from '@/widget/src/types';
 import type { ChatWidgetConfig } from '@/lib/widget-config/schema';
 
@@ -102,7 +103,7 @@ function translateConfig(cfg: ChatWidgetConfig, requestUrl: string, widgetKey: s
 
   // Composer: canonical composer.*
   let composer: WidgetConfig['composer'];
-  const hasComposer = cfg.composer.placeholder !== 'Type your message...' ||
+  const hasComposer = cfg.composer.placeholder !== COMPOSER_DEFAULT_PLACEHOLDER ||
     !!cfg.composer.disclaimer ||
     cfg.features.attachments.enabled;
   if (hasComposer) {
@@ -160,6 +161,22 @@ function translateConfig(cfg: ChatWidgetConfig, requestUrl: string, widgetKey: s
   };
 }
 
+/**
+ * Extract a normalized request domain from Origin/Referer headers.
+ * Returns null when both headers are absent or unparseable.
+ */
+function getRequestDomain(request: NextRequest): string | null {
+  const origin = request.headers.get('origin');
+  const referer = request.headers.get('referer');
+  const ctx = origin || referer;
+  if (!ctx) return null;
+  try {
+    return normalizeDomain(new URL(ctx).hostname) || null;
+  } catch {
+    return null;
+  }
+}
+
 export async function GET(
   request: NextRequest,
   { params }: { params: Promise<{ widgetKey: string }> }
@@ -167,132 +184,26 @@ export async function GET(
   try {
     const { widgetKey } = await params;
 
-    // Validate widgetKey format
-    if (!widgetKey || !/^[A-Za-z0-9]{16}$/.test(widgetKey)) {
+    const requestDomain = getRequestDomain(request);
+    const requestHost = request.headers.get('host') || '';
+
+    const resolved = await resolveAuthorizedWidget(widgetKey, requestDomain, requestHost);
+
+    if (!resolved.ok) {
       return NextResponse.json(
-        { error: 'Invalid widget key format' },
+        { error: resolved.error },
         {
-          status: 400,
+          status: resolved.status,
           headers: {
             'Content-Type': 'application/json',
-            'Access-Control-Allow-Origin': '*'
-          }
+            'Access-Control-Allow-Origin': '*',
+          },
         }
       );
     }
 
-    // Fetch widget with user data
-    const widget = await getWidgetByKeyWithUser(widgetKey);
-
-    if (!widget) {
-      return NextResponse.json(
-        { error: 'Widget not found' },
-        {
-          status: 404,
-          headers: {
-            'Content-Type': 'application/json',
-            'Access-Control-Allow-Origin': '*'
-          }
-        }
-      );
-    }
-
-    if (widget.status !== 'active') {
-      return NextResponse.json(
-        { error: 'Widget is not active' },
-        {
-          status: 403,
-          headers: {
-            'Content-Type': 'application/json',
-            'Access-Control-Allow-Origin': '*'
-          }
-        }
-      );
-    }
-
-    // Check user subscription status
-    const user = widget.user as any;
-    const subscriptionStatus = user.subscriptionStatus || 'active';
-    const currentPeriodEnd = user.currentPeriodEnd;
-
-    if (subscriptionStatus === 'canceled') {
-      if (!currentPeriodEnd || new Date(currentPeriodEnd) <= new Date()) {
-        return NextResponse.json(
-          { error: 'Subscription expired' },
-          {
-            status: 403,
-            headers: {
-              'Content-Type': 'application/json',
-              'Access-Control-Allow-Origin': '*'
-            }
-          }
-        );
-      }
-    }
-
-    // Fail closed: require origin context for public config access.
-    const origin = request.headers.get('origin');
-    const referer = request.headers.get('referer');
-    const originContext = origin || referer;
-    if (!originContext) {
-      return NextResponse.json(
-        { error: 'Origin or referer header is required' },
-        {
-          status: 403,
-          headers: {
-            'Content-Type': 'application/json',
-            'Access-Control-Allow-Origin': '*'
-          }
-        }
-      );
-    }
-
-    let domain = '';
-    try {
-      domain = new URL(originContext).hostname;
-    } catch {
-      return NextResponse.json(
-        { error: 'Invalid origin or referer header' },
-        {
-          status: 403,
-          headers: {
-            'Content-Type': 'application/json',
-            'Access-Control-Allow-Origin': '*'
-          }
-        }
-      );
-    }
-
-    // Check domain restrictions
-    const allowedDomains = (widget as any).allowedDomains || [];
+    const { widget, user } = resolved;
     const userTier = user.tier || 'free';
-
-    if (allowedDomains.length > 0 && userTier !== 'agency') {
-      const normalizedDomain = normalizeDomain(domain);
-      const requestHost = normalizeDomain((request.headers.get('host') || '').split(':')[0] || '');
-      const isFirstPartyOrigin =
-        normalizedDomain !== 'unknown' &&
-        requestHost !== 'unknown' &&
-        normalizedDomain === requestHost;
-      const isAllowed = isFirstPartyOrigin || normalizedDomain === 'localhost' || allowedDomains.some((d: string) => {
-        const normalizedAllowed = normalizeDomain(d);
-        return normalizedDomain === normalizedAllowed ||
-          normalizedDomain.endsWith('.' + normalizedAllowed);
-      });
-
-      if (!isAllowed) {
-        return NextResponse.json(
-          { error: `Domain not allowed: ${domain}` },
-          {
-            status: 403,
-            headers: {
-              'Content-Type': 'application/json',
-              'Access-Control-Allow-Origin': '*'
-            }
-          }
-        );
-      }
-    }
 
     // Translate config.
     // For chat widgets: run migrateConfig first to normalize any legacy stored shape

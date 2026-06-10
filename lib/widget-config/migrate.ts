@@ -347,7 +347,7 @@ export function migrateConfig(raw: unknown): ChatWidgetConfig {
   // KB value (≤ 50) is indistinguishable from MB and is read as MB — that is
   // accepted: such caps were almost certainly authored as MB.
   const normalizeMaxFileSizeMB = (v: number): number =>
-    v > 50 ? Math.max(1, Math.round(v / 1024)) : v;
+    v > 50 ? Math.max(1, Math.round(v / 1024)) : Math.max(1, Math.round(v));
   const feat = candidate.features as AnyRecord;
   if (
     typeof feat.fileAttachments === 'boolean' ||

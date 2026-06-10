@@ -36,6 +36,21 @@ import { generateEmbedCode, resolveEmbedBaseUrlFromRequest, type EmbedType as Ge
 import { z } from 'zod';
 
 // =============================================================================
+// Helpers
+// =============================================================================
+
+/**
+ * Apply the read-boundary transformations to a raw stored widget config.
+ * Chat-kind configs are migrated to canonical schemaVersion 2 via migrateConfig.
+ * When ChatKit is disabled, the provider is forced to n8n.
+ * Display-kind configs pass through unchanged.
+ */
+function normalizeWidgetConfig(rawConfig: any, kind: string): any {
+  const migratedConfig = kind === 'chat' ? migrateConfig(rawConfig) : rawConfig;
+  return !CHATKIT_SERVER_ENABLED ? forceN8nProviderConfig(migratedConfig) : migratedConfig;
+}
+
+// =============================================================================
 // Tier Features Configuration (Schema v2.0)
 // =============================================================================
 
@@ -313,12 +328,8 @@ export async function GET(request: NextRequest) {
         widgets: result.widgets.map(w => {
           const widgetKey = (w as any).widgetKey;
           const widgetEmbedType = (w as any).embedType || 'popup';
-          // READ boundary: migrate chat-kind configs to canonical shape on the way out
-          const rawConfig = (w as any).config;
-          const migratedConfig = (w as any).kind === 'chat' ? migrateConfig(rawConfig) : rawConfig;
-          const normalizedConfig = !CHATKIT_SERVER_ENABLED
-            ? forceN8nProviderConfig(migratedConfig)
-            : migratedConfig;
+          // READ boundary: normalizeWidgetConfig handles migrate + chatkit-flag
+          const normalizedConfig = normalizeWidgetConfig((w as any).config, (w as any).kind);
           return {
             ...w,
             config: normalizedConfig,
@@ -354,12 +365,8 @@ export async function GET(request: NextRequest) {
         widgets: result.widgets.map(w => {
           const widgetKey = (w as any).widgetKey;
           const widgetEmbedType = (w as any).embedType || 'popup';
-          // READ boundary: migrate chat-kind configs to canonical shape on the way out
-          const rawConfig = (w as any).config;
-          const migratedConfig = (w as any).kind === 'chat' ? migrateConfig(rawConfig) : rawConfig;
-          const normalizedConfig = !CHATKIT_SERVER_ENABLED
-            ? forceN8nProviderConfig(migratedConfig)
-            : migratedConfig;
+          // READ boundary: normalizeWidgetConfig handles migrate + chatkit-flag
+          const normalizedConfig = normalizeWidgetConfig((w as any).config, (w as any).kind);
           return {
             ...w,
             config: normalizedConfig,

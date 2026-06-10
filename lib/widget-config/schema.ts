@@ -271,8 +271,11 @@ export const startScreenSchema = z.object({
     .default(() => []),
 });
 
+/** Default placeholder text for the chat composer input. */
+export const COMPOSER_DEFAULT_PLACEHOLDER = 'Type your message...';
+
 export const composerSchema = z.object({
-  placeholder: z.string().max(200).default('Type your message...'),
+  placeholder: z.string().max(200).default(COMPOSER_DEFAULT_PLACEHOLDER),
   disclaimer: z.string().max(500).default(''),
 });
 

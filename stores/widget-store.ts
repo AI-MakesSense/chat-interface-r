@@ -23,6 +23,7 @@ import {
 } from '@/lib/widget-config/schema';
 import { createDefaultConfig } from '@/lib/widget-config/defaults';
 import { migrateConfig } from '@/lib/widget-config/migrate';
+import { deepMerge } from '@/lib/utils/deep-merge';
 
 /**
  * Canonical widget configuration. Re-exported so existing
@@ -45,24 +46,6 @@ type DeepPartial<T> = T extends readonly unknown[]
 export type WidgetConfigUpdate = {
   [K in keyof WidgetConfig]?: DeepPartial<WidgetConfig[K]>;
 };
-
-function isPlainObject(v: unknown): v is Record<string, unknown> {
-  return !!v && typeof v === 'object' && !Array.isArray(v);
-}
-
-/** Deep-merge `patch` over `base`. Arrays and scalars replace; objects merge. */
-function deepMerge<T>(base: T, patch: unknown): T {
-  if (!isPlainObject(base) || !isPlainObject(patch)) {
-    return (patch === undefined ? base : patch) as T;
-  }
-  const out: Record<string, unknown> = { ...base };
-  for (const [key, value] of Object.entries(patch)) {
-    if (value === undefined) continue;
-    const baseValue = (base as Record<string, unknown>)[key];
-    out[key] = isPlainObject(baseValue) && isPlainObject(value) ? deepMerge(baseValue, value) : value;
-  }
-  return out as T;
-}
 
 /**
  * Embed type for widget deployment (Schema v2.0)

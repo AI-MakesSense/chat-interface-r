@@ -13,7 +13,8 @@
  */
 
 import { notFound, redirect } from 'next/navigation';
-import { getWidgetWithLicense } from '@/lib/db/queries';
+import { getWidgetById, getUserById } from '@/lib/db/queries';
+import { isSubscriptionActive } from '@/lib/widget/resolve-widget';
 import PortalWidget from './portal-widget';
 
 interface PageProps {
@@ -31,15 +32,16 @@ export default async function PortalPage({ params }: PageProps) {
   }
 
   // Fetch widget configuration from database
-  const widget = await getWidgetWithLicense(widgetId);
+  const widget = await getWidgetById(widgetId);
 
   // Return 404 if widget not found or not active
   if (!widget || widget.status !== 'active') {
     notFound();
   }
 
-  // Return 404 if license is not active
-  if (widget.license.status !== 'active') {
+  // Resolve user for subscription/status gate (replaces the old wrong-license-status gate)
+  const user = await getUserById(widget.userId);
+  if (!user || !isSubscriptionActive(user)) {
     notFound();
   }
 
@@ -56,7 +58,7 @@ export default async function PortalPage({ params }: PageProps) {
       <PortalWidget
         widgetId={widgetId}
         config={config}
-        license={widget.license.licenseKey}
+        license={(widget as any).widgetKey || widgetId}
       />
     </div>
   );
@@ -73,7 +75,7 @@ export async function generateMetadata({ params }: PageProps) {
     };
   }
 
-  const widget = await getWidgetWithLicense(widgetId);
+  const widget = await getWidgetById(widgetId);
 
   if (!widget) {
     return {

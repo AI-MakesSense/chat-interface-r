@@ -842,4 +842,30 @@ export async function getWidgetsPaginatedV2(
   return { widgets: results, total };
 }
 
+// ============================================================
+// COMPAT ADAPTER QUERIES (Schema v2.0)
+// ============================================================
+
+/**
+ * Get the first active widget for a user, ordered by createdAt ascending.
+ * Used by the legacy /api/widget/[license]/chat-widget.js compat adapter
+ * to find a widget to redirect to when the embed still uses a license key.
+ * Returns null if the user has no active widgets.
+ */
+export async function getFirstActiveWidgetForUser(userId: string): Promise<Widget | null> {
+  const [widget] = await db
+    .select()
+    .from(widgets)
+    .where(
+      and(
+        eq(widgets.userId, userId),
+        eq(widgets.status, 'active')
+      )
+    )
+    .orderBy(widgets.createdAt)
+    .limit(1);
+
+  return widget || null;
+}
+
 // generateWidgetKey is imported from lib/license/widget-key
