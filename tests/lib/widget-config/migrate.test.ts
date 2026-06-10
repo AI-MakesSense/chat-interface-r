@@ -204,6 +204,20 @@ describe('migrateConfig', () => {
     expect(migrateConfig(once)).toEqual(once);
   });
 
+  it('explicit zero for flat shadeLevel/tintLevel survives migration (falsy-zero guard)', () => {
+    const out = migrateConfig({ shadeLevel: 0, tintLevel: 0 });
+    expect(out.colorSystem.shadeLevel).toBe(0);
+    expect(out.colorSystem.tintLevel).toBe(0);
+  });
+
+  it('is idempotent on configs carrying chatkit connection credentials', () => {
+    const once = migrateConfig({
+      connection: { provider: 'chatkit', workflowId: 'wf_123', apiKey: 'sk-test' },
+    });
+    expect(once.connection.apiKey).toBe('sk-test');
+    expect(migrateConfig(once)).toEqual(once);
+  });
+
   it('falls back to defaults for unparseable garbage', () => {
     const out = migrateConfig({ theme: { colors: { primary: 'not-a-color' } } });
     expect(out.theme.colors.primary).toBe('#4F46E5'); // default wins over invalid

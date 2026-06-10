@@ -394,8 +394,11 @@ export const ChatPreview: React.FC<ChatPreviewProps> = ({ config }) => {
 
   if (config.useTintedGrayscale) {
     const h = config.tintHue || 220;
-    const tLevel = config.tintLevel || 10;
-    const sLevel = config.shadeLevel || 50;
+    // ?? not ||: an explicit 0 must render as 0, not fall back to the default.
+    // Fallbacks match the canonical schema defaults (10) — the old `|| 50`
+    // shadeLevel fallback was out of the valid 0-20 range entirely.
+    const tLevel = config.tintLevel ?? 10;
+    const sLevel = config.shadeLevel ?? 10;
 
     if (isDark) {
       const sat = 5 + tLevel * 2;

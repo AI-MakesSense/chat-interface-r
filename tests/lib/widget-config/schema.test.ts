@@ -103,6 +103,14 @@ describe('playground/chatkit canonical sections (Task 4a)', () => {
     expect(chatWidgetConfigSchema.safeParse({ colorSystem: { tintHue: 999 } }).success).toBe(false);
   });
 
+  it('tintLevel/shadeLevel cap at 20 (config-sidebar slider max; HSL formula breaks above ~20)', () => {
+    expect(chatWidgetConfigSchema.safeParse({ colorSystem: { tintLevel: 21 } }).success).toBe(false);
+    expect(chatWidgetConfigSchema.safeParse({ colorSystem: { shadeLevel: 21 } }).success).toBe(false);
+    expect(chatWidgetConfigSchema.safeParse({ colorSystem: { tintLevel: 20 } }).success).toBe(true);
+    expect(chatWidgetConfigSchema.safeParse({ colorSystem: { shadeLevel: 20 } }).success).toBe(true);
+    expect(chatWidgetConfigSchema.safeParse({ colorSystem: { tintLevel: 0, shadeLevel: 0 } }).success).toBe(true);
+  });
+
   it('new sections are isolated between parses', () => {
     const a = chatWidgetConfigSchema.parse({});
     const b = chatWidgetConfigSchema.parse({});

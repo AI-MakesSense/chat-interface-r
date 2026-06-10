@@ -121,14 +121,19 @@ export const themeSchema = z.object({
  * `useTintedGrayscale`, `tintHue`, ... `customUserMessageBackgroundColor`).
  * Defaults match stores/widget-store.ts defaultConfig. Note `useAccent`
  * defaults TRUE (store default) — the other toggles default false.
+ *
+ * tintLevel/shadeLevel ranges mirror the config-sidebar slider caps (0–20,
+ * see components/configurator/config-sidebar.tsx). The cap is also a
+ * correctness bound: chat-preview's HSL formula (`lit = 98 - sLevel * 2`)
+ * goes black/negative above ~20.
  */
 export const colorSystemSchema = z.object({
   useAccent: z.boolean().default(true),
   accentColor: hexColor.default('#0ea5e9'),
   useTintedGrayscale: z.boolean().default(false),
   tintHue: z.number().int().min(0).max(360).default(220),
-  tintLevel: z.number().int().min(0).max(100).default(10),
-  shadeLevel: z.number().int().min(0).max(100).default(10),
+  tintLevel: z.number().int().min(0).max(20).default(10),
+  shadeLevel: z.number().int().min(0).max(20).default(10),
   useCustomSurfaceColors: z.boolean().default(false),
   surfaceBackgroundColor: hexColor.default('#ffffff'),
   surfaceForegroundColor: hexColor.default('#f8fafc'),
@@ -166,6 +171,13 @@ export const chatkitSchema = z.object({
  * Advanced escape hatches. customJs from the legacy store shape is
  * INTENTIONALLY absent — it was never exposed or executed and is a pure XSS
  * surface; migrate.ts drops it.
+ *
+ * THREAT MODEL (customCss): owner-controlled CSS escape hatch injected into
+ * the widget. CSS cannot run script, but it CAN probe URLs via url() and
+ * @import (exfiltration/beacon channel). That is acceptable for
+ * owner-supplied config — the owner already controls the embedding page —
+ * but customCss must NEVER be populated from workflow/relay responses or
+ * any other untrusted runtime source.
  */
 export const advancedSchema = z.object({
   customCss: z.string().max(5000).default(''),
@@ -218,6 +230,12 @@ export const connectionSchema = z.object({
   // ChatKit/AgentKit provider credentials (legacy flat keys
   // `agentKitWorkflowId`/`agentKitApiKey` map here via migrate.ts).
   workflowId: z.string().max(100).default(''),
+  // SECURITY: stored plaintext in the widgets.config JSONB column. It is
+  // never included in public /api/widget/[license]/config responses —
+  // translateConfig builds that public shape explicitly, field by field.
+  // Authenticated /api/widgets routes expose it to the widget OWNER only.
+  // Encryption at rest is deferred. Do NOT add apiKey to any public
+  // response shape.
   apiKey: z.string().max(200).default(''),
 });
 

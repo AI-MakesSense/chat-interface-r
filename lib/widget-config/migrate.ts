@@ -231,6 +231,12 @@ export function migrateConfig(raw: unknown): ChatWidgetConfig {
    * Used for the Task 4a flat-field mappings: these fields have no tier-3
    * legacy (`style.*`) source, so "absent in candidate" is exactly
    * "no canonical structured value" — canonical-over-flat precedence for free.
+   *
+   * PRECONDITION: the candidate section passed as `obj` must have been built
+   * from a spread of the raw `src.X` input (as in the candidate construction
+   * above), NEVER from schema defaults. If a section were pre-filled with
+   * defaults, every key would already be present and the flat-field
+   * migrations below would silently no-op.
    */
   const setIfAbsent = (obj: AnyRecord, key: string, value: unknown): void => {
     if (obj[key] === undefined) obj[key] = value;
