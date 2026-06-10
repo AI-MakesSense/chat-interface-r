@@ -847,13 +847,13 @@ export async function getWidgetsPaginatedV2(
 // ============================================================
 
 /**
- * Get the first active widget for a user, ordered by createdAt ascending.
- * Used by the legacy /api/widget/[license]/chat-widget.js compat adapter
- * to find a widget to redirect to when the embed still uses a license key.
- * Returns null if the user has no active widgets.
+ * Get up to `limit` active widgets for a user, ordered by createdAt ascending.
+ * Used by the legacy /api/widget/[license]/chat-widget.js compat adapter, which
+ * must serve a widget ONLY when the answer is unambiguous (exactly one active
+ * widget). limit=2 is enough to distinguish 0 / 1 / many.
  */
-export async function getFirstActiveWidgetForUser(userId: string): Promise<Widget | null> {
-  const [widget] = await db
+export async function getActiveWidgetsForUser(userId: string, limit = 2): Promise<Widget[]> {
+  return db
     .select()
     .from(widgets)
     .where(
@@ -863,9 +863,7 @@ export async function getFirstActiveWidgetForUser(userId: string): Promise<Widge
       )
     )
     .orderBy(widgets.createdAt)
-    .limit(1);
-
-  return widget || null;
+    .limit(limit);
 }
 
 // generateWidgetKey is imported from lib/license/widget-key

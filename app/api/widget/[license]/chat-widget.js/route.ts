@@ -9,8 +9,8 @@
  *
  * Behavior:
  *   1. Look up the license by key (getLicenseByKey).
- *   2. If valid and active, find the owner's first active widget
- *      (getFirstActiveWidgetForUser).
+ *   2. If valid and active, resolve the owner's single active widget
+ *      (getActiveWidgetsForUser); ambiguous (2+ active widgets) fails closed.
  *   3. Serve an inline bootstrap (Content-Type: application/javascript) that
  *      injects /widget/loader.js with data-widget-key={widgetKey}. A 302 would be
  *      invisible to the loader (the browser keeps the original currentScript.src),
@@ -32,7 +32,7 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import { getLicenseByKey, getFirstActiveWidgetForUser } from '@/lib/db/queries';
+import { getLicenseByKey, getActiveWidgetsForUser } from '@/lib/db/queries';
 
 /**
  * Build an inline bootstrap that injects the stable loader with the resolved
@@ -71,11 +71,20 @@ export async function GET(
       return JS_UNAVAILABLE;
     }
 
-    // Step 2: Find the owner's first active widget.
-    const widget = await getFirstActiveWidgetForUser(license.userId);
-    if (!widget || !widget.widgetKey) {
+    // Step 2: Find the owner's active widgets. The legacy URL carries no widget
+    // identity, so we can only resolve it safely when the user has EXACTLY ONE
+    // active widget. With 2+ widgets, serving the first would silently render
+    // the wrong widget on the customer's site — fail closed and log instead.
+    const activeWidgets = await getActiveWidgetsForUser(license.userId, 2);
+    if (activeWidgets.length !== 1 || !activeWidgets[0].widgetKey) {
+      if (activeWidgets.length > 1) {
+        console.warn(
+          `[Widget Compat Adapter] License ${licenseKey.slice(0, 8)}... has ${activeWidgets.length}+ active widgets — ambiguous legacy embed, refusing to guess. Re-embed with the widgetKey snippet.`
+        );
+      }
       return JS_UNAVAILABLE;
     }
+    const widget = activeWidgets[0];
 
     // Step 3: Serve an inline bootstrap that injects the loader with the resolved
     // widgetKey. We CANNOT 302 to /widget/loader.js?key=KEY: the browser keeps the
