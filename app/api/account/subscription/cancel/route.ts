@@ -19,7 +19,7 @@
 import { NextRequest } from 'next/server';
 import { requireAuth } from '@/lib/auth/guard';
 import { BILLING_ENABLED } from '@/lib/feature-flags';
-import { handleAPIError, errorResponse } from '@/lib/utils/api-error';
+import { handleAPIError } from '@/lib/utils/api-error';
 
 export async function POST(request: NextRequest) {
   try {
