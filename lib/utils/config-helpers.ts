@@ -64,7 +64,9 @@ export function sanitizeConfig(config: any, tier: string, kind: 'chat' | 'displa
     // welcomeText and firstMessage are chat-only branding fields.
     // Injecting them into a display config would add unexpected fields and corrupt validation.
     if (kind === 'chat') {
-      if (!sanitized.branding.welcomeText) sanitized.branding.welcomeText = 'How can we help?';
+      // welcomeText fallback intentionally removed: it diverged from the canonical
+      // schema default ('Welcome! How can we help you today?') and, since sanitize
+      // runs before safeParse, suppressed the schema default. Let the schema apply it.
       if (!sanitized.branding.firstMessage) sanitized.branding.firstMessage = 'Hello! How can I assist you today?';
 
       // Fix launcher icon (chat-only concept)

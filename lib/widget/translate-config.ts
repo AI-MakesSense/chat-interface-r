@@ -156,6 +156,9 @@ export function translateConfig(
     },
     connection: {
       relayEndpoint: `${origin}/api/chat-relay`,
+      // The runtime message-sender reads connection.captureContext !== false;
+      // forward the owner's canonical setting so it isn't forced ON by omission.
+      captureContext: cfg.connection.captureContext,
     },
     agentKit: chatkitEnabled && cfg.connection.provider === 'chatkit' ? {
       enabled: true,

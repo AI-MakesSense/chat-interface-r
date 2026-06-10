@@ -32,6 +32,26 @@ describe('translateConfig — custom text color (F2)', () => {
   });
 });
 
+describe('translateConfig — captureContext passthrough', () => {
+  it('forwards connection.captureContext:false to the runtime config', () => {
+    const cfg = createDefaultConfig('pro');
+    cfg.connection.captureContext = false;
+
+    const out = translateConfig(cfg, ORIGIN, WIDGET_KEY, 'pro', false);
+
+    expect(out.connection?.captureContext).toBe(false);
+  });
+
+  it('forwards connection.captureContext:true (default) to the runtime config', () => {
+    const cfg = createDefaultConfig('pro');
+    cfg.connection.captureContext = true;
+
+    const out = translateConfig(cfg, ORIGIN, WIDGET_KEY, 'pro', false);
+
+    expect(out.connection?.captureContext).toBe(true);
+  });
+});
+
 describe('translateConfig — chatkit flag wiring (F4)', () => {
   it('enables agentKit only when chatkitEnabled AND provider is chatkit', () => {
     const cfg = createDefaultConfig('pro');

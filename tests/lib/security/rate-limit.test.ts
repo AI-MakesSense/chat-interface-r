@@ -44,6 +44,34 @@ describe('rate limiter (memory fallback)', () => {
     // well under that — proving growth is bounded on the fallback path.
     expect(__getMemoryStoreSize(NS)).toBeLessThan(10_000);
   });
+
+  it('stays bounded at the cap when ALL entries are fresh (nothing to prune)', async () => {
+    // Long window so no entry expires: pruning cannot reclaim anything. Once the
+    // store hits the cap, new identifiers must fail open WITHOUT being tracked so
+    // memory stays bounded.
+    const cfg = { limit: 1, windowMs: 60_000 };
+    const NS = 'fresh-cap';
+
+    const realNow = Date.now;
+    const t = 5_000_000;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (Date as any).now = () => t; // freeze time so all entries stay fresh
+    try {
+      // Fill exactly to the cap with fresh entries.
+      for (let i = 0; i < 10_000; i++) {
+        await checkRateLimit(NS, `fresh-${i}`, cfg);
+      }
+      expect(__getMemoryStoreSize(NS)).toBe(10_000);
+
+      // A brand-new identifier at the cap: allowed (fail-open) but NOT stored.
+      const res = await checkRateLimit(NS, 'overflow-id', cfg);
+      expect(res.allowed).toBe(true);
+      expect(res.remaining).toBe(0);
+      expect(__getMemoryStoreSize(NS)).toBeLessThanOrEqual(10_000);
+    } finally {
+      Date.now = realNow;
+    }
+  });
 });
 
 describe('rate limiter (Redis path fail-open)', () => {

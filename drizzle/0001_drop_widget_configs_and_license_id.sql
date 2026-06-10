@@ -10,9 +10,11 @@
 --   2. widgets.user_id  → SET NOT NULL
 --   3. widgets.widget_key → SET NOT NULL
 --   4. widgets.license_id → DROP COLUMN + DROP INDEX
---   5. analytics_events.license_id → DROP COLUMN (data loss acceptable; analytics only)
---   6. analytics_events.user_id → ADD COLUMN (nullable FK to users)
---   7. analytics_events.widget_id → ADD COLUMN (nullable FK to widgets)
+--   5. analytics_events.user_id → ADD COLUMN (nullable FK to users)
+--   6. analytics_events.widget_id → ADD COLUMN (nullable FK to widgets)
+--   7. analytics_events.license_id → DROP COLUMN LAST (data loss acceptable; analytics only)
+--      Ordering: ADD the new columns + FKs BEFORE dropping license_id so there is
+--      never a window where an insert with the new shape has no target column.
 
 --> statement-breakpoint
 DO $$ BEGIN
@@ -33,10 +35,8 @@ ALTER TABLE "widgets" DROP CONSTRAINT IF EXISTS "widgets_license_id_licenses_id_
 --> statement-breakpoint
 ALTER TABLE "widgets" DROP COLUMN IF EXISTS "license_id";
 --> statement-breakpoint
-ALTER TABLE "analytics_events" DROP CONSTRAINT IF EXISTS "analytics_events_license_id_licenses_id_fk";
---> statement-breakpoint
-ALTER TABLE "analytics_events" DROP COLUMN IF EXISTS "license_id";
---> statement-breakpoint
+-- ADD the new analytics_events columns + FKs FIRST, so an insert using the new
+-- shape always has a target column (no column-less window).
 ALTER TABLE "analytics_events" ADD COLUMN IF NOT EXISTS "user_id" uuid;
 --> statement-breakpoint
 ALTER TABLE "analytics_events" ADD COLUMN IF NOT EXISTS "widget_id" uuid;
@@ -53,3 +53,8 @@ DO $$ BEGIN
     ALTER TABLE "analytics_events" ADD CONSTRAINT "analytics_events_widget_id_widgets_id_fk" FOREIGN KEY ("widget_id") REFERENCES "public"."widgets"("id") ON DELETE cascade ON UPDATE no action;
   END IF;
 END $$;
+--> statement-breakpoint
+-- DROP the old license_id constraint + column LAST.
+ALTER TABLE "analytics_events" DROP CONSTRAINT IF EXISTS "analytics_events_license_id_licenses_id_fk";
+--> statement-breakpoint
+ALTER TABLE "analytics_events" DROP COLUMN IF EXISTS "license_id";

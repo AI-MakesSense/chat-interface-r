@@ -286,9 +286,12 @@ async function handleN8nRelay(
 
     if (!response.ok) {
       console.error(`[Chat Relay] N8n Error (${response.status}):`, responseText);
+      // Map ALL n8n non-2xx to 502: the upstream's status (e.g. 401/403) must not
+      // masquerade as a relay-level auth/domain failure to the widget. Keep the
+      // body + upstreamStatus for observability.
       return new NextResponse(
-        JSON.stringify({ error: 'Workflow execution failed', details: responseJson }),
-        { status: response.status, headers: { 'Content-Type': 'application/json', ...corsHeaders } }
+        JSON.stringify({ error: 'Workflow execution failed', upstreamStatus: response.status, details: responseJson }),
+        { status: 502, headers: { 'Content-Type': 'application/json', ...corsHeaders } }
       );
     }
 

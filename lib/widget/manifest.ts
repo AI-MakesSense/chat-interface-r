@@ -16,15 +16,19 @@ let cached: { bundlePath: string } | null = null;
 export function getBundlePath(): string {
   if (!cached) {
     const manifestPath = join(process.cwd(), 'public/widget/manifest.json');
-    let raw: string;
+    let parsed: { bundlePath?: unknown };
     try {
-      raw = readFileSync(manifestPath, 'utf-8');
-    } catch {
+      const raw = readFileSync(manifestPath, 'utf-8');
+      parsed = JSON.parse(raw) as { bundlePath?: unknown };
+    } catch (err) {
+      // Covers both a missing file and a malformed (unparseable) manifest — the
+      // parse used to be outside the try/catch, so a corrupt manifest threw a
+      // raw SyntaxError on every request (cache only set on success).
       throw new Error(
-        `Widget manifest not found at ${manifestPath}. Run \`pnpm build:widget\` before serving.`
+        `Widget manifest at ${manifestPath} could not be read or parsed (${(err as Error).message}). ` +
+          'Run `pnpm build:widget` before serving.'
       );
     }
-    const parsed = JSON.parse(raw) as { bundlePath?: unknown };
     if (typeof parsed.bundlePath !== 'string' || !parsed.bundlePath) {
       throw new Error(`Widget manifest at ${manifestPath} is missing a valid "bundlePath".`);
     }

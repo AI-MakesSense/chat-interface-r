@@ -64,6 +64,11 @@ function memoryCheck(
     // Bound growth before inserting a new identifier: sweep expired entries.
     if (!current && store.size >= MEMORY_STORE_CAP) {
       pruneStore(store, config.windowMs, now);
+      // If nothing was expired (all entries fresh), the store is still full —
+      // fail open WITHOUT tracking this identifier so memory stays bounded.
+      if (store.size >= MEMORY_STORE_CAP) {
+        return { allowed: true, remaining: 0 };
+      }
     }
     store.set(identifier, { count: 1, windowStart: now });
     return { allowed: true, remaining: Math.max(config.limit - 1, 0) };

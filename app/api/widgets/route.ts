@@ -168,8 +168,10 @@ export async function POST(request: NextRequest) {
     // Check widget limit via the central entitlements module.
     if (!canCreateWidget(tier, activeCount)) {
       const limit = TIER_LIMITS[tier].maxWidgets;
+      // Render unbounded tiers (pro/agency) as "unlimited" instead of "Infinity".
+      const limitLabel = Number.isFinite(limit) ? `max: ${limit}` : 'unlimited';
       return NextResponse.json(
-        { error: `Widget limit exceeded for ${tier} tier (max: ${limit})` },
+        { error: `Widget limit exceeded for ${tier} tier (${limitLabel})` },
         { status: 403 }
       );
     }

@@ -111,6 +111,9 @@ export async function GET(
       {
         headers: {
           'Access-Control-Allow-Origin': '*',
+          // Vary on Origin so a CDN never serves one origin's domain-authorized
+          // config to a different origin within the max-age window.
+          'Vary': 'Origin',
           'Cache-Control': 'public, max-age=60',
         },
       }

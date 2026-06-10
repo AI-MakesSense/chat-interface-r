@@ -177,7 +177,15 @@ export async function assertPublicWebhookUrl(raw: string): Promise<URL> {
   // 4. DNS lookup — every resolved address must be public
   // (https://localhost in production also goes through this path: lookup returns
   //  127.0.0.1 → private → rejected)
-  const addrs = await lookup(url.hostname, { all: true });
+  // Race the resolver against a 5s timeout so a slow/hung DNS server can't pin
+  // the relay handler open. Timeout = treated as rejection (fail-closed): a
+  // webhook we can't resolve must not be fetched.
+  const addrs = await Promise.race([
+    lookup(url.hostname, { all: true }),
+    new Promise<never>((_, reject) =>
+      setTimeout(() => reject(new Error('Webhook URL DNS resolution timed out')), 5000)
+    ),
+  ]);
   if (addrs.length === 0) {
     throw new Error('Webhook URL hostname did not resolve');
   }

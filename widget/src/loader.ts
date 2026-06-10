@@ -21,8 +21,13 @@
     console.error('[n8n-widget] loader: missing data-widget-key attribute');
     return;
   }
-  const origin = new URL(script.src).origin;
-  fetch(`${origin}/api/w/${encodeURIComponent(key)}/config`, { mode: 'cors' })
+  const origin = new URL(script.src || '', location.href).origin;
+  fetch(`${origin}/api/w/${encodeURIComponent(key)}/config`, {
+    mode: 'cors',
+    // Bound the config fetch so a slow endpoint can't silently hang the
+    // customer's page; the catch below logs the abort.
+    signal: AbortSignal.timeout(10000),
+  })
     .then((res) => {
       if (!res.ok) throw new Error(`config fetch failed: HTTP ${res.status}`);
       return res.json();
