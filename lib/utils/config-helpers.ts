@@ -26,25 +26,6 @@ export function deepMerge(target: any, source: any): any {
 }
 
 /**
- * Strip legacy config properties that conflict with new structure.
- *
- * With the canonical schema (schemaVersion 2) `theme`, `behavior`, and
- * `advancedStyling` ARE the real top-level sections for chat configs — they
- * must NOT be stripped. This function is now a no-op for chat widgets and
- * only retains a passthrough for display widgets (where the caller still
- * calls it for symmetry). It is kept for call-site compatibility.
- *
- * @param config - The widget configuration to clean
- * @param kind - Widget kind ('chat' | 'display'). Defaults to 'chat' for backward compatibility.
- */
-export function stripLegacyConfigProperties(config: any, kind: 'chat' | 'display' = 'chat'): any {
-  // Both chat and display configs pass through unmodified.
-  // The canonical migrateConfig() handles all shape normalization before this
-  // point; nothing left to strip here.
-  return { ...config };
-}
-
-/**
  * Sanitize configuration to ensure it passes validation
  * Handles legacy data, invalid formats, and tier restrictions
  *

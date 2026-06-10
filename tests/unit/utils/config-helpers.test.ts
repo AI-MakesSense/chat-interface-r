@@ -1,77 +1,16 @@
 /**
  * Unit Tests for config-helpers.ts
  *
- * With the canonical schema (schemaVersion 2), stripLegacyConfigProperties is a
- * passthrough — `theme`, `behavior`, and `advancedStyling` are REAL canonical
- * sections for chat configs and must not be stripped.
+ * NOTE: stripLegacyConfigProperties was deleted. With the canonical schema
+ * (schemaVersion 2), `theme`, `behavior`, and `advancedStyling` are real
+ * top-level sections of chat configs — there is nothing legacy left to strip;
+ * migrateConfig handles all shape normalization at the API boundaries.
  *
  * Tests:
- * - stripLegacyConfigProperties: now a passthrough for both chat and display
  * - createDefaultConfig: returns display-shaped config for kind=display
  */
 
-import { stripLegacyConfigProperties } from '@/lib/utils/config-helpers';
 import { createDefaultConfig } from '@/lib/config/defaults';
-
-describe('stripLegacyConfigProperties', () => {
-  it('preserves theme for display widgets', () => {
-    const config = {
-      kind: 'display',
-      theme: { colorScheme: 'light', color: { accent: '#06f' } },
-      branding: { companyName: 'X' },
-    };
-    const result = stripLegacyConfigProperties(config, 'display');
-    expect(result.theme).toEqual({ colorScheme: 'light', color: { accent: '#06f' } });
-  });
-
-  it('preserves theme for chat widgets (canonical section — must NOT be stripped)', () => {
-    const config = {
-      schemaVersion: 2,
-      kind: 'chat',
-      theme: { mode: 'light', colors: { primary: '#4F46E5' } },
-      branding: { companyName: 'X' },
-    };
-    const result = stripLegacyConfigProperties(config, 'chat');
-    expect(result.theme).toBeDefined();
-    expect(result.theme.mode).toBe('light');
-  });
-
-  it('preserves theme when kind is omitted (passthrough)', () => {
-    const config = { theme: { mode: 'light' }, branding: { companyName: 'X' } };
-    const result = stripLegacyConfigProperties(config);
-    expect(result.theme).toBeDefined();
-  });
-
-  it('preserves behavior and advancedStyling for chat (canonical sections)', () => {
-    const config = {
-      branding: { companyName: 'X' },
-      behavior: { autoOpen: true },
-      advancedStyling: { enabled: true },
-    };
-    const result = stripLegacyConfigProperties(config, 'chat');
-    expect(result.behavior).toEqual({ autoOpen: true });
-    expect(result.advancedStyling).toEqual({ enabled: true });
-  });
-
-  it('preserves all fields for display widgets', () => {
-    const config = {
-      kind: 'display',
-      theme: { colorScheme: 'light' },
-      branding: { companyName: 'X' },
-      someDisplayField: { foo: 'bar' },
-    };
-    const result = stripLegacyConfigProperties(config, 'display');
-    expect(result.someDisplayField).toEqual({ foo: 'bar' });
-    expect(result.theme).toBeDefined();
-  });
-
-  it('returns a shallow copy (does not mutate input)', () => {
-    const config = { branding: { companyName: 'X' }, theme: { mode: 'light' } };
-    const result = stripLegacyConfigProperties(config, 'chat');
-    expect(result).not.toBe(config);
-    expect(result.branding).toEqual({ companyName: 'X' });
-  });
-});
 
 describe('createDefaultConfig', () => {
   it('returns display-shaped config for kind=display', () => {

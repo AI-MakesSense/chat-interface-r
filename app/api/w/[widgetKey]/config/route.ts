@@ -94,7 +94,8 @@ function translateConfig(cfg: ChatWidgetConfig, requestUrl: string, widgetKey: s
       prompts: cfg.startScreen.starterPrompts.map((p) => ({
         label: p.label,
         icon: p.icon,
-        prompt: p.label,
+        // Match legacy translate: prefer the full prompt text when present
+        prompt: p.prompt || p.label,
       })),
     };
   }

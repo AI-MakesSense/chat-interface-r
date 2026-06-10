@@ -375,4 +375,49 @@ describe('GET /api/w/[widgetKey]/config — canonical translation', () => {
     expect(body.connection?.webhookUrl).toBeUndefined();
     expect(body.connection?.relayEndpoint).toContain('/api/chat-relay');
   });
+
+  it('does not emit theme.color.accent for a legacy config that never had an accent flag', async () => {
+    // LEGACY_CONFIG is style-only — old translate required BOTH useAccent && accentColor,
+    // so this widget never rendered an accent. Migration must preserve that.
+    const req = new NextRequest(`http://localhost/api/w/${WIDGET_KEY}/config`, {
+      headers: { origin: 'https://example.com' },
+    });
+    const res = await widgetKeyConfigRoute.GET(req, { params: Promise.resolve({ widgetKey: WIDGET_KEY }) });
+
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.theme?.color?.accent).toBeUndefined();
+  });
+
+  it('emits the full prompt text for legacy starter prompts with a prompt field', async () => {
+    dbQueries.getWidgetByKeyWithUser.mockResolvedValue({
+      id: WIDGET_ID,
+      widgetKey: WIDGET_KEY,
+      name: 'Prompt Widget',
+      status: 'active',
+      kind: 'chat',
+      allowedDomains: [],
+      config: {
+        greeting: 'Hello',
+        starterPrompts: [{ label: 'Short', icon: 'tag', prompt: 'Longer text' }],
+      },
+      user: {
+        id: USER_ID,
+        tier: 'pro',
+        subscriptionStatus: 'active',
+        currentPeriodEnd: new Date(Date.now() + 365 * 24 * 60 * 60 * 1000),
+      },
+    });
+
+    const req = new NextRequest(`http://localhost/api/w/${WIDGET_KEY}/config`, {
+      headers: { origin: 'https://example.com' },
+    });
+    const res = await widgetKeyConfigRoute.GET(req, { params: Promise.resolve({ widgetKey: WIDGET_KEY }) });
+
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.startScreen?.prompts).toHaveLength(1);
+    expect(body.startScreen.prompts[0].label).toBe('Short');
+    expect(body.startScreen.prompts[0].prompt).toBe('Longer text');
+  });
 });

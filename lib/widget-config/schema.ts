@@ -256,10 +256,17 @@ export const featuresSchema = z.object({
 
 // Absorbs the "playground-style" flat fields the runtime renders (greeting,
 // starter prompts, composer placeholder). migrate.ts maps the old flat keys here.
+// `prompt` is the optional full message sent when the user clicks the chip; the
+// legacy runtime translate used `p.prompt || p.label`, so prompt must survive
+// migration (Zod strips unknown keys — without this field it would be dropped).
 export const startScreenSchema = z.object({
   greeting: z.string().max(500).default(''),
   starterPrompts: z
-    .array(z.object({ label: z.string().min(1).max(100), icon: z.string().min(1).max(50) }))
+    .array(z.object({
+      label: z.string().min(1).max(100),
+      icon: z.string().min(1).max(50),
+      prompt: z.string().max(500).optional(),
+    }))
     .max(6)
     .default(() => []),
 });

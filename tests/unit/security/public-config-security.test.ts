@@ -56,6 +56,11 @@ describe('Public Config Security Hardening', () => {
     const config = await response.json();
     expect(config.connection?.relayEndpoint).toContain('/api/chat-relay');
     expect(config.connection?.webhookUrl).toBeUndefined();
+    // ChatKit/AgentKit credentials must never reach the public payload either
+    expect(config.connection?.apiKey).toBeUndefined();
+    expect(config.connection?.workflowId).toBeUndefined();
+    expect(config.agentKit?.apiKey).toBeUndefined();
+    expect(config.agentKit?.workflowId).toBeUndefined();
   });
 
   it('fails closed when origin context is missing', async () => {

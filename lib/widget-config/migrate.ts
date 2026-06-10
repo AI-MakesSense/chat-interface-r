@@ -321,6 +321,22 @@ export function migrateConfig(raw: unknown): ChatWidgetConfig {
   // Legacy features shape: fileAttachments / allowedExtensions / maxFileSize.
   // Only write to attachments keys that are NOT already defined in the canonical
   // features.attachments object — canonical wins.
+  //
+  // allowedExtensions normalization: legacy serving accepted bare extensions
+  // ('pdf', 'PNG'); the canonical schema requires /^\.[a-z0-9]+$/ ('.pdf').
+  // Without normalization, valid legacy entries would be spliced to [] by
+  // repairSection — silently dropping the owner's whitelist.
+  //
+  // maxFileSize default drift (DELIBERATE): legacy serving defaulted to 5MB
+  // when the value was unset; the canonical schema default is 10MB. The more
+  // permissive default is intentional — the relay and the n8n workflow enforce
+  // their own upload caps, so the widget-side limit is a UX hint, not a
+  // security boundary. Explicit legacy maxFileSize values still carry over.
+  const normalizeExtension = (ext: unknown): unknown => {
+    if (typeof ext !== 'string') return ext;
+    const lower = ext.toLowerCase();
+    return lower.startsWith('.') ? lower : '.' + lower;
+  };
   const feat = candidate.features as AnyRecord;
   if (
     typeof feat.fileAttachments === 'boolean' ||
@@ -335,7 +351,7 @@ export function migrateConfig(raw: unknown): ChatWidgetConfig {
         ? { enabled: feat.fileAttachments }
         : {}),
       ...(Array.isArray(feat.allowedExtensions) && canonicalAttachments.allowedExtensions === undefined
-        ? { allowedExtensions: feat.allowedExtensions }
+        ? { allowedExtensions: feat.allowedExtensions.map(normalizeExtension) }
         : {}),
       ...(typeof feat.maxFileSize === 'number' && canonicalAttachments.maxFileSizeMB === undefined
         ? { maxFileSizeMB: feat.maxFileSize }
@@ -435,6 +451,20 @@ export function migrateConfig(raw: unknown): ChatWidgetConfig {
   if (typeof src.useCustomUserMessageColors === 'boolean') setIfAbsent(colorSys, 'useCustomUserMessageColors', src.useCustomUserMessageColors);
   if (isHex(src.customUserMessageTextColor)) setIfAbsent(colorSys, 'customUserMessageTextColor', src.customUserMessageTextColor);
   if (isHex(src.customUserMessageBackgroundColor)) setIfAbsent(colorSys, 'customUserMessageBackgroundColor', src.customUserMessageBackgroundColor);
+
+  // useAccent backstop (legacy path only — v2-tagged configs never reach here):
+  // colorSystem.useAccent defaults TRUE in the canonical schema, but the OLD
+  // runtime translate emitted an accent ONLY when the stored config carried an
+  // explicit truthy `useAccent` flag (`if (dbConfig.useAccent && dbConfig.accentColor)`).
+  // A legacy config with no flag — including one that has an accentColor but no
+  // flag — never showed an accent. Letting the schema default win would repaint
+  // those widgets #0ea5e9 (launcher/send/bubbles) on live embeds. So: unless the
+  // source set useAccent explicitly (flat key or structured colorSystem.useAccent,
+  // both already written into colorSys above when present), pin it to false.
+  // Configurator-created configs always store the flag explicitly, and fresh
+  // configs from createDefaultConfig are parsed from {} (not migrated), so both
+  // still get the schema default of true.
+  setIfAbsent(colorSys, 'useAccent', false);
 
   // Playground style (flat radius/density → theme.radius/theme.density)
   if (typeof src.radius === 'string') setIfAbsent(candidate.theme as AnyRecord, 'radius', src.radius);

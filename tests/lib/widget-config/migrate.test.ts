@@ -90,7 +90,11 @@ describe('migrateConfig', () => {
   it('flat accentColor does NOT flip useAccent on (flag is independent in the UI)', () => {
     const out = migrateConfig({ accentColor: '#22d3ee' });
     expect(out.colorSystem.accentColor).toBe('#22d3ee');
-    expect(out.colorSystem.useAccent).toBe(true); // schema default, not forced
+    // No explicit useAccent flag in the source → pinned FALSE on the legacy
+    // path (old runtime translate required `useAccent && accentColor`, so a
+    // config without the flag never rendered an accent — the schema default
+    // of true must not repaint live embeds).
+    expect(out.colorSystem.useAccent).toBe(false);
     const out2 = migrateConfig({ accentColor: '#22d3ee', useAccent: false });
     expect(out2.colorSystem.useAccent).toBe(false);
   });
@@ -392,5 +396,76 @@ describe('migrateConfig', () => {
     });
     expect(out.startScreen.greeting).toBe('Hi');
     expect(out.startScreen.starterPrompts).toEqual([]);
+  });
+});
+
+// ── Live-embed behavioral parity fixes (spec review) ─────────────────────────
+
+describe('migrateConfig — legacy behavioral parity', () => {
+  // Issue 1: bare/uppercase legacy extensions must be normalized, not spliced to []
+  it('normalizes legacy allowedExtensions: lowercases and dot-prefixes bare entries', () => {
+    const out = migrateConfig({
+      features: { fileAttachments: true, allowedExtensions: ['pdf', '.PNG', 'png'] },
+    });
+    expect(out.features.attachments.enabled).toBe(true);
+    // every entry survives, dot-prefixed and lowercased
+    expect(out.features.attachments.allowedExtensions).toEqual(['.pdf', '.png', '.png']);
+  });
+
+  // Issue 3: optional prompt field on starter prompts survives migration
+  it('preserves the prompt field on legacy starter prompt objects', () => {
+    const out = migrateConfig({
+      starterPrompts: [{ label: 'Short', icon: 'tag', prompt: 'Longer text' }],
+    });
+    expect(out.startScreen.starterPrompts).toHaveLength(1);
+    expect(out.startScreen.starterPrompts[0]).toEqual({
+      label: 'Short',
+      icon: 'tag',
+      prompt: 'Longer text',
+    });
+  });
+
+  // Issue 4: legacy configs with no explicit useAccent flag must not gain an accent.
+  // Old translate required BOTH `useAccent && accentColor`, so absence of the flag
+  // (even with an accentColor present) meant no accent was rendered.
+  it('pins useAccent=false for a style-only legacy config (no flag, no accentColor)', () => {
+    const out = migrateConfig({
+      branding: { companyName: 'Acme' },
+      style: { theme: 'light', primaryColor: '#00BFFF' },
+    });
+    expect(out.colorSystem.useAccent).toBe(false);
+  });
+
+  it('pins useAccent=false when accentColor is present but the flag is absent (matches old translate)', () => {
+    const out = migrateConfig({
+      accentColor: '#FF5733',
+      greeting: 'Hi',
+    });
+    expect(out.colorSystem.useAccent).toBe(false);
+    // accentColor still mirrors into theme.colors.primary and colorSystem.accentColor
+    expect(out.theme.colors.primary).toBe('#FF5733');
+    expect(out.colorSystem.accentColor).toBe('#FF5733');
+  });
+
+  it('respects an explicit flat useAccent=true flag', () => {
+    const out = migrateConfig({ useAccent: true, accentColor: '#FF5733' });
+    expect(out.colorSystem.useAccent).toBe(true);
+  });
+
+  it('respects an explicit structured colorSystem.useAccent=true', () => {
+    const out = migrateConfig({ colorSystem: { useAccent: true, accentColor: '#FF5733' } });
+    expect(out.colorSystem.useAccent).toBe(true);
+  });
+
+  it('fresh defaults (non-migrated) keep the schema default useAccent=true', () => {
+    // createDefaultConfig parses {} directly — only the legacy migration path pins false
+    const { createDefaultConfig } = require('@/lib/widget-config/defaults');
+    expect(createDefaultConfig('pro', 'chat').colorSystem.useAccent).toBe(true);
+  });
+
+  it('v2-tagged configs keep their stored useAccent (no backstop on the v2 path)', () => {
+    const v2 = migrateConfig({ useAccent: true, accentColor: '#FF5733' });
+    expect(v2.schemaVersion).toBe(2);
+    expect(migrateConfig(v2).colorSystem.useAccent).toBe(true);
   });
 });
