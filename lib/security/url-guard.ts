@@ -1,6 +1,11 @@
 /**
  * SSRF guard for user-supplied webhook URLs.
  * Enforces: https only (http://localhost allowed outside production), public IPs only.
+ *
+ * Redirect-following SSRF (a public webhook 3xx-bouncing the server to a private
+ * IP) is blocked at the relay: it fetches with `redirect: 'manual'` and rejects
+ * any 3xx / opaque-redirect response instead of following the Location (Task 13).
+ *
  * Residual risk (accepted): DNS rebinding between validation and fetch — mitigated by
  * the relay's fetch timeout (Task 13). Full mitigation needs fetch-by-pinned-IP which
  * n8n's TLS setup doesn't support cleanly.

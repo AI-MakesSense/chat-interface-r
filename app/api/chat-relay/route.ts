@@ -250,7 +250,30 @@ async function handleN8nRelay(
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload),
       signal: AbortSignal.timeout(N8N_FETCH_TIMEOUT_MS),
+      // SSRF: do NOT follow redirects. assertPublicWebhookUrl validated the
+      // original URL, but a public webhook could 3xx-bounce us to a private IP
+      // (metadata endpoint, localhost, RFC1918). n8n webhooks are direct POST
+      // endpoints that never redirect, so we treat any 3xx as a rejection
+      // rather than following the Location.
+      redirect: 'manual',
     });
+
+    // With redirect:'manual', a 3xx upstream surfaces either as an opaque
+    // redirect (response.type === 'opaqueredirect', status 0) or as a visible
+    // 3xx status depending on the runtime. Reject both — never follow Location.
+    if (
+      response.type === 'opaqueredirect' ||
+      response.status === 0 ||
+      (response.status >= 300 && response.status < 400)
+    ) {
+      console.error(
+        `[Chat Relay] Webhook attempted a redirect (status=${response.status}, type=${response.type}) — rejected`
+      );
+      return new NextResponse(
+        JSON.stringify({ error: 'Webhook URL rejected by security policy' }),
+        { status: 502, headers: { 'Content-Type': 'application/json', ...corsHeaders } }
+      );
+    }
 
     const responseText = await response.text();
     let responseJson;

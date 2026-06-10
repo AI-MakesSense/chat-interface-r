@@ -219,6 +219,37 @@ describe('Chat Relay Security Hardening', () => {
     expect(data.error).toMatch(/timed out/i);
   });
 
+  // Redirect SSRF: with redirect:'manual' a webhook that 3xx-bounces to a
+  // private IP must be rejected (502), and the relay must NOT issue a second
+  // fetch to the Location. Covers both runtime representations:
+  //   - Node/undici: visible 3xx status (e.g. 302), type 'basic'
+  //   - spec fetch (edge): opaque redirect, type 'opaqueredirect', status 0
+  it.each([
+    { label: 'visible 302 (node/undici)', status: 302, type: 'basic' },
+    { label: 'opaque redirect (edge)', status: 0, type: 'opaqueredirect' },
+  ])('rejects a webhook redirect — $label — with 502 and no second fetch', async ({ status, type }) => {
+    (global.fetch as jest.Mock).mockResolvedValue({
+      ok: false,
+      status,
+      type,
+      headers: { get: () => 'http://169.254.169.254/' },
+      text: async () => '',
+    } as unknown as Response);
+
+    const response = await POST(
+      createRequest(
+        { licenseKey: widgetKey, message: 'hello', widgetId: 'widget-1' },
+        { origin: 'https://example.com' }
+      )
+    );
+
+    expect(response.status).toBe(502);
+    const data = await response.json();
+    expect(data.error).toMatch(/security policy/i);
+    // The Location must NOT be followed — exactly one fetch was issued.
+    expect((global.fetch as jest.Mock)).toHaveBeenCalledTimes(1);
+  });
+
   // Allowlist proof: an arbitrary top-level key the embedder injects must NOT
   // appear in the payload forwarded to n8n.
   it('does not forward arbitrary client-injected top-level keys to n8n', async () => {
