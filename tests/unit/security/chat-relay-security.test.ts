@@ -70,9 +70,31 @@ describe('Chat Relay Security Hardening', () => {
     global.fetch = jest.fn().mockResolvedValue({
       ok: true,
       status: 200,
+      headers: { get: () => null },
       text: async () => JSON.stringify({ message: 'ok' }),
-    } as Response);
+    } as unknown as Response);
   });
+
+  const mockWidgetWithConfig = (config: Record<string, unknown>) => {
+    dbQueries.getWidgetByKeyWithUser.mockResolvedValue({
+      id: 'widget-1',
+      widgetKey,
+      status: 'active',
+      allowedDomains: ['example.com'],
+      config,
+      user: {
+        id: 'user-1',
+        tier: 'pro',
+        subscriptionStatus: 'active',
+      },
+    });
+  };
+
+  const relayRequest = () =>
+    createRequest(
+      { licenseKey: widgetKey, message: 'hello', widgetId: 'widget-1' },
+      { origin: 'https://example.com' }
+    );
 
   it('blocks requests missing both origin and referer', async () => {
     const response = await POST(
@@ -282,27 +304,6 @@ describe('Chat Relay Security Hardening', () => {
   // value must degrade to the 'n8n' default instead of bricking the widget
   // with a permanent 400 'Unsupported provider'.
   describe('relay provider normalization (legacy configs)', () => {
-    const mockWidgetWithConfig = (config: Record<string, unknown>) => {
-      dbQueries.getWidgetByKeyWithUser.mockResolvedValue({
-        id: 'widget-1',
-        widgetKey,
-        status: 'active',
-        allowedDomains: ['example.com'],
-        config,
-        user: {
-          id: 'user-1',
-          tier: 'pro',
-          subscriptionStatus: 'active',
-        },
-      });
-    };
-
-    const relayRequest = () =>
-      createRequest(
-        { licenseKey: widgetKey, message: 'hello', widgetId: 'widget-1' },
-        { origin: 'https://example.com' }
-      );
-
     it('treats an unknown legacy provider as n8n instead of 400', async () => {
       // widget.config has a legacy provider value and a v1 flat webhook url
       mockWidgetWithConfig({
@@ -356,6 +357,88 @@ describe('Chat Relay Security Hardening', () => {
       expect(urlGuard.assertPublicWebhookUrl).toHaveBeenCalledWith(
         'https://n8n.example.com/webhook/v2'
       );
+    });
+
+    it('returns 500 when the n8n connection has an empty webhookUrl and no flat fallback', async () => {
+      mockWidgetWithConfig({
+        connection: { provider: 'n8n', webhookUrl: '' },
+      });
+
+      const response = await POST(relayRequest());
+
+      expect(response.status).toBe(500);
+      const data = await response.json();
+      expect(data.error).toMatch(/not configured/i);
+    });
+
+    it('returns 500 when the config is an empty object', async () => {
+      mockWidgetWithConfig({});
+
+      const response = await POST(relayRequest());
+
+      expect(response.status).toBe(500);
+      const data = await response.json();
+      expect(data.error).toMatch(/not configured/i);
+    });
+  });
+
+  // ADV-003: the relay buffers the upstream body to re-serialize it as JSON.
+  // An unbounded body from a compromised/misbehaving webhook is an OOM vector,
+  // so anything over the 1MB cap must be rejected with 502 — never buffered.
+  describe('relay response size cap', () => {
+    it('rejects an upstream response larger than 1MB with 502', async () => {
+      mockWidgetWithConfig({
+        connection: { provider: 'n8n', webhookUrl: 'https://n8n.example.com/webhook/abc' },
+      });
+      const big = 'x'.repeat(1_000_001);
+      global.fetch = jest.fn().mockResolvedValue(
+        new Response(big, { status: 200, headers: { 'Content-Type': 'text/plain' } })
+      ) as any;
+
+      const response = await POST(relayRequest());
+
+      expect(response.status).toBe(502);
+      const data = await response.json();
+      expect(data.error).toMatch(/too large/i);
+    });
+
+    it('rejects via Content-Length without reading the body when declared oversized', async () => {
+      mockWidgetWithConfig({
+        connection: { provider: 'n8n', webhookUrl: 'https://n8n.example.com/webhook/abc' },
+      });
+      const text = jest.fn(async () => 'should never be read');
+      global.fetch = jest.fn().mockResolvedValue({
+        ok: true,
+        status: 200,
+        type: 'basic',
+        headers: { get: (name: string) => (name.toLowerCase() === 'content-length' ? '5000000' : null) },
+        text,
+      } as unknown as Response) as any;
+
+      const response = await POST(relayRequest());
+
+      expect(response.status).toBe(502);
+      const data = await response.json();
+      expect(data.error).toMatch(/too large/i);
+      expect(text).not.toHaveBeenCalled();
+    });
+
+    it('still relays a body under the cap', async () => {
+      mockWidgetWithConfig({
+        connection: { provider: 'n8n', webhookUrl: 'https://n8n.example.com/webhook/abc' },
+      });
+      global.fetch = jest.fn().mockResolvedValue(
+        new Response(JSON.stringify({ message: 'ok' }), {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' },
+        })
+      ) as any;
+
+      const response = await POST(relayRequest());
+
+      expect(response.status).toBe(200);
+      const data = await response.json();
+      expect(data.message).toBe('ok');
     });
   });
 });

@@ -8,6 +8,9 @@ import { CHATKIT_SERVER_ENABLED } from '@/lib/feature-flags';
 /** Upstream fetch timeout for the n8n webhook (ms). */
 const N8N_FETCH_TIMEOUT_MS = 15_000;
 
+/** Max upstream response body the relay will buffer (bytes). */
+const N8N_MAX_RESPONSE_BYTES = 1_000_000;
+
 interface RelayBody {
   widgetId?: string;
   licenseKey: string; // In v2 this is widgetKey; legacy uses licenseKey
@@ -71,10 +74,14 @@ function getRequestDomain(request: NextRequest): string | null {
  * Normalize the connection block from a possibly-legacy stored config WITHOUT
  * running the full migrateConfig on the hot relay path.
  *
- * Mirrors migrateConfig semantics for exactly the two fields the relay needs:
- *  - provider: case-insensitive; anything that is not 'chatkit' is treated as
- *    'n8n' (the schema default). A legacy/typo value must degrade to the
- *    default, NOT brick the widget with a permanent 400.
+ * Handles exactly the two fields the relay needs:
+ *  - provider: deliberately MORE lenient than migrateConfig. migrateConfig's
+ *    enum check is case-SENSITIVE (a stored 'CHATKIT' migrates to the 'n8n'
+ *    default), while the relay matches case-insensitively (a superset) so a
+ *    legacy mixed-case 'ChatKit' row still routes to the chatkit branch.
+ *    Anything that is not 'chatkit' is treated as 'n8n' (the schema default) —
+ *    a legacy/typo value must degrade to the default, NOT brick the widget
+ *    with a permanent 400.
  *  - webhookUrl: canonical v2 path first, then the v1 flat field.
  */
 function getRelayConnection(config: any): { provider: 'n8n' | 'chatkit'; webhookUrl?: string } {
@@ -85,6 +92,46 @@ function getRelayConnection(config: any): { provider: 'n8n' | 'chatkit'; webhook
       : 'n8n';
   const webhookUrl = config?.connection?.webhookUrl || config?.n8nWebhookUrl;
   return { provider, webhookUrl };
+}
+
+/**
+ * Read a response body with a hard byte cap. Returns null when the body
+ * exceeds the cap (declared via Content-Length or discovered while streaming).
+ * The relay buffers the whole body to re-serialize it as JSON, so an unbounded
+ * upstream body is an OOM vector — cap it.
+ */
+async function readBodyCapped(response: Response, maxBytes: number): Promise<string | null> {
+  const contentLength = Number(response.headers.get('content-length'));
+  if (Number.isFinite(contentLength) && contentLength > maxBytes) return null;
+
+  if (!response.body) {
+    // No streamable body in this runtime — fall back to text(). `.length` is
+    // UTF-16 code units, not bytes, but it's a close-enough lower bound for
+    // the cap; the streaming path above is the one production exercises.
+    const text = await response.text();
+    return text.length > maxBytes ? null : text;
+  }
+
+  const reader = response.body.getReader();
+  const chunks: Uint8Array[] = [];
+  let total = 0;
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    total += value.byteLength;
+    if (total > maxBytes) {
+      await reader.cancel();
+      return null;
+    }
+    chunks.push(value);
+  }
+  const buf = new Uint8Array(total);
+  let offset = 0;
+  for (const chunk of chunks) {
+    buf.set(chunk, offset);
+    offset += chunk.byteLength;
+  }
+  return new TextDecoder().decode(buf);
 }
 
 export async function OPTIONS(request: NextRequest) {
@@ -285,7 +332,14 @@ async function handleN8nRelay(
       );
     }
 
-    const responseText = await response.text();
+    const responseText = await readBodyCapped(response, N8N_MAX_RESPONSE_BYTES);
+    if (responseText === null) {
+      console.error('[Chat Relay] N8n response exceeded size cap — rejected');
+      return new NextResponse(
+        JSON.stringify({ error: 'Workflow response too large' }),
+        { status: 502, headers: { 'Content-Type': 'application/json', ...corsHeaders } }
+      );
+    }
     let responseJson;
 
     try {
