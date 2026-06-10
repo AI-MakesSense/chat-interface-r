@@ -163,7 +163,13 @@ export class ZipGenerator {
         fontSize: config.theme.typography.fontSize || 16,
         // Runtime reads style.customFontUrl (widget/src/ui/chat-container.ts,
         // widget/src/theming/css-variables.ts) — must not be dropped.
-        customFontUrl: config.theme.typography.fontUrl || undefined,
+        // Fallback: the sidebar's custom-font flow stores into
+        // theme.typography.customFontCss (either @font-face CSS or a bare
+        // URL), mirroring ChatKitEmbed's fontSources extraction.
+        customFontUrl:
+          config.theme.typography.fontUrl ||
+          this.extractFontUrl(config.theme.typography.customFontCss) ||
+          undefined,
       },
       features: {
         fileAttachmentsEnabled: config.features.attachments.enabled || false,
@@ -171,6 +177,23 @@ export class ZipGenerator {
         maxFileSizeKB: (config.features.attachments.maxFileSizeMB || 5) * 1024,
       }
     };
+  }
+
+  /**
+   * Extract a font URL from theme.typography.customFontCss. Mirrors
+   * ChatKitEmbed's url(...) extraction; additionally accepts a bare URL,
+   * which is what the sidebar's custom-font flow actually stores.
+   */
+  private extractFontUrl(customFontCss: string): string | undefined {
+    if (!customFontCss) return undefined;
+    const urlMatch = customFontCss.match(/url\(['"]?([^'")]+)['"]?\)/);
+    if (urlMatch) return urlMatch[1];
+    try {
+      new URL(customFontCss);
+      return customFontCss;
+    } catch {
+      return undefined;
+    }
   }
 
   private async createZip(zip: JSZip): Promise<Buffer> {

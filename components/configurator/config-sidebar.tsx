@@ -4,6 +4,7 @@ import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { createPortal } from 'react-dom';
 import { Save, RotateCcw } from 'lucide-react';
 import { WidgetConfig, StarterPrompt, WidgetConfigUpdate } from '@/stores/widget-store';
+import { isCommittableWebhookUrl } from './webhook-url-commit';
 import {
   // Communication
   MessageCircle,
@@ -263,6 +264,47 @@ const SidebarInput = ({ isDark, ...props }: React.InputHTMLAttributes<HTMLInputE
     className={`bg-transparent border rounded-md px-2 py-1 text-sm focus:outline-none focus:border-blue-500 transition-colors ${isDark ? 'text-[#e5e5e5] border-[#ffffff1a]' : 'text-neutral-900 border-neutral-200'} ${props.className || ''}`}
   />
 );
+
+// Draft-buffered webhook URL input. The canonical webhookUrl validator
+// rejects every partial URL ("h", "http", "https:/") and the store rejects
+// invalid updates wholesale — committing per keystroke would wipe each typed
+// character, making the field paste-only. The draft is kept locally and
+// committed only when '' or a valid URL (https:// or localhost) per the
+// canonical schema gate. The draft is intentionally KEPT (not reverted) on
+// blur so a half-typed URL survives focus changes.
+const WebhookUrlInput = ({
+  value,
+  onCommit,
+  isDark,
+  ...props
+}: Omit<React.InputHTMLAttributes<HTMLInputElement>, 'value' | 'onChange'> & {
+  value: string;
+  onCommit: (v: string) => void;
+  isDark: boolean;
+}) => {
+  const [draft, setDraft] = useState(value);
+  const [lastValue, setLastValue] = useState(value);
+  // Sync draft when the committed value changes externally (render-phase
+  // state adjustment — avoids setState-in-effect).
+  if (value !== lastValue) {
+    setLastValue(value);
+    setDraft(value);
+  }
+
+  return (
+    <SidebarInput
+      {...props}
+      value={draft}
+      onChange={(e) => {
+        setDraft(e.target.value);
+        if (isCommittableWebhookUrl(e.target.value)) {
+          onCommit(e.target.value);
+        }
+      }}
+      isDark={isDark}
+    />
+  );
+};
 
 const HEX_COLOR_RE = /^#[0-9A-Fa-f]{6}$/;
 
@@ -1454,13 +1496,13 @@ export const ConfigSidebar: React.FC<ConfigSidebarProps> = ({
                     </Row>
                     {isN8nSelected && (
                       <div className="mt-3 animate-in slide-in-from-top-1 fade-in duration-200">
-                        <SidebarInput
+                        <WebhookUrlInput
                           type="url"
                           value={config.connection?.webhookUrl || ''}
-                          onChange={(e) => applyPatch({
+                          onCommit={(v) => applyPatch({
                             connection: {
                               provider: 'n8n',
-                              webhookUrl: e.target.value,
+                              webhookUrl: v,
                             },
                           })}
                           className="w-full"
@@ -1567,13 +1609,13 @@ export const ConfigSidebar: React.FC<ConfigSidebarProps> = ({
             {lockedProvider === 'n8n' && (
               <div className="space-y-2">
                 <div className={`text-sm font-medium ${theme.textMuted}`}>n8n Webhook URL</div>
-                <SidebarInput
+                <WebhookUrlInput
                   type="text"
                   value={config.connection?.webhookUrl || ''}
-                  onChange={(e) => applyPatch({
+                  onCommit={(v) => applyPatch({
                     connection: {
                       provider: 'n8n',
-                      webhookUrl: e.target.value,
+                      webhookUrl: v,
                     },
                   })}
                   className="w-full"

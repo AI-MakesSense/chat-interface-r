@@ -58,6 +58,29 @@ describe('ZipGenerator.sanitizeConfig', () => {
     expect(out.style.customFontUrl).toBeUndefined();
   });
 
+  it('falls back to url() extraction from customFontCss when fontUrl is unset', () => {
+    const config = createDefaultConfig('basic', 'chat');
+    config.theme.typography.customFontCss =
+      "@font-face { font-family: Geist; src: url('https://fonts.example.com/geist.woff2') format('woff2'); }";
+    const out = sanitize(config);
+    expect(out.style.customFontUrl).toBe('https://fonts.example.com/geist.woff2');
+  });
+
+  it('falls back to a bare URL in customFontCss (what the sidebar custom-font flow stores)', () => {
+    const config = createDefaultConfig('basic', 'chat');
+    config.theme.typography.customFontCss = 'https://fonts.example.com/geist.css';
+    const out = sanitize(config);
+    expect(out.style.customFontUrl).toBe('https://fonts.example.com/geist.css');
+  });
+
+  it('explicit fontUrl wins over the customFontCss fallback', () => {
+    const config = createDefaultConfig('basic', 'chat');
+    config.theme.typography.fontUrl = 'https://fonts.example.com/primary.woff2';
+    config.theme.typography.customFontCss = 'https://fonts.example.com/fallback.css';
+    const out = sanitize(config);
+    expect(out.style.customFontUrl).toBe('https://fonts.example.com/primary.woff2');
+  });
+
   it('emits the legacy features shape', () => {
     const config = createDefaultConfig('basic', 'chat');
     config.features.attachments.enabled = true;
