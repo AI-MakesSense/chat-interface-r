@@ -113,6 +113,10 @@ export default function FullpageWidget({ widgetKey, config, bundlePath }: Fullpa
       }
       const el = document.getElementById(scriptId);
       if (el) el.remove();
+      // Allow a remount to re-inject. React StrictMode (dev) mounts→unmounts→
+      // remounts; without resetting this the second mount would no-op and the page
+      // would stay blank.
+      scriptInjected.current = false;
     };
   }, [widgetKey, isChatKit, bundlePath]);
 

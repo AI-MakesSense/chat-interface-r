@@ -33,7 +33,7 @@ if (typeof window !== 'undefined') {
     // Fallback for async/deferred scripts or environments where currentScript
     // is unavailable. Last-wins selector mirrors legacy behaviour.
     const scriptCandidates = Array.from(
-      document.querySelectorAll('script[src*="/chat-widget.js"], script[src*="/bundle.js"], script[src*="/w/"]')
+      document.querySelectorAll('script[src*="/widget/v/chat-widget."], script[src*="/chat-widget.js"], script[src*="/bundle.js"], script[src*="/w/"]')
     ) as HTMLScriptElement[];
     scriptTag = scriptCandidates[scriptCandidates.length - 1] || null;
   }
@@ -42,14 +42,21 @@ if (typeof window !== 'undefined') {
   // dispose the active renderer on unmount. SPA navigation does not re-evaluate
   // the injected bundle script, so without this the renderer's listeners/timers
   // would leak across client-side route changes.
+  //
+  // Multi-widget pages (chat + display on one page is a supported case) mount more
+  // than one renderer, so compose LIFO: the latest teardown disposes its own
+  // renderer, restores the previous hook, then chains into it — disposing all
+  // renderers without leaking the earlier ones.
   function exposeTeardown(renderer: { dispose: () => void | Promise<void> }): void {
     if (typeof window === 'undefined') return;
-    (window as any).__n8nWidgetTeardown = () => {
+    const prev = (window as any).__n8nWidgetTeardown;
+    (window as any).__n8nWidgetTeardown = async () => {
       try {
-        void renderer.dispose();
+        await renderer.dispose();
       } finally {
-        delete (window as any).__n8nWidgetTeardown;
+        (window as any).__n8nWidgetTeardown = prev ?? undefined;
       }
+      if (typeof prev === 'function') await prev();
     };
   }
 

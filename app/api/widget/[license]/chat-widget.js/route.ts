@@ -3,7 +3,7 @@
  *
  * Route: GET /api/widget/[license]/chat-widget.js
  *
- * Purpose: Redirect old license-key-based embed URLs to the new widgetKey loader.
+ * Purpose: Bridge old license-key-based embed URLs to the new widgetKey loader.
  * This supports un-migrated embeds that were installed before Task 8 shipped the
  * widgetKey embed format.
  *
@@ -11,10 +11,10 @@
  *   1. Look up the license by key (getLicenseByKey).
  *   2. If valid and active, find the owner's first active widget
  *      (getFirstActiveWidgetForUser).
- *   3. 302-redirect to /widget/loader.js?key={widgetKey}.
- *      NOTE: /widget/loader.js is created in Task 16. Until that route exists,
- *      the redirect 302s but the target 404s at runtime — this is acceptable for
- *      un-migrated legacy embeds. Dashboard users should re-copy their embed code.
+ *   3. Serve an inline bootstrap (Content-Type: application/javascript) that
+ *      injects /widget/loader.js with data-widget-key={widgetKey}. A 302 would be
+ *      invisible to the loader (the browser keeps the original currentScript.src),
+ *      so the legacy embed would silently never mount — hence the inline bootstrap.
  *   4. If the license is invalid/inactive or no active widget exists, return a
  *      JS comment 404 so the browser does not crash the embedding page's script.
  *
@@ -33,6 +33,18 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { getLicenseByKey, getFirstActiveWidgetForUser } from '@/lib/db/queries';
+
+/**
+ * Build an inline bootstrap that injects the stable loader with the resolved
+ * widgetKey baked in. A 302 to /widget/loader.js?key=KEY would be invisible to the
+ * loader — the browser keeps the original currentScript.src across redirects — so
+ * we serve JS that creates the loader <script> with data-widget-key set.
+ */
+function buildLoaderBootstrap(origin: string, widgetKey: string): string {
+  const loaderSrc = JSON.stringify(`${origin}/widget/loader.js`);
+  const keyLiteral = JSON.stringify(widgetKey);
+  return `(function(){var s=document.createElement('script');s.src=${loaderSrc};s.async=true;s.setAttribute('data-widget-key',${keyLiteral});document.head.appendChild(s);})();`;
+}
 
 const JS_UNAVAILABLE = new NextResponse(
   '// widget unavailable',
@@ -65,12 +77,17 @@ export async function GET(
       return JS_UNAVAILABLE;
     }
 
-    // Step 3: Redirect to the new loader URL.
-    // /widget/loader.js is created in Task 16; until then, this 404s at runtime.
+    // Step 3: Serve an inline bootstrap that injects the loader with the resolved
+    // widgetKey. We CANNOT 302 to /widget/loader.js?key=KEY: the browser keeps the
+    // original <script src> (/api/widget/LICENSE/chat-widget.js) as currentScript.src
+    // across the redirect, so the loader never sees the ?key= and bails.
     const origin = new URL(request.url).origin;
-    const loaderUrl = `${origin}/widget/loader.js?key=${widget.widgetKey}`;
+    const bootstrap = buildLoaderBootstrap(origin, widget.widgetKey);
 
-    return NextResponse.redirect(loaderUrl, { status: 302 });
+    return new NextResponse(bootstrap, {
+      status: 200,
+      headers: { 'Content-Type': 'application/javascript' },
+    });
 
   } catch (error) {
     console.error('[Widget Compat Adapter] Error:', error);

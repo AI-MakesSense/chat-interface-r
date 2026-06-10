@@ -8,8 +8,15 @@
     console.error('[n8n-widget] loader: could not find script element');
     return;
   }
-  // Compat adapter (Task 9) redirects legacy embeds here with ?key=...
-  const key = script.dataset.widgetKey || new URL(script.src || '', location.href).searchParams.get('key');
+  // Compat adapter (Task 9) bridges legacy embeds here with ?key=...
+  let key = script.dataset.widgetKey || new URL(script.src || '', location.href).searchParams.get('key');
+  // Defense-in-depth: if a legacy /w/KEY.js embed somehow reaches the loader with
+  // its original src preserved (e.g. a redirect the browser didn't rewrite),
+  // recover the 16-char key from the path so the widget still mounts.
+  if (!key) {
+    const m = new URL(script.src || '', location.href).pathname.match(/\/w\/([A-Za-z0-9]{16})/);
+    if (m) key = m[1];
+  }
   if (!key) {
     console.error('[n8n-widget] loader: missing data-widget-key attribute');
     return;

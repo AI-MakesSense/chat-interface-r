@@ -27,6 +27,21 @@ import { checkRateLimit } from '@/lib/security/rate-limit';
 import { CHATKIT_SERVER_ENABLED } from '@/lib/feature-flags';
 
 /**
+ * Build an inline bootstrap script that injects the stable loader with the
+ * resolved widgetKey baked in. Used by the legacy compat path: a redirect would
+ * be invisible to the loader (browsers keep the original currentScript.src), so
+ * we serve JS that creates the loader <script> with data-widget-key set.
+ *
+ * The widgetKey is validated as 16-char alphanumeric upstream; JSON.stringify
+ * still guards against any injection into the JS string literal.
+ */
+function buildLoaderBootstrap(origin: string, widgetKey: string): string {
+  const loaderSrc = JSON.stringify(`${origin}/widget/loader.js`);
+  const keyLiteral = JSON.stringify(widgetKey);
+  return `(function(){var s=document.createElement('script');s.src=${loaderSrc};s.async=true;s.setAttribute('data-widget-key',${keyLiteral});document.head.appendChild(s);})();`;
+}
+
+/**
  * Extract IP address from request
  */
 function getClientIP(request: NextRequest): string {
@@ -323,12 +338,24 @@ export async function GET(
     // For n8n widgets, the injection/serve pipeline is gone (Task 18). The widget
     // is now served by the stable loader (which fetches /api/w/<key>/config and
     // injects the content-hashed bundle). This route remains as a compat shim for
-    // any cached/legacy `/w/<key>.js` embeds: 302 to the loader with the key.
-    // All authorization above (status, subscription, domain, rate limits) still
-    // runs before the redirect, and the loader's config call re-checks domain authz.
+    // any cached/legacy `/w/<key>.js` embeds.
+    //
+    // We CANNOT 302-redirect to /widget/loader.js?key=KEY: the browser keeps the
+    // original <script src> (/w/KEY.js) as document.currentScript.src across the
+    // redirect, so the loader never sees the ?key= and bails. Instead we serve an
+    // inline bootstrap that injects the loader with the resolved widgetKey baked
+    // into a data-widget-key attribute. All authorization above (status,
+    // subscription, domain, rate limits) still runs first, and the loader's config
+    // call re-checks domain authz.
     const requestOrigin = new URL(request.url).origin;
-    const loaderUrl = `${requestOrigin}/widget/loader.js?key=${encodeURIComponent(cleanWidgetKey)}`;
-    return NextResponse.redirect(loaderUrl, { status: 302 });
+    const bootstrap = buildLoaderBootstrap(requestOrigin, cleanWidgetKey);
+    return new NextResponse(bootstrap, {
+      status: 200,
+      headers: {
+        ...createResponseHeaders(),
+        'Content-Type': 'application/javascript',
+      },
+    });
 
   } catch (error) {
     console.error('[Widget Serving v2] Internal error:', error);
