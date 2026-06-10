@@ -170,7 +170,7 @@ export async function POST(request: NextRequest) {
     // normalizeTier maps 'free'/'garbage' → 'basic' for the config-schema layer
     // (LicenseTier); TIER_LIMITS drives the entitlement decision here.
     const normalizedTier = normalizeTier(tier);
-    const brandingRequired = !TIER_LIMITS[tier].brandingRemovable;
+    const brandingRequired = !TIER_LIMITS[normalizeUserTier(tier)].brandingRemovable;
     const configSchema = getSchemaForKind(kind, normalizedTier, brandingRequired);
     const parsed = configSchema.safeParse(finalConfig);
     if (!parsed.success) {
