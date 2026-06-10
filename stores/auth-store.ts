@@ -27,6 +27,9 @@ export interface User {
   name: string | null;
   emailVerified: boolean;
   createdAt: string;
+  /** Subscription tier ('free' | 'basic' | 'pro' | 'agency'). Gates pro-only configurator controls. */
+  tier?: string;
+  isAdmin?: boolean;
 }
 
 /**
@@ -36,6 +39,7 @@ export interface SignupData {
   email: string;
   password: string;
   name?: string;
+  inviteCode?: string;
 }
 
 /**

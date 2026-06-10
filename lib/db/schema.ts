@@ -6,8 +6,12 @@
  * Tables:
  * - users: User accounts with authentication
  * - licenses: Widget licenses with domain restrictions
- * - widget_configs: Widget configuration storage (JSONB)
  * - analytics_events: Usage tracking (optional for MVP)
+ *
+ * Schema v2.0 Notes:
+ * - widget_configs table has been DROPPED (superseded by widgets.config JSONB column)
+ * - widgets.licenseId column has been DROPPED (widgets now belong directly to users via userId)
+ * - widgets.userId and widgets.widgetKey are NOT NULL (backfill via pnpm db:backfill-v2 before migration)
  */
 
 import { pgTable, uuid, varchar, text, boolean, timestamp, integer, jsonb, index } from 'drizzle-orm/pg-core';
@@ -64,34 +68,15 @@ export const licenses = pgTable('licenses', {
 });
 
 /**
- * Widget Configurations Table
- * Stores the full widget configuration as JSONB for flexibility
- *
- * Config structure includes:
- * - branding: logo, company name, welcome text, etc.
- * - style: theme, colors, position, typography
- * - connection: N8n webhook URL
- * - features: file attachments, allowed extensions, etc.
- */
-export const widgetConfigs = pgTable('widget_configs', {
-  id: uuid('id').primaryKey().defaultRandom(),
-  licenseId: uuid('license_id').references(() => licenses.id, { onDelete: 'cascade' }).notNull(),
-  config: jsonb('config').notNull(), // Full configuration object
-  version: integer('version').default(1).notNull(), // Version tracking for config changes
-  createdAt: timestamp('created_at').defaultNow().notNull(),
-  updatedAt: timestamp('updated_at').defaultNow().notNull(),
-});
-
-/**
  * Widgets Table (Schema v2.0)
  * Stores widget instances with their configurations
  *
  * Schema v2.0 Changes:
- * - Direct user relationship (userId) - widgets belong directly to users
- * - widgetKey: 16-char alphanumeric key for embed URLs
+ * - Direct user relationship (userId NOT NULL) - widgets belong directly to users
+ * - widgetKey: 16-char alphanumeric key for embed URLs (NOT NULL)
  * - embedType: How widget is deployed (popup/inline/fullpage/portal)
  * - allowedDomains: Per-widget domain whitelist (optional)
- * - licenseId: Now optional (kept for backward compatibility)
+ * - licenseId column DROPPED (use userId directly)
  *
  * JSONB Config Structure:
  * - branding: Company name, logo, welcome text
@@ -104,16 +89,17 @@ export const widgets = pgTable('widgets', {
   // Primary Key
   id: uuid('id').primaryKey().defaultRandom(),
 
-  // Direct user relationship (Schema v2.0)
-  userId: uuid('user_id').references(() => users.id, { onDelete: 'cascade' }),
+  // Direct user relationship (Schema v2.0) - NOT NULL enforced after backfill
+  userId: uuid('user_id').references(() => users.id, { onDelete: 'cascade' }).notNull(),
 
-  // Widget identification (Schema v2.0)
-  widgetKey: varchar('widget_key', { length: 16 }).unique(), // 16-char alphanumeric for embed URLs
+  // Widget identification (Schema v2.0) - NOT NULL enforced after backfill
+  widgetKey: varchar('widget_key', { length: 16 }).unique().notNull(), // 16-char alphanumeric for embed URLs
 
   // Core Fields
   name: varchar('name', { length: 100 }).notNull(), // User-friendly name ("Homepage Chat", "Support Widget")
   status: varchar('status', { length: 20 }).default('active').notNull(), // 'active' | 'paused' | 'deleted'
   widgetType: varchar('widget_type', { length: 20 }).default('n8n').notNull(), // 'n8n' | 'chatkit'
+  kind: varchar('kind', { length: 20 }).notNull().default('chat'), // 'chat' | 'display'
 
   // Embed type (Schema v2.0) - determines embed code format
   embedType: varchar('embed_type', { length: 20 }).default('popup'), // 'popup' | 'inline' | 'fullpage' | 'portal'
@@ -131,14 +117,10 @@ export const widgets = pgTable('widgets', {
   // Timestamps
   createdAt: timestamp('created_at').defaultNow().notNull(),
   updatedAt: timestamp('updated_at').defaultNow().notNull(),
-
-  // Legacy: Keep for backward compatibility during migration
-  licenseId: uuid('license_id').references(() => licenses.id, { onDelete: 'cascade' }),
 }, (table) => ({
   // Indexes for performance
   widgetKeyIdx: index('widgets_widget_key_idx').on(table.widgetKey),
   userIdIdx: index('widgets_user_id_idx').on(table.userId),
-  licenseIdIdx: index('widgets_license_id_idx').on(table.licenseId),
   statusIdx: index('widgets_status_idx').on(table.status),
   embedTypeIdx: index('widgets_embed_type_idx').on(table.embedType),
   // GIN index for JSONB queries
@@ -148,10 +130,14 @@ export const widgets = pgTable('widgets', {
 /**
  * Analytics Events Table (Optional for MVP)
  * Tracks widget usage and events for analytics
+ *
+ * Schema v2.0: licenseId replaced by userId + widgetId direct references.
+ * Data loss on analyticsEvents.licenseId is acceptable (analytics only).
  */
 export const analyticsEvents = pgTable('analytics_events', {
   id: uuid('id').primaryKey().defaultRandom(),
-  licenseId: uuid('license_id').references(() => licenses.id, { onDelete: 'cascade' }),
+  userId: uuid('user_id').references(() => users.id, { onDelete: 'cascade' }),
+  widgetId: uuid('widget_id').references(() => widgets.id, { onDelete: 'cascade' }),
   eventType: varchar('event_type', { length: 50 }).notNull(), // 'widget_load', 'message_sent', etc.
   domain: varchar('domain', { length: 255 }),
   metadata: jsonb('metadata'), // Flexible event data
@@ -170,27 +156,54 @@ export const passwordResetTokens = pgTable('password_reset_tokens', {
   createdAt: timestamp('created_at').defaultNow().notNull(),
 });
 
+/**
+ * Invitations Table
+ * Stores platform invitations (email-based or shareable codes)
+ */
+export const invitations = pgTable('invitations', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  email: varchar('email', { length: 255 }), // nullable: null for code-type invites
+  code: varchar('code', { length: 32 }).notNull().unique(), // 32-char hex, unique
+  type: varchar('type', { length: 10 }).notNull(), // 'email' | 'code'
+  status: varchar('status', { length: 20 }).default('pending').notNull(), // 'pending' | 'accepted' | 'expired'
+  invitedBy: uuid('invited_by').references(() => users.id, { onDelete: 'set null' }),
+  acceptedBy: uuid('accepted_by').references(() => users.id, { onDelete: 'set null' }),
+  expiresAt: timestamp('expires_at').notNull(),
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+}, (table) => ({
+  codeIdx: index('invitations_code_idx').on(table.code),
+  statusIdx: index('invitations_status_idx').on(table.status),
+}));
+
+/**
+ * Activity Log Table
+ * Platform-level activity tracking (signups, logins, widget operations, etc.)
+ */
+export const activityLog = pgTable('activity_log', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  userId: uuid('user_id').references(() => users.id, { onDelete: 'set null' }),
+  action: varchar('action', { length: 50 }).notNull(), // 'user_signup', 'user_login', 'widget_created', etc.
+  metadata: jsonb('metadata'), // { targetId, targetName, oldTier, newTier, etc. }
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+}, (table) => ({
+  userIdIdx: index('activity_log_user_id_idx').on(table.userId),
+  actionIdx: index('activity_log_action_idx').on(table.action),
+  createdAtIdx: index('activity_log_created_at_idx').on(table.createdAt),
+}));
+
 // Relations (for Drizzle query convenience)
 export const usersRelations = relations(users, ({ many }) => ({
   licenses: many(licenses),
   widgets: many(widgets), // Schema v2.0: Direct user → widgets relationship
   passwordResetTokens: many(passwordResetTokens),
+  activityLogs: many(activityLog),
+  sentInvitations: many(invitations),
 }));
 
-export const licensesRelations = relations(licenses, ({ one, many }) => ({
+export const licensesRelations = relations(licenses, ({ one }) => ({
   user: one(users, {
     fields: [licenses.userId],
     references: [users.id],
-  }),
-  widgetConfig: one(widgetConfigs),
-  widgets: many(widgets), // NEW: One license → many widgets
-  analyticsEvents: many(analyticsEvents),
-}));
-
-export const widgetConfigsRelations = relations(widgetConfigs, ({ one }) => ({
-  license: one(licenses, {
-    fields: [widgetConfigs.licenseId],
-    references: [licenses.id],
   }),
 }));
 
@@ -200,23 +213,36 @@ export const widgetsRelations = relations(widgets, ({ one }) => ({
     fields: [widgets.userId],
     references: [users.id],
   }),
-  // Legacy: License relationship (for backward compatibility)
-  license: one(licenses, {
-    fields: [widgets.licenseId],
-    references: [licenses.id],
-  }),
 }));
 
 export const analyticsEventsRelations = relations(analyticsEvents, ({ one }) => ({
-  license: one(licenses, {
-    fields: [analyticsEvents.licenseId],
-    references: [licenses.id],
+  user: one(users, {
+    fields: [analyticsEvents.userId],
+    references: [users.id],
+  }),
+  widget: one(widgets, {
+    fields: [analyticsEvents.widgetId],
+    references: [widgets.id],
   }),
 }));
 
 export const passwordResetTokensRelations = relations(passwordResetTokens, ({ one }) => ({
   user: one(users, {
     fields: [passwordResetTokens.userId],
+    references: [users.id],
+  }),
+}));
+
+export const invitationsRelations = relations(invitations, ({ one }) => ({
+  inviter: one(users, {
+    fields: [invitations.invitedBy],
+    references: [users.id],
+  }),
+}));
+
+export const activityLogRelations = relations(activityLog, ({ one }) => ({
+  user: one(users, {
+    fields: [activityLog.userId],
     references: [users.id],
   }),
 }));
@@ -228,9 +254,6 @@ export type NewUser = typeof users.$inferInsert;
 export type License = typeof licenses.$inferSelect;
 export type NewLicense = typeof licenses.$inferInsert;
 
-export type WidgetConfig = typeof widgetConfigs.$inferSelect;
-export type NewWidgetConfig = typeof widgetConfigs.$inferInsert;
-
 export type Widget = typeof widgets.$inferSelect;
 export type NewWidget = typeof widgets.$inferInsert;
 
@@ -239,3 +262,9 @@ export type NewAnalyticsEvent = typeof analyticsEvents.$inferInsert;
 
 export type PasswordResetToken = typeof passwordResetTokens.$inferSelect;
 export type NewPasswordResetToken = typeof passwordResetTokens.$inferInsert;
+
+export type Invitation = typeof invitations.$inferSelect;
+export type NewInvitation = typeof invitations.$inferInsert;
+
+export type ActivityLogEntry = typeof activityLog.$inferSelect;
+export type NewActivityLogEntry = typeof activityLog.$inferInsert;

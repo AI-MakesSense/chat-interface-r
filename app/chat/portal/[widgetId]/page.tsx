@@ -12,9 +12,9 @@
  * Example: /chat/portal/550e8400-e29b-41d4-a716-446655440000
  */
 
-import { notFound } from 'next/navigation';
-import { getWidgetWithLicense } from '@/lib/db/queries';
-import PortalWidget from './portal-widget';
+import { notFound, redirect } from 'next/navigation';
+import { getWidgetById, getUserById } from '@/lib/db/queries';
+import { isSubscriptionActive } from '@/lib/widget/resolve-widget';
 
 interface PageProps {
   params: Promise<{
@@ -25,37 +25,49 @@ interface PageProps {
 export default async function PortalPage({ params }: PageProps) {
   const { widgetId } = await params;
 
+  // Canonical v2 route uses /chat/[widgetKey].
+  if (/^[A-Za-z0-9]{16}$/.test(widgetId)) {
+    redirect(`/chat/${widgetId}`);
+  }
+
   // Fetch widget configuration from database
-  const widget = await getWidgetWithLicense(widgetId);
+  const widget = await getWidgetById(widgetId);
 
   // Return 404 if widget not found or not active
   if (!widget || widget.status !== 'active') {
     notFound();
   }
 
-  // Return 404 if license is not active
-  if (widget.license.status !== 'active') {
+  // Resolve user for subscription/status gate (replaces the old wrong-license-status gate)
+  const user = await getUserById(widget.userId);
+  if (!user || !isSubscriptionActive(user)) {
     notFound();
   }
 
-  // Extract config from JSONB
-  const config = widget.config as any;
+  // widgetKey is NOT NULL post-Task-8. An un-backfilled widget (no widgetKey)
+  // is unsupported here — it cannot authorize against the relay (which resolves
+  // strictly by widgetKey), so a UUID fallback would only produce a 403 at runtime.
+  if (!widget.widgetKey) {
+    notFound();
+  }
 
-  return (
-    <div className="portal-container">
-      <PortalWidget
-        widgetId={widgetId}
-        config={config}
-        license={widget.license.licenseKey}
-      />
-    </div>
-  );
+  // Every valid portal request resolves to the canonical widgetKey route; this
+  // page itself never renders (it always redirects or 404s).
+  redirect(`/chat/${widget.widgetKey}`);
 }
 
 // Generate metadata for the page
 export async function generateMetadata({ params }: PageProps) {
   const { widgetId } = await params;
-  const widget = await getWidgetWithLicense(widgetId);
+
+  if (/^[A-Za-z0-9]{16}$/.test(widgetId)) {
+    return {
+      title: 'Chat Portal',
+      description: 'Open chat portal',
+    };
+  }
+
+  const widget = await getWidgetById(widgetId);
 
   if (!widget) {
     return {

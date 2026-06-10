@@ -15,8 +15,9 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { requireAuth } from '@/lib/auth/guard';
-import { getWidgetWithLicense, deployWidget } from '@/lib/db/queries';
-import { createWidgetConfigSchema } from '@/lib/validation/widget-schema';
+import { getWidgetById, getUserById, deployWidget } from '@/lib/db/queries';
+import { getWidgetConfigSchemaForKind, normalizeTier } from '@/lib/validation/widget-schema';
+import { assertPublicWebhookUrl, isPlaceholderWebhook } from '@/lib/security/url-guard';
 import { z } from 'zod';
 
 // =============================================================================
@@ -38,15 +39,23 @@ export async function POST(
     const idSchema = z.string().uuid();
     const widgetId = idSchema.parse(id);
 
-    // 3. Get widget with license information
-    const widget = await getWidgetWithLicense(widgetId);
-
+    // 3. Resolve widget + owner. Tier is always sourced from users.tier
+    //    (the canonical tier per the account model), never from a license.
+    const widget = await getWidgetById(widgetId);
     if (!widget) {
       return NextResponse.json({ error: 'Widget not found' }, { status: 404 });
     }
+    const widgetUser = await getUserById(widget.userId);
+    if (!widgetUser) {
+      // The widget's owner account has been deleted — return 404 rather
+      // than falling through to a misleading 'free' tier validation failure.
+      return NextResponse.json({ error: 'Widget owner not found' }, { status: 404 });
+    }
+    const ownerUserId = widget.userId;
+    const tier = widgetUser.tier ?? 'free';
 
-    // 4. Verify ownership through license
-    if (widget.license.userId !== user.sub) {
+    // 4. Verify ownership
+    if (ownerUserId !== user.sub) {
       return NextResponse.json({ error: 'You do not own this widget' }, { status: 403 });
     }
 
@@ -59,7 +68,9 @@ export async function POST(
     }
 
     // 6. Validate config is deployment-ready (strict validation - no defaults)
-    const configSchema = createWidgetConfigSchema(widget.license.tier as any, false);
+    // Use the existing widget's kind to select the right schema.
+    const widgetKind: 'chat' | 'display' = (widget.kind === 'display') ? 'display' : 'chat';
+    const configSchema = getWidgetConfigSchemaForKind(widgetKind, normalizeTier(tier), false);
 
     try {
       configSchema.parse(widget.config);
@@ -93,18 +104,42 @@ export async function POST(
       );
     }
 
-    // Check if webhookUrl is HTTPS or localhost
-    const isLocalhostUrl = webhookUrl.includes('localhost') || webhookUrl.includes('127.0.0.1');
-    const isHttpsUrl = webhookUrl.startsWith('https://');
-
-    if (!isHttpsUrl && !isLocalhostUrl) {
+    // The display sentinel ('https://example.com/webhook') is allowed at SAVE
+    // time (user is mid-setup) but a widget must NOT deploy pointing at the
+    // placeholder. Reject it with a clear message before the SSRF guard (which
+    // would otherwise let example.com through as a public host).
+    if (isPlaceholderWebhook(webhookUrl)) {
       return NextResponse.json(
         {
           error: 'Widget configuration is not ready for deployment',
           details: [
             {
               path: ['connection', 'webhookUrl'],
-              message: 'Webhook URL must use HTTPS (or localhost for development)',
+              message: 'Configure your webhook URL before deploying (the placeholder URL is not a real endpoint)',
+            },
+          ],
+        },
+        { status: 400 }
+      );
+    }
+
+    // SSRF + scheme validation. Replaces the old protocol-only check:
+    // assertPublicWebhookUrl enforces https (localhost exempt outside production)
+    // AND rejects private-IP literals / hostnames that DNS-resolve to private
+    // addresses. Applied provider-agnostically: any widget carrying a non-empty
+    // connection.webhookUrl must point at a public endpoint to deploy, regardless
+    // of provider (display/chatkit must not deploy a private-IP webhook either —
+    // defense-in-depth, consistent with the save-time guard).
+    try {
+      await assertPublicWebhookUrl(webhookUrl);
+    } catch (err) {
+      return NextResponse.json(
+        {
+          error: 'Widget configuration is not ready for deployment',
+          details: [
+            {
+              path: ['connection', 'webhookUrl'],
+              message: (err as Error).message,
             },
           ],
         },

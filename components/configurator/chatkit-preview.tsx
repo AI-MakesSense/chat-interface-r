@@ -210,7 +210,7 @@ export const ChatKitPreview: React.FC<ChatKitPreviewProps> = ({ config }) => {
     const fontSources: { family: string; src: string; weight?: number; display?: 'swap' }[] = [];
 
     // Add Google Font source if needed
-    const fontFamily = config.fontFamily || 'system-ui';
+    const fontFamily = config.theme.typography.fontFamily || 'system-ui';
     if (GOOGLE_FONT_SOURCES[fontFamily]) {
         fontSources.push({
             family: fontFamily,
@@ -221,12 +221,12 @@ export const ChatKitPreview: React.FC<ChatKitPreviewProps> = ({ config }) => {
     }
 
     // Add custom font source if configured
-    if (config.useCustomFont && config.customFontCss && config.customFontName) {
+    if (config.theme.typography.useCustomFont && config.theme.typography.customFontCss && config.theme.typography.customFontName) {
         // Extract URL from @import statement
-        const urlMatch = config.customFontCss.match(/url\(['"]?([^'"]+)['"]?\)/);
+        const urlMatch = config.theme.typography.customFontCss.match(/url\(['"]?([^'"]+)['"]?\)/);
         if (urlMatch) {
             fontSources.push({
-                family: config.customFontName,
+                family: config.theme.typography.customFontName,
                 src: urlMatch[1],
                 weight: 400,
                 display: 'swap',
@@ -257,37 +257,38 @@ export const ChatKitPreview: React.FC<ChatKitPreviewProps> = ({ config }) => {
             },
         },
         theme: {
-            colorScheme: config.themeMode || 'light',
+            // canonical mode includes 'auto'; ChatKit only knows light/dark
+            colorScheme: config.theme.mode === 'dark' ? 'dark' : 'light',
             typography: {
-                baseSize: (config.density === 'compact' ? 14 : config.density === 'spacious' ? 18 : 16) as 14 | 15 | 16 | 17 | 18,
-                fontFamily: getFontFamily(config.fontFamily || 'System'),
+                baseSize: (config.theme.density === 'compact' ? 14 : config.theme.density === 'spacious' ? 18 : 16) as 14 | 15 | 16 | 17 | 18,
+                fontFamily: getFontFamily(config.theme.typography.fontFamily || 'System'),
                 fontFamilyMono: 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace',
                 ...(fontSources.length > 0 ? { fontSources } : {}),
             },
             color: {
                 grayscale: {
-                    hue: config.chatkitGrayscaleHue ?? 0,
-                    tint: Math.min(Math.max(config.chatkitGrayscaleTint ?? 6, 0), 9) as 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9,
-                    shade: Math.min(Math.max(config.chatkitGrayscaleShade ?? (config.themeMode === 'dark' ? -1 : -4), -4), 4) as -4 | -3 | -2 | -1 | 0 | 1 | 2 | 3 | 4,
+                    hue: config.chatkit.grayscaleHue ?? 0,
+                    tint: Math.min(Math.max(config.chatkit.grayscaleTint ?? 6, 0), 9) as 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9,
+                    shade: Math.min(Math.max(config.chatkit.grayscaleShade ?? (config.theme.mode === 'dark' ? -1 : -4), -4), 4) as -4 | -3 | -2 | -1 | 0 | 1 | 2 | 3 | 4,
                 },
                 accent: {
-                    primary: config.chatkitAccentPrimary ?? (config.themeMode === 'dark' ? '#f1f5f9' : '#0f172a'),
-                    level: Math.min(Math.max(config.chatkitAccentLevel ?? 1, 0), 3) as 0 | 1 | 2 | 3,
+                    primary: config.chatkit.accentPrimary ?? (config.theme.mode === 'dark' ? '#f1f5f9' : '#0f172a'),
+                    level: Math.min(Math.max(config.chatkit.accentLevel ?? 1, 0), 3) as 0 | 1 | 2 | 3,
                 },
                 // Surface colors if custom colors are enabled
-                ...(config.useCustomSurfaceColors && config.surfaceBackgroundColor && config.surfaceForegroundColor ? {
+                ...(config.colorSystem.useCustomSurfaceColors && config.colorSystem.surfaceBackgroundColor && config.colorSystem.surfaceForegroundColor ? {
                     surface: {
-                        background: config.surfaceBackgroundColor,
-                        foreground: config.surfaceForegroundColor,
+                        background: config.colorSystem.surfaceBackgroundColor,
+                        foreground: config.colorSystem.surfaceForegroundColor,
                     }
                 } : {}),
             },
-            radius: config.radius === 'pill' ? 'pill' : config.radius === 'none' ? 'sharp' : config.radius === 'medium' ? 'soft' : 'round',
-            density: config.density || 'normal',
+            radius: config.theme.radius === 'pill' ? 'pill' : config.theme.radius === 'none' ? 'sharp' : config.theme.radius === 'medium' ? 'soft' : 'round',
+            density: config.theme.density || 'normal',
         },
         startScreen: {
-            greeting: config.greeting,
-            prompts: config.starterPrompts?.map(p => {
+            greeting: config.startScreen.greeting,
+            prompts: config.startScreen.starterPrompts?.map(p => {
                 const mappedIcon = p.icon ? mapToChatKitIcon(p.icon) : undefined;
                 return {
                     label: p.label,
@@ -296,13 +297,13 @@ export const ChatKitPreview: React.FC<ChatKitPreviewProps> = ({ config }) => {
                 };
             }) || [],
         },
-        composer: config.placeholder ? {
-            placeholder: config.placeholder,
+        composer: config.composer.placeholder ? {
+            placeholder: config.composer.placeholder,
         } : undefined,
         // Disclaimer if configured
-        ...(config.disclaimer ? {
+        ...(config.composer.disclaimer ? {
             disclaimer: {
-                text: config.disclaimer,
+                text: config.composer.disclaimer,
                 highContrast: false,
             },
         } : {}),
@@ -311,7 +312,7 @@ export const ChatKitPreview: React.FC<ChatKitPreviewProps> = ({ config }) => {
     return (
         <div className="h-full w-full overflow-hidden border rounded-xl shadow-sm bg-white">
             {/* Custom CSS injection for advanced styling */}
-            {config.customCss && <style dangerouslySetInnerHTML={{ __html: config.customCss }} />}
+            {config.advanced.customCss && <style dangerouslySetInnerHTML={{ __html: config.advanced.customCss }} />}
             <ChatKit control={control} />
         </div>
     );

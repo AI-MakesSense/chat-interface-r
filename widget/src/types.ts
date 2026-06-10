@@ -3,6 +3,27 @@
  *
  * Purpose: Defines TypeScript types for widget configuration and internal state
  * Responsibility: Type safety and IntelliSense support
+ *
+ * CANONICAL SCHEMA RELATIONSHIP
+ * ─────────────────────────────
+ * The server-side canonical config lives in lib/widget-config/schema.ts (schemaVersion 2).
+ * The types in THIS file describe the TRANSLATED runtime payload shape produced by
+ * translateConfig() in app/api/w/[widgetKey]/config/route.ts — NOT the canonical shape.
+ * Every interface here intentionally diverges from its canonical counterpart:
+ *
+ *   BrandingConfig  — runtime subset (4 fields vs 9 in canonical brandingSchema)
+ *   StyleConfig     — legacy flat shape; canonical uses nested theme.position/typography
+ *   FeaturesConfig  — flat maxFileSizeKB vs canonical attachments.maxFileSizeMB
+ *   ConnectionConfig — runtime relayEndpoint vs canonical webhookUrl/workflowId/apiKey
+ *   ThemeConfig     — ChatKit-compatible runtime shape vs canonical theme.mode/colors/...
+ *   StartScreenConfig — runtime prompts[] vs canonical starterPrompts[]
+ *   ComposerConfig  — runtime superset (attachments, models) vs canonical (placeholder, disclaimer)
+ *
+ * Therefore NO type re-exports from lib/widget-config/schema are present here.
+ * CONSTRAINT: never import runtime VALUES from lib/widget-config into widget/src —
+ * that would pull Zod into the widget bundle. Type-only imports (`import type { ... }`)
+ * are safe at the TypeScript level but are NOT used here because the shapes differ.
+ * Defaults parity is guarded by tests/widget/config-defaults-parity.test.ts.
  */
 
 export interface WidgetConfig {
@@ -23,6 +44,12 @@ export interface WidgetConfig {
   composer?: ComposerConfig;
   advancedStyling?: any; // Legacy/Pro styling
   behavior?: any; // Legacy behavior settings
+
+  // =========================================================================
+  // Display widget fields
+  // =========================================================================
+  kind?: 'chat' | 'display';
+  display?: DisplayUiConfig;
 }
 
 export interface PortalConfig {
@@ -34,6 +61,23 @@ export interface PortalConfig {
 export interface WidgetRuntimeConfig {
   uiConfig: WidgetConfig;
   relay: RelayConfig;
+  /**
+   * Embed-mode configuration for the chat widget runtime.
+   *
+   * NOTE: This field controls *how* the chat widget is embedded on the page
+   * (popup / inline / portal) and is intentionally named `display` for
+   * historical reasons. It is **not** the same as `WidgetConfig.display`,
+   * which holds the display-widget sidebar UI config (position, header,
+   * emptyMessage, etc.). When reading code that references `.display` on a
+   * `WidgetRuntimeConfig`, it refers to the embed mode; when reading `.display`
+   * on a `WidgetConfig` / `uiConfig`, it refers to the sidebar UI settings.
+   */
+  display?: WidgetDisplayConfig;
+}
+
+export interface WidgetDisplayConfig {
+  mode?: 'popup' | 'inline' | 'portal';
+  containerId?: string;
 }
 
 export interface BrandingConfig {
@@ -254,4 +298,18 @@ export interface ModelOption {
   label: string;
   description?: string;
   default?: boolean;
+}
+
+// =========================================================================
+// Display Widget Configuration
+// =========================================================================
+
+export interface DisplayUiConfig {
+  position: 'left' | 'right';
+  defaultOpen: boolean;
+  header: {
+    title: string;
+    showCount: boolean;
+  };
+  emptyMessage: string;
 }

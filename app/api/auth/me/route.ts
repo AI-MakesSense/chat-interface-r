@@ -11,6 +11,7 @@ import { NextRequest } from 'next/server';
 import { requireAuth } from '@/lib/auth/guard';
 import { getUserById } from '@/lib/db/queries';
 import { handleAPIError, errorResponse } from '@/lib/utils/api-error';
+import { isAdminEmail } from '@/lib/auth/admin-guard';
 
 export async function GET(request: NextRequest) {
   try {
@@ -31,6 +32,8 @@ export async function GET(request: NextRequest) {
         name: user.name,
         emailVerified: user.emailVerified,
         createdAt: user.createdAt,
+        tier: user.tier ?? 'free',
+        isAdmin: isAdminEmail(user.email),
       },
     });
   } catch (error) {

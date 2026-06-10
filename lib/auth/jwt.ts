@@ -13,19 +13,33 @@
 
 import { SignJWT, jwtVerify } from 'jose';
 
-// JWT secret from environment (must be set)
-const JWT_SECRET = process.env.JWT_SECRET;
+/**
+ * Lazily resolve the JWT secret on first use.
+ *
+ * The throw must not run at module top level: Next.js's data-collection step
+ * evaluates every route module at build time, which transitively loads this
+ * file. A module-top-level throw kills the build before any env var injection
+ * (Preview scope, Marketplace integrations) has had a chance to apply.
+ * Deferring to a function preserves the same validation contract but shifts
+ * the failure surface from build time to request time, where the error is
+ * actionable.
+ */
+let _secret: Uint8Array | null = null;
 
-if (!JWT_SECRET) {
-  throw new Error('JWT_SECRET environment variable is not set');
+function getSecret(): Uint8Array {
+  if (_secret) return _secret;
+
+  const raw = process.env.JWT_SECRET;
+  if (!raw) {
+    throw new Error('JWT_SECRET environment variable is not set');
+  }
+  if (raw.length < 32) {
+    throw new Error('JWT_SECRET must be at least 32 characters long');
+  }
+
+  _secret = new TextEncoder().encode(raw);
+  return _secret;
 }
-
-if (JWT_SECRET.length < 32) {
-  throw new Error('JWT_SECRET must be at least 32 characters long');
-}
-
-// Convert secret to Uint8Array for jose library
-const secret = new TextEncoder().encode(JWT_SECRET);
 
 /**
  * JWT Payload Interface
@@ -50,7 +64,7 @@ export async function signJWT(payload: Omit<JWTPayload, 'iat' | 'exp'>): Promise
       .setProtectedHeader({ alg: 'HS256' })
       .setIssuedAt()
       .setExpirationTime('7d') // 7 days
-      .sign(secret);
+      .sign(getSecret());
 
     return token;
   } catch (error) {
@@ -68,7 +82,7 @@ export async function signJWT(payload: Omit<JWTPayload, 'iat' | 'exp'>): Promise
  */
 export async function verifyJWT(token: string): Promise<JWTPayload> {
   try {
-    const { payload } = await jwtVerify(token, secret);
+    const { payload } = await jwtVerify(token, getSecret());
     return payload as unknown as JWTPayload;
   } catch (error) {
     // Token is invalid or expired

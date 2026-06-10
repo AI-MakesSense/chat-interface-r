@@ -1,0 +1,349 @@
+/**
+ * @jest-environment node
+ *
+ * Coverage for app/w/[widgetKey]/route.ts (the legacy widget-serve compat route).
+ *
+ * Post-Task-18 this route no longer serves an injected bundle. For n8n widgets it
+ * serves an inline bootstrap that injects /widget/loader.js with the resolved
+ * widgetKey baked in (a 302 would be invisible to the loader). It still runs all
+ * authorization (status, subscription, domain) and rate limiting first. The
+ * ChatKit branch (behind CHATKIT_SERVER_ENABLED) serves an iframe injector.
+ *
+ * This replaces the deleted widget-serve-fail-closed.test.ts.
+ */
+import { describe, it, expect, beforeEach, jest } from '@jest/globals';
+
+jest.mock('@/lib/db/queries', () => ({
+  getWidgetByKeyWithUser: jest.fn(),
+}));
+
+jest.mock('@/lib/security/rate-limit', () => ({
+  checkRateLimit: jest.fn(),
+}));
+
+// Default: ChatKit server disabled (matches default env).
+jest.mock('@/lib/feature-flags', () => ({
+  CHATKIT_SERVER_ENABLED: false,
+}));
+
+const { NextRequest } = require('next/server');
+const { GET } = require('@/app/w/[widgetKey]/route');
+const dbQueries = require('@/lib/db/queries');
+const rateLimit = require('@/lib/security/rate-limit');
+
+const widgetKey = 'ABCD1234EFGH5678';
+
+function makeRequest(headers: Record<string, string>) {
+  return new NextRequest(`https://chat-interface-r.vercel.app/w/${widgetKey}.js`, {
+    method: 'GET',
+    headers,
+  });
+}
+
+function n8nWidget(overrides: Record<string, any> = {}) {
+  return {
+    id: 'widget-1',
+    widgetKey,
+    name: 'Support Widget',
+    status: 'active',
+    widgetType: 'n8n',
+    allowedDomains: ['example.com'],
+    config: { branding: { companyName: 'ACME' } },
+    user: { id: 'user-1', tier: 'pro', subscriptionStatus: 'active' },
+    ...overrides,
+  };
+}
+
+describe('Widget Serve Route (compat bootstrap)', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+    // Allow both IP and widget rate-limit checks by default.
+    rateLimit.checkRateLimit.mockResolvedValue({ allowed: true });
+  });
+
+  it('serves an inline loader bootstrap containing the widgetKey for an authorized n8n widget', async () => {
+    dbQueries.getWidgetByKeyWithUser.mockResolvedValue(n8nWidget());
+
+    const response = await GET(
+      makeRequest({ origin: 'https://example.com', host: 'chat-interface-r.vercel.app' }),
+      { params: Promise.resolve({ widgetKey: `${widgetKey}.js` }) }
+    );
+
+    expect(response.status).toBe(200);
+    expect(response.headers.get('Content-Type')).toContain('application/javascript');
+
+    const body = await response.text();
+    // The bootstrap injects the loader with the resolved key baked in.
+    expect(body).toContain('/widget/loader.js');
+    expect(body).toContain('data-widget-key');
+    expect(body).toContain(widgetKey);
+    // It must NOT be a redirect (which the loader cannot follow).
+    expect(response.status).not.toBe(302);
+  });
+
+  it('returns 403 when the request domain is not authorized', async () => {
+    dbQueries.getWidgetByKeyWithUser.mockResolvedValue(n8nWidget({ allowedDomains: ['example.com'] }));
+
+    const response = await GET(
+      // evil.com is not in allowedDomains, not first-party, not localhost.
+      makeRequest({ origin: 'https://evil.com', host: 'chat-interface-r.vercel.app' }),
+      { params: Promise.resolve({ widgetKey: `${widgetKey}.js` }) }
+    );
+
+    expect(response.status).toBe(403);
+    const body = await response.text();
+    expect(body).not.toContain('/widget/loader.js');
+  });
+
+  it('returns 403 when the widget does not exist', async () => {
+    dbQueries.getWidgetByKeyWithUser.mockResolvedValue(null);
+
+    const response = await GET(
+      makeRequest({ origin: 'https://example.com', host: 'chat-interface-r.vercel.app' }),
+      { params: Promise.resolve({ widgetKey: `${widgetKey}.js` }) }
+    );
+
+    expect(response.status).toBe(403);
+  });
+
+  it('returns 403 when the widget is not active', async () => {
+    dbQueries.getWidgetByKeyWithUser.mockResolvedValue(n8nWidget({ status: 'paused' }));
+
+    const response = await GET(
+      makeRequest({ origin: 'https://example.com', host: 'chat-interface-r.vercel.app' }),
+      { params: Promise.resolve({ widgetKey: `${widgetKey}.js` }) }
+    );
+
+    expect(response.status).toBe(403);
+  });
+
+  it('returns 403 when the owner subscription is canceled and past the grace period', async () => {
+    dbQueries.getWidgetByKeyWithUser.mockResolvedValue(
+      n8nWidget({
+        user: {
+          id: 'user-1',
+          tier: 'pro',
+          subscriptionStatus: 'canceled',
+          currentPeriodEnd: new Date(Date.now() - 86_400_000).toISOString(),
+        },
+      })
+    );
+
+    const response = await GET(
+      makeRequest({ origin: 'https://example.com', host: 'chat-interface-r.vercel.app' }),
+      { params: Promise.resolve({ widgetKey: `${widgetKey}.js` }) }
+    );
+
+    expect(response.status).toBe(403);
+  });
+
+  it('rejects an invalid widgetKey format without a DB lookup', async () => {
+    const response = await GET(
+      makeRequest({ origin: 'https://example.com', host: 'chat-interface-r.vercel.app' }),
+      { params: Promise.resolve({ widgetKey: 'not-a-valid-key' }) }
+    );
+
+    expect(response.status).toBe(403);
+    expect(dbQueries.getWidgetByKeyWithUser).not.toHaveBeenCalled();
+  });
+
+  it('returns 429 when the IP rate limit is exceeded', async () => {
+    rateLimit.checkRateLimit.mockResolvedValueOnce({ allowed: false, retryAfter: 1 });
+    dbQueries.getWidgetByKeyWithUser.mockResolvedValue(n8nWidget());
+
+    const response = await GET(
+      makeRequest({ origin: 'https://example.com', host: 'chat-interface-r.vercel.app' }),
+      { params: Promise.resolve({ widgetKey: `${widgetKey}.js` }) }
+    );
+
+    expect(response.status).toBe(429);
+  });
+
+  describe('localhost bypass is gated on NODE_ENV (F6)', () => {
+    const savedNodeEnv = process.env.NODE_ENV;
+    afterEach(() => {
+      // @ts-expect-error NODE_ENV is normally readonly
+      process.env.NODE_ENV = savedNodeEnv;
+    });
+
+    it('authorizes a localhost request in development', async () => {
+      // @ts-expect-error NODE_ENV is normally readonly
+      process.env.NODE_ENV = 'development';
+      dbQueries.getWidgetByKeyWithUser.mockResolvedValue(
+        n8nWidget({ allowedDomains: ['example.com'] })
+      );
+
+      const response = await GET(
+        makeRequest({ origin: 'http://localhost:3000', host: 'localhost:3000' }),
+        { params: Promise.resolve({ widgetKey: `${widgetKey}.js` }) }
+      );
+
+      expect(response.status).toBe(200);
+    });
+
+    it('rejects a localhost request in production', async () => {
+      // @ts-expect-error NODE_ENV is normally readonly
+      process.env.NODE_ENV = 'production';
+      dbQueries.getWidgetByKeyWithUser.mockResolvedValue(
+        n8nWidget({ allowedDomains: ['example.com'] })
+      );
+
+      const response = await GET(
+        makeRequest({ origin: 'http://localhost:3000', host: 'chat-interface-r.vercel.app' }),
+        { params: Promise.resolve({ widgetKey: `${widgetKey}.js` }) }
+      );
+
+      expect(response.status).toBe(403);
+    });
+  });
+
+  describe('first-party allowance comes from NEXT_PUBLIC_APP_URL, not the Host header', () => {
+    const ORIGINAL_APP_URL = process.env.NEXT_PUBLIC_APP_URL;
+
+    afterEach(() => {
+      if (ORIGINAL_APP_URL === undefined) delete process.env.NEXT_PUBLIC_APP_URL;
+      else process.env.NEXT_PUBLIC_APP_URL = ORIGINAL_APP_URL;
+    });
+
+    it('rejects Origin attacker.com even when the Host header matches it (old bypass)', async () => {
+      process.env.NEXT_PUBLIC_APP_URL = 'https://app.example.io';
+      dbQueries.getWidgetByKeyWithUser.mockResolvedValue(
+        n8nWidget({ allowedDomains: ['customer.com'] })
+      );
+
+      // attacker.com is neither the app domain nor in allowedDomains. The old
+      // code trusted the client-controlled Host header and allowed this.
+      const response = await GET(
+        makeRequest({ origin: 'https://attacker.com', host: 'attacker.com' }),
+        { params: Promise.resolve({ widgetKey: `${widgetKey}.js` }) }
+      );
+
+      expect(response.status).toBe(403);
+      const body = await response.text();
+      expect(body).not.toContain('/widget/loader.js');
+    });
+
+    it('allows a request whose origin matches NEXT_PUBLIC_APP_URL regardless of Host', async () => {
+      process.env.NEXT_PUBLIC_APP_URL = 'https://app.example.io';
+      dbQueries.getWidgetByKeyWithUser.mockResolvedValue(
+        n8nWidget({ allowedDomains: ['customer.com'] })
+      );
+
+      const response = await GET(
+        makeRequest({ origin: 'https://app.example.io', host: 'something-else.test' }),
+        { params: Promise.resolve({ widgetKey: `${widgetKey}.js` }) }
+      );
+
+      expect(response.status).toBe(200);
+    });
+  });
+
+  it('serves the ChatKit iframe injector for a chatkit widget when the flag is enabled', async () => {
+    jest.resetModules();
+    jest.doMock('@/lib/feature-flags', () => ({ CHATKIT_SERVER_ENABLED: true }));
+    jest.doMock('@/lib/security/rate-limit', () => ({
+      checkRateLimit: jest.fn().mockResolvedValue({ allowed: true }),
+    }));
+    jest.doMock('@/lib/db/queries', () => ({
+      getWidgetByKeyWithUser: jest.fn().mockResolvedValue(
+        n8nWidget({ widgetType: 'chatkit', allowedDomains: [], user: { id: 'u', tier: 'agency', subscriptionStatus: 'active' } })
+      ),
+    }));
+
+    const { GET: GetWithChatkit } = require('@/app/w/[widgetKey]/route');
+    const response = await GetWithChatkit(
+      makeRequest({ origin: 'https://example.com', host: 'chat-interface-r.vercel.app' }),
+      { params: Promise.resolve({ widgetKey: `${widgetKey}.js` }) }
+    );
+
+    expect(response.status).toBe(200);
+    const body = await response.text();
+    // ChatKit branch injects an iframe pointed at /chatkit/<key>, NOT the loader.
+    expect(body).toContain('chatkit');
+    expect(body).not.toContain('/widget/loader.js');
+
+    jest.resetModules();
+    jest.dontMock('@/lib/feature-flags');
+    jest.dontMock('@/lib/security/rate-limit');
+    jest.dontMock('@/lib/db/queries');
+  });
+
+  describe('ChatKit served-JS injection guard (finding #17)', () => {
+    const chatkitUrl = `https://chat-interface-r.vercel.app/chatkit/${widgetKey}`;
+
+    function loadChatkitGet(widgetOverrides: Record<string, any>) {
+      jest.resetModules();
+      jest.doMock('@/lib/feature-flags', () => ({ CHATKIT_SERVER_ENABLED: true }));
+      jest.doMock('@/lib/security/rate-limit', () => ({
+        checkRateLimit: jest.fn().mockResolvedValue({ allowed: true }),
+      }));
+      jest.doMock('@/lib/db/queries', () => ({
+        getWidgetByKeyWithUser: jest.fn().mockResolvedValue(
+          n8nWidget({
+            widgetType: 'chatkit',
+            allowedDomains: [],
+            user: { id: 'u', tier: 'agency', subscriptionStatus: 'active' },
+            ...widgetOverrides,
+          })
+        ),
+      }));
+      return require('@/app/w/[widgetKey]/route').GET;
+    }
+
+    async function serve(GetChatkit: any) {
+      const response = await GetChatkit(
+        makeRequest({ origin: 'https://example.com', host: 'chat-interface-r.vercel.app' }),
+        { params: Promise.resolve({ widgetKey: `${widgetKey}.js` }) }
+      );
+      expect(response.status).toBe(200);
+      return response.text();
+    }
+
+    afterEach(() => {
+      jest.resetModules();
+      jest.dontMock('@/lib/feature-flags');
+      jest.dontMock('@/lib/security/rate-limit');
+      jest.dontMock('@/lib/db/queries');
+    });
+
+    it('does not interpolate a non-hex accentColor into the served popup script', async () => {
+      const GetChatkit = loadChatkitGet({
+        embedType: 'popup',
+        // Legacy DB rows predate hex validation on the write path — a stored
+        // value like this would break out of the cssText string and execute.
+        config: { chatkitAccentPrimary: '#fff;}};alert(1);//' },
+      });
+
+      const js = await serve(GetChatkit);
+      expect(js).not.toContain('alert(1)');
+      // Fell back to the default accent color.
+      expect(js).toContain('#0f172a');
+    });
+
+    it('passes valid 3/6/8-digit hex accent colors through unchanged', async () => {
+      for (const hex of ['#abc', '#A1B2C3', '#A1B2C3FF']) {
+        const GetChatkit = loadChatkitGet({
+          embedType: 'popup',
+          config: { chatkitAccentPrimary: hex },
+        });
+        const js = await serve(GetChatkit);
+        expect(js).toContain(`background: ${hex};`);
+      }
+    });
+
+    it('serves a JSON-encoded iframe src in the popup script', async () => {
+      const GetChatkit = loadChatkitGet({ embedType: 'popup', config: {} });
+      const js = await serve(GetChatkit);
+      expect(js).toContain(`iframe.src = ${JSON.stringify(chatkitUrl)};`);
+      // No unresolved template artifacts in the served script.
+      expect(js).not.toContain('${');
+    });
+
+    it('serves a JSON-encoded iframe src in the inline script', async () => {
+      const GetChatkit = loadChatkitGet({ embedType: 'inline', config: {} });
+      const js = await serve(GetChatkit);
+      expect(js).toContain(`iframe.src = ${JSON.stringify(chatkitUrl)};`);
+      expect(js).not.toContain('${');
+    });
+  });
+});

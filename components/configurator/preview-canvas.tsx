@@ -2,13 +2,20 @@
 
 import React, { useState, useRef, useEffect } from 'react';
 import { WidgetConfig } from '@/stores/widget-store';
-import { ChatPreview } from './chat-preview';
+import { WidgetPreviewFrame } from './widget-preview-frame';
 import { ChatKitPreview } from './chatkit-preview';
 import { ChevronDown, MessageCircle, X, AppWindow, LayoutTemplate } from 'lucide-react';
 import { CHATKIT_UI_ENABLED } from '@/lib/feature-flags';
 
 interface PreviewCanvasProps {
   config: WidgetConfig;
+  /**
+   * License tier driving preview branding (pro/agency may hide the "Powered by"
+   * footer). Defaults to 'agency' so a tier-less preview shows the white-labeled
+   * widget rather than forcing branding on.
+   */
+  tier?: string;
+  onDimensionsChange?: (width: number, height: number) => void;
 }
 
 type EmbedMode = 'inline' | 'full' | 'popup';
@@ -18,13 +25,16 @@ interface Dimensions {
   height: number;
 }
 
-export const PreviewCanvas: React.FC<PreviewCanvasProps> = ({ config }) => {
-  const [size, setSize] = useState<Dimensions>({ width: 380, height: 600 });
+export const PreviewCanvas: React.FC<PreviewCanvasProps> = ({ config, tier = 'agency', onDimensionsChange }) => {
+  const [size, setSize] = useState<Dimensions>({
+    width: config.theme.size.inlineWidth || 400,
+    height: config.theme.size.inlineHeight || 600,
+  });
   const [embedMode, setEmbedMode] = useState<EmbedMode>('inline');
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
   const [isPopupOpen, setIsPopupOpen] = useState(false);
 
-  const isDark = config.themeMode === 'dark';
+  const isDark = config.theme.mode === 'dark';
 
   const resizeRef = useRef<{
     startX: number;
@@ -39,6 +49,9 @@ export const PreviewCanvas: React.FC<PreviewCanvasProps> = ({ config }) => {
     startH: 0,
     dir: null
   });
+
+  // Keep a ref of the latest size so handleMouseUp can read it synchronously
+  const sizeRef = useRef<Dimensions>(size);
 
   const dropdownRef = useRef<HTMLDivElement>(null);
 
@@ -61,7 +74,11 @@ export const PreviewCanvas: React.FC<PreviewCanvasProps> = ({ config }) => {
     if (mode === 'full') {
       setSize({ width: 1000, height: 700 });
     } else if (mode === 'inline') {
-      setSize({ width: 380, height: 600 });
+      const w = config.theme.size.inlineWidth || 400;
+      const h = config.theme.size.inlineHeight || 600;
+      const next = { width: w, height: h };
+      sizeRef.current = next;
+      setSize(next);
     }
   };
 
@@ -95,12 +112,18 @@ export const PreviewCanvas: React.FC<PreviewCanvasProps> = ({ config }) => {
       newHeight = Math.max(400, Math.min(900, startH + (e.clientY - startY)));
     }
 
-    setSize({ width: newWidth, height: newHeight });
+    const next = { width: newWidth, height: newHeight };
+    sizeRef.current = next;
+    setSize(next);
   };
 
   const handleMouseUp = () => {
     document.removeEventListener('mousemove', handleMouseMove);
     document.removeEventListener('mouseup', handleMouseUp);
+    // Persist final dimensions to widget config on drag end
+    if (onDimensionsChange && (embedMode === 'inline' || embedMode === 'full')) {
+      onDimensionsChange(sizeRef.current.width, sizeRef.current.height);
+    }
   };
 
   // Cleanup event listeners on unmount
@@ -113,12 +136,12 @@ export const PreviewCanvas: React.FC<PreviewCanvasProps> = ({ config }) => {
 
   // Determine styles for the launcher button based on config
   const getLauncherStyle = () => {
-    if (config.useAccent) {
-      return { backgroundColor: config.accentColor || '#0ea5e9', color: '#ffffff' };
+    if (config.colorSystem.useAccent) {
+      return { backgroundColor: config.colorSystem.accentColor || '#0ea5e9', color: '#ffffff' };
     }
-    if (config.useCustomSurfaceColors) {
+    if (config.colorSystem.useCustomSurfaceColors) {
       return {
-        backgroundColor: config.surfaceForegroundColor || '#f8fafc',
+        backgroundColor: config.colorSystem.surfaceForegroundColor || '#f8fafc',
         color: isDark ? '#e5e5e5' : '#111827'
       };
     }
@@ -217,7 +240,11 @@ export const PreviewCanvas: React.FC<PreviewCanvasProps> = ({ config }) => {
             {isChatKit ? (
               <ChatKitPreview config={config} />
             ) : (
-              <ChatPreview config={config} />
+              <WidgetPreviewFrame
+                kind="chat"
+                config={config}
+                tier={tier}
+              />
             )}
           </div>
 
@@ -248,6 +275,11 @@ export const PreviewCanvas: React.FC<PreviewCanvasProps> = ({ config }) => {
               className={`h-[4px] w-[40px] rounded-full opacity-0 group-hover:opacity-100 transition-opacity ${resizeHandle}`}
             />
           </div>
+
+          {/* Dimension label */}
+          <div className={`absolute -bottom-10 left-1/2 -translate-x-1/2 text-[11px] tabular-nums font-mono ${isDark ? 'text-white/40' : 'text-black/30'}`}>
+            {Math.round(size.width)} &times; {Math.round(size.height)}
+          </div>
         </div>
       )}
 
@@ -265,7 +297,11 @@ export const PreviewCanvas: React.FC<PreviewCanvasProps> = ({ config }) => {
             {isChatKit ? (
               <ChatKitPreview config={config} />
             ) : (
-              <ChatPreview config={config} />
+              <WidgetPreviewFrame
+                kind="chat"
+                config={config}
+                tier={tier}
+              />
             )}
           </div>
 

@@ -151,7 +151,11 @@ The **N8n Widget Designer Platform** is a production-ready SaaS application that
 
 ## Database Schema
 
-### Tables (6 total)
+### Tables
+
+> **Schema v2.0:** the legacy `widgetConfigs` table is GONE, and widgets now relate
+> directly to a user (not via license). `widgets.licenseId` was removed; analytics is
+> keyed on `userId`/`widgetId`.
 
 **users** - User accounts
 - id, email (unique), passwordHash, name, emailVerified, timestamps
@@ -164,20 +168,21 @@ The **N8n Widget Designer Platform** is a production-ready SaaS application that
 - stripeSubscriptionId, stripeCustomerId, expiresAt
 - timestamps
 
-**widgets** - Widget instances (one-to-many from licenses)
-- id, licenseId, name, status ('active' | 'paused' | 'deleted')
-- config (JSONB, 70+ options)
-- version (incremented on updates)
-- deployedAt, timestamps
-
-**widgetConfigs** - Legacy widget configurations (one-to-one)
-- id, licenseId, config (JSONB), version, timestamps
+**widgets** - Widget instances (owned directly by a user)
+- id, userId (NOT NULL), widgetKey (16-char alphanumeric, unique, NOT NULL — drives embed URLs)
+- name, status ('active' | 'paused' | 'deleted')
+- widgetType ('n8n' | 'chatkit'), kind ('chat' | 'display')
+- embedType ('popup' | 'inline' | 'fullpage' | 'portal')
+- config (JSONB, canonical widget-config shape), allowedDomains (text array)
+- version (incremented on updates), deployedAt, timestamps
 
 **analyticsEvents** - Usage tracking
-- id, licenseId, eventType, domain, metadata (JSONB), createdAt
+- id, userId, widgetId, eventType, domain, metadata (JSONB), createdAt
 
 **passwordResetTokens** - Password reset flow
 - id, userId, token (unique), expiresAt, createdAt
+
+**invitations** / **activityLog** - Team invitations and audit trail
 
 ### License Tiers
 - **Basic** ($29/year): 1 domain, 1 widget, branding enabled
@@ -198,9 +203,33 @@ The **N8n Widget Designer Platform** is a production-ready SaaS application that
   - Connection (N8n webhook URL)
 - Real-time preview with device toggle (desktop/mobile/tablet)
 - Domain validation and authorization
-- Rate limiting (10 req/sec per IP, 100 req/min per license)
+- Rate limiting via Upstash Redis (sliding window) when configured; in-memory fallback in dev/test (`lib/security/rate-limit.ts`)
 - Session management with persistent IDs
 - SSE streaming for real-time responses
+
+### Config Architecture (canonical single source of truth)
+- `lib/widget-config/` is the single source of truth for the widget config schema:
+  - `schema.ts` (canonical Zod schema + types), `defaults.ts`, `field-registry.ts`
+    (schema-driven field metadata that powers the configurator sidebar), `migrate.ts`
+    (normalizes legacy shapes to schemaVersion 2), `path.ts`, `index.ts`.
+- The legacy `widgetConfigs` table and the per-tier config files have been replaced
+  by this canonical module.
+
+### Serving Model (v2)
+- Customers embed a single stable URL: **`/widget/loader.js`** with `data-widget-key`.
+- The loader fetches **`GET /api/w/[widgetKey]/config`**, which returns an envelope
+  `{ bundlePath, runtime }` (`runtime` = `{ uiConfig, relay, flags }`).
+- The loader pre-injects `window.ChatWidgetConfig = runtime`, then injects the
+  **content-hashed bundle** (`/widget/v/chat-widget.<hash>.js`).
+- The bundle reads the pre-injected config (fast path); there is no runtime config
+  re-fetch and no server-side HTML injection pipeline (removed).
+- Legacy `/api/widget/[license]/chat-widget.js` is a thin compat adapter that
+  bootstraps the same loader with the resolved widgetKey.
+
+### Configurator
+- Schema-driven registry sidebar (renders fields from `lib/widget-config/field-registry.ts`).
+- Single unified dynamic route: `app/configurator/[kind]/` (chat | display) replaces
+  the previously duplicated per-kind pages.
 
 ### Markdown Rendering
 - XSS sanitization with DOMPurify
@@ -279,6 +308,9 @@ pnpm db:seed       # Seed test data
 - Code quality reviews
 - Security audits
 
+### docs/solutions/
+- Documented solutions to past problems (bugs, best practices, workflow patterns), organized by category with YAML frontmatter (`module`, `tags`, `problem_type`). Relevant when implementing or debugging in documented areas.
+
 ---
 
 ## Configuration Files
@@ -303,5 +335,5 @@ pnpm db:seed       # Seed test data
 
 ---
 
-**Last Updated:** 2025-11-24
-**Git Branch:** admiring-rhodes
+**Last Updated:** 2026-06-10
+**Git Branch:** feat/production-readiness

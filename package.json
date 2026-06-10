@@ -4,7 +4,8 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
-    "build": "npm run build:widget && next build",
+    "predev": "pnpm build:widget",
+    "build": "pnpm build:widget && next build",
     "start": "next start",
     "lint": "eslint",
     "db:generate": "drizzle-kit generate",
@@ -16,7 +17,9 @@
     "test": "jest",
     "test:watch": "jest --watch",
     "test:coverage": "jest --coverage",
-    "build:widget": "npx esbuild widget/src/index.ts --bundle --outfile=public/widget/chat-widget.iife.js --format=iife --global-name=ChatWidget --minify"
+    "build:widget": "node scripts/build-widget.mjs",
+    "db:backfill-v2": "tsx scripts/migrate-v2-backfill.ts",
+    "db:deploy-v2": "tsx scripts/migrate-v2-backfill.ts && drizzle-kit migrate"
   },
   "dependencies": {
     "@hookform/resolvers": "^5.2.2",
@@ -30,6 +33,8 @@
     "@radix-ui/react-switch": "^1.2.6",
     "@radix-ui/react-tabs": "^1.1.13",
     "@sentry/nextjs": "^10.27.0",
+    "@upstash/ratelimit": "^2.0.8",
+    "@upstash/redis": "^1.38.0",
     "bcryptjs": "^3.0.3",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",

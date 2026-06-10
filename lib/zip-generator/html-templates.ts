@@ -9,10 +9,11 @@ import type { WidgetConfig } from '@/widget/src/types';
 
 export class HTMLTemplates {
   /**
-   * Generate website HTML with embedded config
+   * Generate website HTML with the hosted loader embed (Task 18).
+   * The loader fetches config + the content-hashed bundle from the SaaS origin,
+   * so the package no longer ships a local widget bundle or inline config.
    */
-  static generateWebsiteHTML(config: WidgetConfig): string {
-    const configJson = JSON.stringify(config, null, 2);
+  static generateWebsiteHTML(config: WidgetConfig, widgetKey: string, baseUrl: string): string {
     const timestamp = new Date().toISOString();
 
     return `<!DOCTYPE html>
@@ -58,49 +59,16 @@ export class HTMLTemplates {
     <p>You can customize this page or integrate the widget into your existing website.</p>
   </div>
 
-  <!-- Chat Widget Script -->
-  <script src="./chat-widget.js"></script>
-
-  <!-- Initialize Widget -->
-  <script>
-    // Widget Configuration
-    const widgetConfig = ${configJson};
-
-    // Initialize widget when DOM is ready
-    if (document.readyState === 'loading') {
-      document.addEventListener('DOMContentLoaded', initWidget);
-    } else {
-      initWidget();
-    }
-
-    function initWidget() {
-      if (typeof Widget !== 'undefined') {
-        const widget = new Widget(widgetConfig);
-        widget.render();
-      } else {
-        console.error('Widget class not loaded');
-      }
-    }
-  </script>
+  <!-- Chat Widget (hosted loader) -->
+  <script src="${baseUrl}/widget/loader.js" data-widget-key="${widgetKey}" async></script>
 </body>
 </html>`;
   }
 
   /**
-   * Generate portal HTML with embedded config
+   * Generate portal HTML with the hosted loader embed (Task 18, portal mode).
    */
-  static generatePortalHTML(config: WidgetConfig, widgetId: string): string {
-    const portalConfig = {
-      ...config,
-      mode: 'portal',
-      portal: {
-        showHeader: true,
-        headerTitle: config.branding?.companyName || 'Chat',
-        ...config.portal,
-      },
-    };
-
-    const configJson = JSON.stringify(portalConfig, null, 2);
+  static generatePortalHTML(config: WidgetConfig, widgetId: string, widgetKey: string, baseUrl: string): string {
     const timestamp = new Date().toISOString();
 
     return `<!DOCTYPE html>
@@ -130,30 +98,14 @@ export class HTMLTemplates {
   <!-- Portal Container -->
   <div id="chat-portal"></div>
 
-  <!-- Chat Widget Script -->
-  <script src="./chat-widget.js"></script>
-
-  <!-- Initialize Portal Widget -->
-  <script>
-    // Portal Configuration
-    const portalConfig = ${configJson};
-
-    // Initialize portal when DOM is ready
-    if (document.readyState === 'loading') {
-      document.addEventListener('DOMContentLoaded', initPortal);
-    } else {
-      initPortal();
-    }
-
-    function initPortal() {
-      if (typeof Widget !== 'undefined') {
-        const widget = new Widget(portalConfig);
-        widget.render();
-      } else {
-        console.error('Widget class not loaded');
-      }
-    }
-  </script>
+  <!-- Chat Widget (hosted loader, portal mode) -->
+  <script
+    src="${baseUrl}/widget/loader.js"
+    data-widget-key="${widgetKey}"
+    data-mode="portal"
+    data-container="chat-portal"
+    async
+  ></script>
 </body>
 </html>`;
   }

@@ -60,12 +60,18 @@ function generateGrayscalePalette(hue: number, tint: number, shade: number = 0):
 }
 
 /**
- * Generate tinted surface colors matching the preview component's logic
+ * Generate tinted surface colors matching the legacy preview component's logic.
+ *
+ * Inputs are ChatKit-scale (tint 0-9, shade -4..4) — the documented
+ * GrayscaleConfig contract (types.ts). The formulas below were written for
+ * the legacy 0-20 slider scale; convert back so visual output is unchanged
+ * for equivalent slider positions (a ±1-step drift can remain from the
+ * Math.round applied at the canonical→runtime boundary in translate-config).
  */
 function generateTintedSurfaces(
   hue: number,
-  tintLevel: number,
-  shadeLevel: number,
+  tint: number,
+  shade: number,
   isDark: boolean
 ): {
   bg: string;
@@ -76,6 +82,11 @@ function generateTintedSurfaces(
   subText: string;
   hoverSurface: string;
 } {
+  // Convert ChatKit scale back to the legacy 0-20 scale the formulas expect:
+  // tint 0-9 → 0-20, shade -4..4 → 0-20 (shade 0 → 10 = legacy neutral).
+  const tintLevel = (tint / 9) * 20;
+  const shadeLevel = shade * 2.5 + 10;
+
   if (isDark) {
     const sat = 5 + tintLevel * 2;
     const lit = 10 + shadeLevel * 0.5;
@@ -262,6 +273,12 @@ export function createCSSVariables(config: WidgetConfig): Record<string, string>
     variables['--cw-composer-surface'] = isDark ? '#262626' : '#ffffff';
     variables['--cw-border-color'] = isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.08)';
     variables['--cw-hover-surface'] = isDark ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.05)';
+  }
+
+  // Text color override (applied after grayscale so a custom text color wins)
+  const textColor = theme?.color?.text;
+  if (textColor) {
+    variables['--cw-text-color'] = textColor;
   }
 
   // Icon color (only set default if not already set)

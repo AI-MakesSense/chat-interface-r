@@ -4,138 +4,48 @@
  * Zustand store for managing widget configuration state.
  * Handles creating, updating, and saving widget configurations.
  *
- * Features:
- * - Widget configuration CRUD operations
- * - Auto-save with debouncing
- * - Real-time preview updates
- * - Loading and error states
+ * The config shape is the CANONICAL ChatWidgetConfig from
+ * lib/widget-config/schema.ts — this store defines no config shape of its
+ * own. Server payloads are normalized through migrateConfig on hydration,
+ * and every update is validated against chatWidgetConfigSchema before it
+ * lands in state.
+ *
+ * Kind note: this store only ever holds chat-kind configs. The n8n and
+ * chatkit configurator pages are both chat-kind (provider is a field inside
+ * connection, not a different config kind); display-kind configs never flow
+ * through this store, so no kind gating is needed here.
  */
 
 import { create } from 'zustand';
+import {
+  type ChatWidgetConfig,
+  chatWidgetConfigSchema,
+} from '@/lib/widget-config/schema';
+import { createDefaultConfig } from '@/lib/widget-config/defaults';
+import { migrateConfig } from '@/lib/widget-config/migrate';
+import { deepMerge } from '@/lib/utils/deep-merge';
 
 /**
- * Starter prompt for conversation starters
+ * Canonical widget configuration. Re-exported so existing
+ * `import { WidgetConfig } from '@/stores/widget-store'` consumers keep
+ * compiling; new code should import ChatWidgetConfig from
+ * '@/lib/widget-config/schema' directly.
  */
-export interface StarterPrompt {
-  label: string;
-  icon: string;
-}
+export type WidgetConfig = ChatWidgetConfig;
 
-/**
- * Widget configuration structure
- * Matches the JSON schema stored in database
- * Extended to support playground-style configurator
- */
-export interface WidgetConfig {
-  // Widget metadata
-  widgetId?: string;
-  license?: {
-    key?: string;
-    active?: boolean;
-    plan?: string;
-  };
+/** Starter prompt for conversation starters (canonical startScreen element). */
+export type StarterPrompt = WidgetConfig['startScreen']['starterPrompts'][number];
 
-  // Branding
-  branding: {
-    companyName?: string;
-    logoUrl?: string;
-    welcomeText?: string;
-    firstMessage?: string;
-  };
+type DeepPartial<T> = T extends readonly unknown[]
+  ? T
+  : T extends object
+    ? { [K in keyof T]?: DeepPartial<T[K]> }
+    : T;
 
-  // Theme & Colors (legacy structure for backward compatibility)
-  style: {
-    theme: 'light' | 'dark' | 'auto';
-    primaryColor: string;
-    backgroundColor?: string;
-    textColor?: string;
-    position: 'bottom-right' | 'bottom-left' | 'top-right' | 'top-left';
-    cornerRadius?: number;
-  };
-
-  // Typography (legacy)
-  typography?: {
-    fontFamily?: string;
-    fontSize?: number;
-  };
-
-  // Connection
-  connection: {
-    provider?: 'n8n' | 'chatkit';
-    webhookUrl?: string;
-    routeParam?: string;
-    // ChatKit specific
-    workflowId?: string;
-    apiKey?: string;
-  };
-
-  // Features (legacy)
-  features?: {
-    fileAttachments?: boolean;
-    allowedExtensions?: string[];
-    maxFileSize?: number;
-  };
-
-  // Advanced (legacy)
-  advanced?: {
-    customCss?: string;
-    customJs?: string;
-  };
-
-  // =========================================================================
-  // NEW: Playground-style configuration (optional for backward compatibility)
-  // =========================================================================
-
-  // Color System
-  themeMode?: 'light' | 'dark';
-  useAccent?: boolean;
-  accentColor?: string;
-  useTintedGrayscale?: boolean;
-  tintHue?: number;
-  tintLevel?: number;
-  shadeLevel?: number;
-  useCustomSurfaceColors?: boolean;
-  surfaceBackgroundColor?: string;
-  surfaceForegroundColor?: string;
-  useCustomTextColor?: boolean;
-  customTextColor?: string;
-
-  // ChatKit-specific color system
-  chatkitGrayscaleHue?: number;        // 0-360
-  chatkitGrayscaleTint?: number;       // saturation level
-  chatkitGrayscaleShade?: number;      // brightness adjustment
-  chatkitAccentPrimary?: string;       // hex color
-  chatkitAccentLevel?: number;         // 1-3 intensity
-
-  // Component Colors
-  useCustomIconColor?: boolean;
-  customIconColor?: string;
-  useCustomUserMessageColors?: boolean;
-  customUserMessageTextColor?: string;
-  customUserMessageBackgroundColor?: string;
-
-  // Typography (new style)
-  fontFamily?: string;
-  fontSize?: number;
-  useCustomFont?: boolean;
-  customFontName?: string;
-  customFontCss?: string;
-  customCss?: string;
-
-  // Style
-  radius?: 'none' | 'small' | 'medium' | 'large' | 'pill';
-  density?: 'compact' | 'normal' | 'spacious';
-
-  // Start Screen
-  greeting?: string;
-  starterPrompts?: StarterPrompt[];
-
-  // Composer
-  placeholder?: string;
-  disclaimer?: string;
-  enableAttachments?: boolean;
-  enableModelPicker?: boolean;
-}
+/** Deep partial for config updates: arrays are replaced whole, objects merge. */
+export type WidgetConfigUpdate = {
+  [K in keyof WidgetConfig]?: DeepPartial<WidgetConfig[K]>;
+};
 
 /**
  * Embed type for widget deployment (Schema v2.0)
@@ -241,85 +151,12 @@ interface WidgetState {
   deleteWidget: (id: string) => Promise<void>;
   deployWidget: (id: string) => Promise<{ deployUrl: string }>;
   setCurrentWidget: (widget: Widget | null) => void;
-  updateConfig: (config: Partial<WidgetConfig>) => void;
+  updateConfig: (config: WidgetConfigUpdate) => void;
   saveConfig: () => Promise<void>;
   resetConfig: () => void;
+  markSaved: () => void;
   clearError: () => void;
 }
-
-/**
- * Default widget configuration
- * Includes both legacy and new playground-style properties
- */
-const defaultConfig: WidgetConfig = {
-  // Legacy properties (for backward compatibility)
-  branding: {
-    companyName: 'My Company',
-    welcomeText: 'How can we help you today?',
-    firstMessage: 'Hello! I\'m your AI assistant. Ask me anything!',
-  },
-  style: {
-    theme: 'light',
-    primaryColor: '#00bfff',
-    position: 'bottom-right',
-    cornerRadius: 12,
-  },
-  connection: {
-    provider: 'n8n',
-    webhookUrl: '',
-    workflowId: '',
-    apiKey: '',
-  },
-
-  // New playground-style properties
-  themeMode: 'light',
-  useAccent: true,
-  accentColor: '#0ea5e9',
-  useTintedGrayscale: false,
-  tintHue: 220,
-  tintLevel: 10,
-  shadeLevel: 10,
-  useCustomSurfaceColors: false,
-  surfaceBackgroundColor: '#ffffff',
-  surfaceForegroundColor: '#f8fafc',
-  useCustomTextColor: false,
-  customTextColor: '#1e293b',
-
-  // ChatKit-specific defaults
-  chatkitGrayscaleHue: 220,
-  chatkitGrayscaleTint: 6,
-  chatkitGrayscaleShade: -1,
-  chatkitAccentPrimary: '#0f172a',
-  chatkitAccentLevel: 1,
-
-  useCustomIconColor: false,
-  customIconColor: '#64748b',
-  useCustomUserMessageColors: false,
-  customUserMessageTextColor: '#ffffff',
-  customUserMessageBackgroundColor: '#0ea5e9',
-
-  // Typography
-  fontFamily: 'system-ui',
-  fontSize: 16,
-  useCustomFont: false,
-  customFontName: '',
-  customFontCss: '',
-  customCss: '',
-
-  // Style
-  radius: 'medium',
-  density: 'normal',
-
-  // Start Screen
-  greeting: 'How can I help you today?',
-  starterPrompts: [],
-
-  // Composer
-  placeholder: 'Type a message...',
-  disclaimer: '',
-  enableAttachments: false,
-  enableModelPicker: false,
-};
 
 /**
  * Widget store
@@ -331,7 +168,7 @@ export const useWidgetStore = create<WidgetState>((set, get) => ({
   widgets: [],
   currentWidget: null,
   currentLicense: null,
-  currentConfig: defaultConfig,
+  currentConfig: createDefaultConfig('basic', 'chat'),
   isLoading: false,
   isSaving: false,
   error: null,
@@ -396,7 +233,7 @@ export const useWidgetStore = create<WidgetState>((set, get) => ({
       set((state) => ({
         widgets: [...state.widgets, widget],
         currentWidget: widget,
-        currentConfig: widget.config,
+        currentConfig: migrateConfig(widget.config),
         isSaving: false,
         error: null,
         hasUnsavedChanges: false,
@@ -435,7 +272,7 @@ export const useWidgetStore = create<WidgetState>((set, get) => ({
       set({
         currentWidget: widget,
         currentLicense: null, // Schema v2.0: No longer using licenses
-        currentConfig: widget.config,
+        currentConfig: migrateConfig(widget.config),
         isLoading: false,
         error: null,
         hasUnsavedChanges: false,
@@ -476,7 +313,7 @@ export const useWidgetStore = create<WidgetState>((set, get) => ({
       set((state) => ({
         widgets: state.widgets.map((w) => (w.id === id ? widget : w)),
         currentWidget: widget,
-        currentConfig: widget.config,
+        currentConfig: migrateConfig(widget.config),
         isSaving: false,
         error: null,
         hasUnsavedChanges: false,
@@ -568,53 +405,42 @@ export const useWidgetStore = create<WidgetState>((set, get) => ({
   },
 
   /**
-   * Set current widget for editing
+   * Set current widget for editing.
+   * Server hydration point: the raw stored config (any historical shape) is
+   * normalized to the canonical schema via migrateConfig, which also returns
+   * a fresh deep object so resetConfig can revert to the saved snapshot.
    */
   setCurrentWidget: (widget: Widget | null) => {
+    const config = widget?.config
+      ? migrateConfig(widget.config)
+      : createDefaultConfig('basic', 'chat');
     set({
       currentWidget: widget,
       currentLicense: null, // Clear license when setting widget manually
-      currentConfig: widget?.config || defaultConfig,
+      currentConfig: config,
       hasUnsavedChanges: false,
     });
   },
 
   /**
-   * Update current configuration
-   * Marks as having unsaved changes for auto-save
+   * Update current configuration: deep-merge the partial over current state,
+   * then validate the result against the canonical schema. Invalid updates
+   * are rejected wholesale (state unchanged) with a console warning.
    */
-  updateConfig: (configUpdate: Partial<WidgetConfig>) => {
-    set((state) => ({
-      currentConfig: {
-        ...state.currentConfig,
-        ...configUpdate,
-        branding: {
-          ...state.currentConfig.branding,
-          ...configUpdate.branding,
-        },
-        style: {
-          ...state.currentConfig.style,
-          ...configUpdate.style,
-        },
-        connection: {
-          ...state.currentConfig.connection,
-          ...configUpdate.connection,
-        },
-        typography: {
-          ...state.currentConfig.typography,
-          ...configUpdate.typography,
-        },
-        features: {
-          ...state.currentConfig.features,
-          ...configUpdate.features,
-        },
-        advanced: {
-          ...state.currentConfig.advanced,
-          ...configUpdate.advanced,
-        },
-      },
-      hasUnsavedChanges: true,
-    }));
+  updateConfig: (configUpdate: WidgetConfigUpdate) => {
+    set((state) => {
+      const merged = deepMerge(state.currentConfig, configUpdate);
+      const result = chatWidgetConfigSchema.safeParse(merged);
+      if (!result.success) {
+        console.warn('[widget-store] rejected invalid config update', result.error.flatten());
+        return state;
+      }
+      return {
+        ...state,
+        currentConfig: result.data,
+        hasUnsavedChanges: true,
+      };
+    });
   },
 
   /**
@@ -631,16 +457,25 @@ export const useWidgetStore = create<WidgetState>((set, get) => ({
   },
 
   /**
-   * Reset configuration to last saved state
+   * Reset configuration to last saved state.
+   * migrateConfig returns a fresh deep object, so no shared references with
+   * currentWidget.config.
    */
   resetConfig: () => {
     const { currentWidget } = get();
     if (currentWidget) {
       set({
-        currentConfig: currentWidget.config,
+        currentConfig: migrateConfig(currentWidget.config),
         hasUnsavedChanges: false,
       });
     }
+  },
+
+  /**
+   * Mark the current configuration as saved (e.g. after an external save).
+   */
+  markSaved: () => {
+    set({ hasUnsavedChanges: false });
   },
 
   /**

@@ -19,26 +19,13 @@ import { db } from '../lib/db/client';
 import { users, licenses, widgets } from '../lib/db/schema';
 import { hashPassword } from '../lib/auth/password';
 import { randomBytes } from 'crypto';
+import { generateWidgetKey } from '../lib/license/widget-key';
 
 /**
  * Generate a random license key (32-char hex)
  */
 function generateLicenseKey(): string {
   return randomBytes(16).toString('hex');
-}
-
-/**
- * Generate a widget key (16-char alphanumeric)
- * Uses base36 encoding for URL-friendly keys
- */
-function generateWidgetKey(): string {
-  const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
-  let key = '';
-  const bytes = randomBytes(16);
-  for (let i = 0; i < 16; i++) {
-    key += chars[bytes[i] % chars.length];
-  }
-  return key;
 }
 
 /**

@@ -23,9 +23,24 @@ import { getWidgetByKeyWithUser } from '@/lib/db/queries';
 import { normalizeDomain } from '@/lib/license/domain';
 import { extractDomainFromReferer, createResponseHeaders } from '@/lib/widget/headers';
 import { createErrorScript, logWidgetError, ErrorType } from '@/lib/widget/error';
-import { checkRateLimit } from '@/lib/widget/rate-limit';
-import { serveWidgetBundle } from '@/lib/widget/serve';
+import { checkRateLimit } from '@/lib/security/rate-limit';
+import { isDomainAllowed } from '@/lib/widget/resolve-widget';
 import { CHATKIT_SERVER_ENABLED } from '@/lib/feature-flags';
+
+/**
+ * Build an inline bootstrap script that injects the stable loader with the
+ * resolved widgetKey baked in. Used by the legacy compat path: a redirect would
+ * be invisible to the loader (browsers keep the original currentScript.src), so
+ * we serve JS that creates the loader <script> with data-widget-key set.
+ *
+ * The widgetKey is validated as 16-char alphanumeric upstream; JSON.stringify
+ * still guards against any injection into the JS string literal.
+ */
+function buildLoaderBootstrap(origin: string, widgetKey: string): string {
+  const loaderSrc = JSON.stringify(`${origin}/widget/loader.js`);
+  const keyLiteral = JSON.stringify(widgetKey);
+  return `(function(){var s=document.createElement('script');s.src=${loaderSrc};s.async=true;s.setAttribute('data-widget-key',${keyLiteral});document.head.appendChild(s);})();`;
+}
 
 /**
  * Extract IP address from request
@@ -89,9 +104,23 @@ export async function GET(
       return createErrorResponse('LICENSE_INVALID', { widgetKey: cleanWidgetKey });
     }
 
-    // Step 2: Extract domain from referer or origin header
-    // Some browsers/contexts don't send referer (privacy settings, HTTPS→HTTP, etc.)
-    // Fall back to origin header, or allow if neither present (initial script load)
+    // Step 2: Extract domain from referer or origin header.
+    // With crossorigin="anonymous" on the script tag, browsers send the Origin
+    // header on cross-origin loads.  We still fall back to referer for legacy
+    // embeds and accept a null domain (skip domain authz) rather than blocking
+    // the widget entirely — the user experience of a silent failure is worse
+    // than serving the widget to an unknown origin.
+    //
+    // NOTE: precedence here is INTENTIONALLY referer-first, the opposite of the
+    // shared getRequestDomain (lib/widget/resolve-widget.ts), which is
+    // origin-first. This legacy compat route serves plain <script src> loads,
+    // where browsers send Referer but typically no Origin — and sandboxed
+    // iframes send the literal "Origin: null", which never parses. Referer is
+    // the richer signal for this traffic shape. The divergence is safe because
+    // this route is documented fail-open (unknown domain => warn + serve), and
+    // the loader bootstrap it returns triggers /api/w/[key]/config, which
+    // re-runs domain authz via getRequestDomain fail-closed. Do not "unify"
+    // this ordering without considering both properties.
     const referer = request.headers.get('referer');
     const origin = request.headers.get('origin');
 
@@ -102,18 +131,13 @@ export async function GET(
       domain = extractDomainFromReferer(origin);
     }
 
-    // If no domain info available, log warning but allow (for script initial load)
-    // Domain validation will still happen if allowedDomains is configured
-    if (!domain) {
-      console.warn(`[Widget] No referer/origin for ${cleanWidgetKey}, allowing initial load`);
-      domain = 'unknown';
-    }
+    const domainUnknown = !domain;
 
     // Step 4: Get client IP for rate limiting
     const clientIP = getClientIP(request);
 
     // Step 5: Check IP rate limit (10 req/sec)
-    const ipRateLimit = checkRateLimit(clientIP, 'ip');
+    const ipRateLimit = await checkRateLimit('widget-serve:ip', clientIP, { limit: 10, windowMs: 1000 });
     if (!ipRateLimit.allowed) {
       const errorScript = createErrorScript('INTERNAL_ERROR');
       return new NextResponse(errorScript, {
@@ -136,7 +160,7 @@ export async function GET(
     }
 
     // Step 7: Check widget rate limit (100 req/min)
-    const widgetRateLimit = checkRateLimit(cleanWidgetKey, 'license');
+    const widgetRateLimit = await checkRateLimit('widget-serve:widget', cleanWidgetKey, { limit: 100, windowMs: 60_000 });
     if (!widgetRateLimit.allowed) {
       const errorScript = createErrorScript('INTERNAL_ERROR');
       return new NextResponse(errorScript, {
@@ -180,20 +204,27 @@ export async function GET(
     }
 
     // Step 10: Validate domain authorization
-    const normalizedRequestDomain = normalizeDomain(domain);
+    // When domain is unknown (no referer/origin), skip domain authz and log a
+    // warning.  This avoids silent widget failures caused by strict Referrer
+    // policies or privacy-focused browsers.
     const allowedDomains = (widget as any).allowedDomains || [];
     const userTier = user.tier || 'free';
 
-    // Agency tier or empty allowedDomains allows any domain
-    // Also skip validation if domain is 'unknown' (no referer/origin sent)
-    if (userTier !== 'agency' && allowedDomains.length > 0 && normalizedRequestDomain !== 'unknown') {
-      const isAuthorized = normalizedRequestDomain === 'localhost' || allowedDomains.some((allowedDomain: string) => {
-        const normalizedAllowed = normalizeDomain(allowedDomain);
-        return normalizedAllowed === normalizedRequestDomain ||
-          normalizedRequestDomain.endsWith('.' + normalizedAllowed);
-      });
+    if (domainUnknown) {
+      console.warn(
+        `[Widget] Serving widget without origin context (referer/origin missing): ${cleanWidgetKey}, ip=${clientIP}`
+      );
+    } else {
+      const normalizedRequestDomain = normalizeDomain(domain!);
 
-      if (!isAuthorized) {
+      // Single source of truth for domain authorization (lib/widget/resolve-widget.ts):
+      // agency-tier bypass, empty-allowedDomains bypass, NEXT_PUBLIC_APP_URL-derived
+      // first-party allowance, non-production localhost bypass, exact/subdomain match.
+      //
+      // SECURITY: this route previously derived a first-party allowance from the
+      // client-controlled Host header — the same allowedDomains bypass fixed in
+      // resolve-widget.ts. The first-party domain now comes from server config only.
+      if (!isDomainAllowed(normalizedRequestDomain, allowedDomains, userTier)) {
         return createErrorResponse('DOMAIN_UNAUTHORIZED', {
           widgetKey: cleanWidgetKey,
           domain: normalizedRequestDomain,
@@ -215,6 +246,7 @@ export async function GET(
         });
       }
 
+      // Host used for URL construction only — NEVER for authorization (see isDomainAllowed).
       const host = request.headers.get('host') || 'localhost:3000';
       const protocol = host.includes('localhost') ? 'http' : 'https';
       // Use the new v2.0 ChatKit route that uses widgetKey
@@ -236,7 +268,7 @@ export async function GET(
   if (targetContainer) {
     // Inline mode - embed in the target container
     var iframe = document.createElement('iframe');
-    iframe.src = "${widgetUrl}";
+    iframe.src = ${JSON.stringify(widgetUrl)};
     iframe.style.cssText = "width: 100%; height: 100%; border: none; background: transparent;";
     iframe.allow = "clipboard-write";
     targetContainer.innerHTML = '';
@@ -249,7 +281,12 @@ export async function GET(
       } else {
         // Popup mode (default): floating chat bubble with toggle
         const config = widget.config as any;
-        const accentColor = config?.chatkitAccentPrimary || config?.accentColor || '#0f172a';
+        // Served-JS injection guard: these values are interpolated into a
+        // script we serve to customer pages. Write paths validate them today,
+        // but legacy rows predate that validation — never trust stored data
+        // when building executable output.
+        const rawAccent = config?.chatkitAccentPrimary || config?.accentColor || '#0f172a';
+        const accentColor = /^#[0-9A-Fa-f]{3,8}$/.test(String(rawAccent)) ? String(rawAccent) : '#0f172a';
         const position = config?.style?.position || 'bottom-right';
         const positionStyles = position === 'bottom-left'
           ? 'left: 20px; right: auto;'
@@ -275,7 +312,7 @@ export async function GET(
   container.style.cssText = "position: fixed; bottom: 90px; ${positionStyles} width: 400px; height: 600px; max-height: calc(100vh - 120px); border-radius: 16px; overflow: hidden; box-shadow: 0 8px 32px rgba(0,0,0,0.2); z-index: 999999; display: none; background: white;";
 
   var iframe = document.createElement('iframe');
-  iframe.src = "${widgetUrl}";
+  iframe.src = ${JSON.stringify(widgetUrl)};
   iframe.style.cssText = "width: 100%; height: 100%; border: none; background: transparent;";
   iframe.allow = "clipboard-write";
 
@@ -304,23 +341,26 @@ export async function GET(
       });
     }
 
-    // For n8n widgets, serve the widget bundle
-    // Create a mock license object for backward compatibility with serveWidgetBundle
-    const mockLicense = {
-      id: user.id,
-      licenseKey: cleanWidgetKey,
-      tier: userTier,
-      domains: allowedDomains,
-      status: 'active' as const,
-      brandingEnabled: userTier === 'free' || userTier === 'basic',
-    };
-
-    const widgetBundle = await serveWidgetBundle(mockLicense as any, widget.id);
-
-    // Step 12: Return successful response
-    return new NextResponse(widgetBundle, {
+    // For n8n widgets, the injection/serve pipeline is gone (Task 18). The widget
+    // is now served by the stable loader (which fetches /api/w/<key>/config and
+    // injects the content-hashed bundle). This route remains as a compat shim for
+    // any cached/legacy `/w/<key>.js` embeds.
+    //
+    // We CANNOT 302-redirect to /widget/loader.js?key=KEY: the browser keeps the
+    // original <script src> (/w/KEY.js) as document.currentScript.src across the
+    // redirect, so the loader never sees the ?key= and bails. Instead we serve an
+    // inline bootstrap that injects the loader with the resolved widgetKey baked
+    // into a data-widget-key attribute. All authorization above (status,
+    // subscription, domain, rate limits) still runs first, and the loader's config
+    // call re-checks domain authz.
+    const requestOrigin = new URL(request.url).origin;
+    const bootstrap = buildLoaderBootstrap(requestOrigin, cleanWidgetKey);
+    return new NextResponse(bootstrap, {
       status: 200,
-      headers: createResponseHeaders()
+      headers: {
+        ...createResponseHeaders(),
+        'Content-Type': 'application/javascript',
+      },
     });
 
   } catch (error) {

@@ -152,3 +152,20 @@ body {
 .zoom-in-95 {
   animation-name: zoomIn;
 }
+
+/* Page entrance animation */
+main {
+  animation: fadeIn 300ms ease-out both;
+}
+
+/* Button press feedback */
+button:active:not(:disabled) {
+  transform: scale(0.98);
+}
+
+/* Sonner dark toast overrides */
+[data-sonner-toaster] {
+  --normal-bg: #1a1a1a !important;
+  --normal-border: rgba(255,255,255,0.1) !important;
+  --normal-text: #e5e5e5 !important;
+}

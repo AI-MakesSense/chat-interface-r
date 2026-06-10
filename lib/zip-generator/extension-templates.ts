@@ -11,10 +11,16 @@ export class ExtensionTemplates {
   /**
    * Generate manifest.json for Chrome Extension (Manifest V3)
    */
-  static generateManifest(config: WidgetConfig): any {
+  static generateManifest(config: WidgetConfig, baseUrl?: string): any {
     const companyName = config.branding?.companyName || 'Your Company';
 
-    return {
+    // MV3 blocks remote scripts in extension pages by default. The sidepanel now
+    // loads the hosted loader from the SaaS origin (Task 18), so the extension
+    // pages CSP must allow script-src from that origin, and host_permissions must
+    // grant fetch access for the loader's config call.
+    const origin = ExtensionTemplates.safeOrigin(baseUrl);
+
+    const manifest: any = {
       manifest_version: 3,
       name: `${companyName} Chat Assistant`,
       version: '1.0.0',
@@ -42,18 +48,31 @@ export class ExtensionTemplates {
         'sidePanel'
       ]
     };
+
+    if (origin) {
+      manifest.host_permissions = [`${origin}/*`];
+      manifest.content_security_policy = {
+        extension_pages: `script-src 'self' ${origin}; object-src 'self'; connect-src 'self' ${origin}`,
+      };
+    }
+
+    return manifest;
+  }
+
+  /** Extract the bare origin (scheme://host[:port]) from a base URL; undefined if unparseable. */
+  private static safeOrigin(baseUrl?: string): string | undefined {
+    if (!baseUrl) return undefined;
+    try {
+      return new URL(baseUrl).origin;
+    } catch {
+      return undefined;
+    }
   }
 
   /**
    * Generate sidepanel.html for Chrome Extension
    */
-  static generateSidepanel(config: WidgetConfig, widgetId: string): string {
-    const configJSON = JSON.stringify({
-      ...config,
-      mode: 'portal',
-      widgetId
-    }, null, 2);
-
+  static generateSidepanel(widgetKey: string, baseUrl: string): string {
     return `<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -80,17 +99,14 @@ export class ExtensionTemplates {
 <body>
   <div id="chat-portal"></div>
 
-  <script src="./chat-widget.js"></script>
-  <script>
-    const widgetConfig = ${configJSON};
-
-    if (typeof Widget !== 'undefined') {
-      const widget = new Widget(widgetConfig);
-      widget.render();
-    } else {
-      console.error('Widget failed to load');
-    }
-  </script>
+  <!-- Chat Widget (hosted loader, portal mode) -->
+  <script
+    src="${baseUrl}/widget/loader.js"
+    data-widget-key="${widgetKey}"
+    data-mode="portal"
+    data-container="chat-portal"
+    async
+  ></script>
 </body>
 </html>`;
   }
@@ -127,9 +143,8 @@ This package contains a Chrome extension that adds an AI-powered chat assistant 
 ## Files Included
 
 - \`manifest.json\` - Chrome Extension Manifest V3
-- \`sidepanel.html\` - Side panel chat interface
+- \`sidepanel.html\` - Side panel chat interface (loads the hosted widget loader)
 - \`background.js\` - Background service worker
-- \`chat-widget.js\` - Widget JavaScript bundle
 - \`icons/\` - Extension icons (16x16, 48x48, 128x128)
 - \`README.md\` - This file
 

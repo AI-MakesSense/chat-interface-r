@@ -1,0 +1,50 @@
+name: CI
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    env:
+      # next build reads these at build time; no test in the gated suite needs a
+      # live DB (the 2 Neon-HTTP DB tests are excluded — see
+      # docs/development/test-migration-debt.md), so no Postgres service is
+      # provisioned. These values only have to be present and well-formed.
+      DATABASE_URL: postgres://ci:ci@localhost:5432/ci
+      JWT_SECRET: ci-only-secret-at-least-32-characters-long-string
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9 # matches pnpm-lock.yaml lockfileVersion 9.0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22 # LTS; Next 16 supported
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      # Advisory only: the repo has a large pre-existing no-explicit-any backlog
+      # (479 errors). Lint runs for visibility but does not block the gate until
+      # that debt is cleared. Flip to a blocking step once lint is clean.
+      - name: Lint (advisory)
+        run: pnpm lint
+        continue-on-error: true
+
+      - name: Type-check
+        run: pnpm type-check
+
+      - name: Test
+        run: pnpm test -- --ci
+
+      - name: Build widget bundle
+        run: pnpm build:widget
+
+      - name: Build app
+        run: pnpm build

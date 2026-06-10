@@ -13,11 +13,11 @@
 
 import { eq, ne, and, desc, sql } from 'drizzle-orm';
 import { db } from './client';
+import { generateWidgetKey } from '../license/widget-key';
 import {
   users,
   licenses,
   widgets,
-  widgetConfigs,
   analyticsEvents,
   passwordResetTokens,
   type User,
@@ -26,8 +26,6 @@ import {
   type NewLicense,
   type Widget,
   type NewWidget,
-  type WidgetConfig,
-  type NewWidgetConfig,
 } from './schema';
 
 // ============================================================
@@ -204,81 +202,6 @@ export async function deleteLicense(id: string): Promise<boolean> {
 }
 
 // ============================================================
-// WIDGET CONFIG QUERIES
-// ============================================================
-
-/**
- * Get widget config by license ID
- */
-export async function getConfigByLicenseId(licenseId: string): Promise<WidgetConfig | null> {
-  const [config] = await db
-    .select()
-    .from(widgetConfigs)
-    .where(eq(widgetConfigs.licenseId, licenseId))
-    .limit(1);
-
-  return config || null;
-}
-
-/**
- * Save or update widget configuration
- * Creates new config if doesn't exist, updates if it does
- */
-export async function saveWidgetConfig(
-  licenseId: string,
-  config: any
-): Promise<WidgetConfig> {
-  // Check if config exists
-  const existing = await getConfigByLicenseId(licenseId);
-
-  if (existing) {
-    // Update existing config
-    const [updated] = await db
-      .update(widgetConfigs)
-      .set({
-        config,
-        version: existing.version + 1,
-        updatedAt: new Date(),
-      })
-      .where(eq(widgetConfigs.licenseId, licenseId))
-      .returning();
-
-    return updated;
-  } else {
-    // Create new config
-    const [newConfig] = await db
-      .insert(widgetConfigs)
-      .values({
-        licenseId,
-        config,
-        version: 1,
-      })
-      .returning();
-
-    return newConfig;
-  }
-}
-
-/**
- * Update widget configuration
- */
-export async function updateConfig(
-  licenseId: string,
-  config: any
-): Promise<WidgetConfig | null> {
-  const [updated] = await db
-    .update(widgetConfigs)
-    .set({
-      config,
-      updatedAt: new Date(),
-    })
-    .where(eq(widgetConfigs.licenseId, licenseId))
-    .returning();
-
-  return updated || null;
-}
-
-// ============================================================
 // PASSWORD RESET TOKEN QUERIES
 // ============================================================
 
@@ -342,16 +265,19 @@ export async function deletePasswordResetToken(token: string) {
 // ============================================================
 
 /**
- * Log an analytics event
+ * Log an analytics event (Schema v2.0)
+ * Uses userId and optional widgetId instead of licenseId.
  */
 export async function logAnalyticsEvent(
-  licenseId: string,
+  userId: string,
   eventType: string,
   domain: string,
-  metadata?: any
+  metadata?: any,
+  widgetId?: string
 ) {
   await db.insert(analyticsEvents).values({
-    licenseId,
+    userId,
+    widgetId: widgetId ?? null,
     eventType,
     domain,
     metadata,
@@ -385,49 +311,59 @@ export async function getWidgetById(id: string): Promise<Widget | null> {
 }
 
 /**
- * Get widget with license data (joined query)
- * Returns widget with nested license object
- * Throws error for invalid UUID format
+ * Get widget with license data (Schema v2.0 compatibility shim)
+ * Widgets no longer carry a licenseId column; this resolves the license via
+ * the widget's userId → first active license by creation order.
+ * Returns null if the widget has no active license.
+ *
+ * @deprecated transitional shim — Task 9 removes this; resolve identity via
+ * userId directly (and source tier from users.tier, not license.tier).
  */
 export async function getWidgetWithLicense(id: string): Promise<WidgetWithLicense | null> {
-  const result = await db
+  const widget = await getWidgetById(id);
+  if (!widget) return null;
+
+  // Resolve first active license for the widget owner, deterministically.
+  const [license] = await db
     .select()
-    .from(widgets)
-    .innerJoin(licenses, eq(widgets.licenseId, licenses.id))
-    .where(eq(widgets.id, id))
+    .from(licenses)
+    .where(and(eq(licenses.userId, widget.userId), eq(licenses.status, 'active')))
+    .orderBy(licenses.createdAt)
     .limit(1);
 
-  if (!result[0]) return null;
+  if (!license) return null;
 
-  return {
-    ...result[0].widgets,
-    license: result[0].licenses,
-  };
+  return { ...widget, license };
 }
 
 /**
- * Create a new widget
- * Sets default status='active' and version=1 if not provided
- * Sets timestamps using client-side time for consistency
+ * Create a new widget (Schema v2.0)
+ * licenseId parameter is REMOVED — widgets belong directly to users via userId.
+ * Callers that previously passed licenseId must pass userId instead.
+ * Task 9 cleans up remaining legacy call sites (app/api/widgets/route.ts legacy branch).
  */
 export async function createWidget(data: {
-  licenseId: string;
+  userId: string;
   name: string;
   config: any;
   status?: string;
   widgetType?: string;
+  kind?: 'chat' | 'display';
   version?: number;
   deployedAt?: Date | null;
 }): Promise<Widget> {
   const now = new Date();
+  const widgetKey = generateWidgetKey();
   const [widget] = await db
     .insert(widgets)
     .values({
-      licenseId: data.licenseId,
+      userId: data.userId,
+      widgetKey,
       name: data.name,
       config: data.config,
       status: data.status || 'active',
       widgetType: data.widgetType || 'n8n',
+      kind: data.kind || 'chat',
       version: data.version || 1,
       deployedAt: data.deployedAt || null,
       createdAt: now,
@@ -442,6 +378,7 @@ export async function createWidget(data: {
  * Update widget fields (partial update)
  * Returns null if widget doesn't exist
  * Never updates createdAt, always updates updatedAt
+ * kind is immutable — set at creation time and cannot be changed via this function
  */
 export async function updateWidget(
   id: string,
@@ -454,6 +391,9 @@ export async function updateWidget(
     deployedAt?: Date | null;
   }
 ): Promise<Widget | null> {
+  if ('kind' in data) {
+    throw new Error('updateWidget cannot change widget kind — kind is set at creation time');
+  }
   const updateData: any = {};
   if (data.name !== undefined) updateData.name = data.name;
   if (data.config !== undefined) updateData.config = data.config;
@@ -493,20 +433,30 @@ export async function deleteWidget(id: string): Promise<Widget | null> {
 }
 
 // ============================================================
-// LICENSE-RELATED WIDGET QUERIES
+// LICENSE-RELATED WIDGET QUERIES (Schema v2.0 compatibility shims)
+// Task 9 will rewrite callers to use userId directly.
 // ============================================================
 
 /**
- * Get all widgets for a specific license
- * Excludes deleted widgets by default
- * Returns widgets ordered by newest first
+ * Get all widgets for a user associated with a specific license.
+ * Schema v2.0: widgets no longer carry licenseId; this resolves to the
+ * license owner's widgets. The licenseId is used only to look up the userId.
  */
 export async function getWidgetsByLicenseId(
   licenseId: string,
   includeDeleted = false
 ): Promise<Widget[]> {
+  // Resolve userId from license
+  const [license] = await db
+    .select()
+    .from(licenses)
+    .where(eq(licenses.id, licenseId))
+    .limit(1);
+
+  if (!license) return [];
+
   // Build conditions array
-  const conditions = [eq(widgets.licenseId, licenseId)];
+  const conditions = [eq(widgets.userId, license.userId)];
 
   // Exclude deleted by default
   if (!includeDeleted) {
@@ -522,56 +472,67 @@ export async function getWidgetsByLicenseId(
 }
 
 /**
- * Get all widgets for a user across all their licenses
- * Returns widgets with license information attached
- * Excludes deleted widgets by default
+ * Get all widgets for a user (Schema v2.0 direct query).
+ * licenseId parameter is ignored (preserved for call-site compatibility only).
+ * `license` is nullable — a user with zero licenses yields `license: null`.
+ * Task 9 will remove the licenseId parameter and the license shape entirely.
  */
 export async function getWidgetsByUserId(
   userId: string,
   includeDeleted = false,
-  licenseId?: string
-): Promise<Array<Widget & { license: License }>> {
+  _licenseId?: string
+): Promise<Array<Widget & { license: License | null }>> {
   // Build conditions array
-  const conditions = [eq(licenses.userId, userId)];
-
-  // Optional: filter by specific license
-  if (licenseId) {
-    conditions.push(eq(widgets.licenseId, licenseId));
-  }
+  const conditions = [eq(widgets.userId, userId)];
 
   // Exclude deleted by default
   if (!includeDeleted) {
     conditions.push(ne(widgets.status, 'deleted'));
   }
 
-  // JOIN widgets + licenses, filter, order
-  const results = await db
+  const widgetResults = await db
     .select()
     .from(widgets)
-    .innerJoin(licenses, eq(widgets.licenseId, licenses.id))
     .where(and(...conditions))
     .orderBy(desc(widgets.createdAt));
 
-  // Transform results to Widget & { license: License }
-  return results.map(r => ({
-    ...r.widgets,
-    license: r.licenses,
-    licenseKey: r.licenses.licenseKey, // Explicitly add licenseKey for frontend convenience
+  // Look up the user's first license for backward-compat shape (may be absent)
+  const [license] = await db
+    .select()
+    .from(licenses)
+    .where(eq(licenses.userId, userId))
+    .limit(1);
+
+  return widgetResults.map(w => ({
+    ...w,
+    license: license ?? null,
+    licenseKey: license?.licenseKey ?? null,
   }));
 }
 
 /**
- * Get count of active widgets for a license
- * Excludes soft-deleted widgets (status='deleted')
- * Returns integer count
+ * Get count of active widgets for a license (Schema v2.0 compatibility shim).
+ * Resolves the license's userId and counts that user's active widgets.
+ *
+ * NOTE: returns the user TOTAL across all their licenses — it over-counts
+ * relative to a per-license widgetLimit (conservative / over-restrictive).
+ * Task 9 replaces callers with getActiveWidgetCountForUser.
  */
 export async function getActiveWidgetCount(licenseId: string): Promise<number> {
+  const [license] = await db
+    .select()
+    .from(licenses)
+    .where(eq(licenses.id, licenseId))
+    .limit(1);
+
+  if (!license) return 0;
+
   const result = await db
     .select({ count: sql<number>`count(*)::int` })
     .from(widgets)
     .where(
       and(
-        eq(widgets.licenseId, licenseId),
+        eq(widgets.userId, license.userId),
         ne(widgets.status, 'deleted')
       )
     );
@@ -676,20 +637,21 @@ export async function deployWidget(id: string): Promise<Widget | null> {
 }
 
 /**
- * Get paginated widgets for a user with total count
- * Supports pagination, filtering by license, and including deleted widgets
- * Returns widgets with license information and total count
+ * Get paginated widgets for a user with total count (Schema v2.0)
+ * Widgets are queried directly by userId — no license join needed.
+ * licenseId option is ignored (preserved for call-site compatibility).
+ * Task 9 will clean up callers and remove the licenseId option.
  */
 export async function getWidgetsPaginated(
   userId: string,
   options: {
     page?: number;
     limit?: number;
-    licenseId?: string;
+    licenseId?: string; // Ignored — kept for API compatibility; Task 9 removes this
     includeDeleted?: boolean;
   } = {}
 ): Promise<{
-  widgets: Array<Widget & { license: License }>;
+  widgets: Array<Widget & { license: License | null }>;
   total: number;
 }> {
   // Parse and validate pagination params
@@ -697,12 +659,8 @@ export async function getWidgetsPaginated(
   const limit = Math.min(options.limit || 20, 100); // Max 100
   const offset = (page - 1) * limit;
 
-  // Build filter conditions
-  const conditions = [eq(licenses.userId, userId)];
-
-  if (options.licenseId) {
-    conditions.push(eq(widgets.licenseId, options.licenseId));
-  }
+  // Build filter conditions (direct userId — no license join)
+  const conditions = [eq(widgets.userId, userId)];
 
   if (!options.includeDeleted) {
     conditions.push(ne(widgets.status, 'deleted'));
@@ -712,7 +670,6 @@ export async function getWidgetsPaginated(
   const [countResult] = await db
     .select({ count: sql<number>`count(*)::int` })
     .from(widgets)
-    .innerJoin(licenses, eq(widgets.licenseId, licenses.id))
     .where(and(...conditions));
 
   const total = countResult?.count || 0;
@@ -721,17 +678,22 @@ export async function getWidgetsPaginated(
   const results = await db
     .select()
     .from(widgets)
-    .innerJoin(licenses, eq(widgets.licenseId, licenses.id))
     .where(and(...conditions))
     .orderBy(desc(widgets.createdAt))
     .limit(limit)
     .offset(offset);
 
-  // Transform results to Widget & { license: License }
-  const widgetsWithLicenses = results.map(r => ({
-    ...r.widgets,
-    license: r.licenses,
-    licenseKey: r.licenses.licenseKey, // Explicitly add licenseKey for frontend convenience
+  // Look up user's license once for backward-compat shape (may be absent)
+  const [userLicense] = await db
+    .select()
+    .from(licenses)
+    .where(eq(licenses.userId, userId))
+    .limit(1);
+
+  const widgetsWithLicenses = results.map(w => ({
+    ...w,
+    license: userLicense ?? null,
+    licenseKey: userLicense?.licenseKey ?? null,
   }));
 
   return { widgets: widgetsWithLicenses, total };
@@ -796,10 +758,9 @@ export async function createWidgetV2(data: {
   allowedDomains?: string[];
   status?: string;
   widgetType?: string;
+  kind?: 'chat' | 'display';
   version?: number;
   deployedAt?: Date | null;
-  // Legacy: optional licenseId for backward compatibility
-  licenseId?: string;
 }): Promise<Widget> {
   const now = new Date();
 
@@ -810,7 +771,6 @@ export async function createWidgetV2(data: {
     .insert(widgets)
     .values({
       userId: data.userId,
-      licenseId: data.licenseId || null, // Legacy support
       name: data.name,
       config: data.config,
       widgetKey,
@@ -818,6 +778,7 @@ export async function createWidgetV2(data: {
       allowedDomains: data.allowedDomains || null,
       status: data.status || 'active',
       widgetType: data.widgetType || 'n8n',
+      kind: data.kind || 'chat',
       version: data.version || 1,
       deployedAt: data.deployedAt ?? now, // Schema v2.0: Auto-deploy on creation
       createdAt: now,
@@ -881,17 +842,28 @@ export async function getWidgetsPaginatedV2(
   return { widgets: results, total };
 }
 
+// ============================================================
+// COMPAT ADAPTER QUERIES (Schema v2.0)
+// ============================================================
+
 /**
- * Generate a 16-character alphanumeric widget key
- * Uses crypto-safe random generation
+ * Get up to `limit` active widgets for a user, ordered by createdAt ascending.
+ * Used by the legacy /api/widget/[license]/chat-widget.js compat adapter, which
+ * must serve a widget ONLY when the answer is unambiguous (exactly one active
+ * widget). limit=2 is enough to distinguish 0 / 1 / many.
  */
-function generateWidgetKey(): string {
-  const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
-  let result = '';
-  const randomValues = new Uint8Array(16);
-  crypto.getRandomValues(randomValues);
-  for (let i = 0; i < 16; i++) {
-    result += chars[randomValues[i] % chars.length];
-  }
-  return result;
+export async function getActiveWidgetsForUser(userId: string, limit = 2): Promise<Widget[]> {
+  return db
+    .select()
+    .from(widgets)
+    .where(
+      and(
+        eq(widgets.userId, userId),
+        eq(widgets.status, 'active')
+      )
+    )
+    .orderBy(widgets.createdAt)
+    .limit(limit);
 }
+
+// generateWidgetKey is imported from lib/license/widget-key

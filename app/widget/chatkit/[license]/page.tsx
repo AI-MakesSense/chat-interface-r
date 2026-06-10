@@ -3,7 +3,7 @@ import { db } from '@/lib/db/client';
 import { licenses, widgets } from '@/lib/db/schema';
 import { eq } from 'drizzle-orm';
 import { ChatKitEmbed } from '@/components/chatkit-embed';
-import { WidgetConfig } from '@/stores/widget-store';
+import { migrateConfig } from '@/lib/widget-config/migrate';
 import { CHATKIT_SERVER_ENABLED } from '@/lib/feature-flags';
 
 interface PageProps {
@@ -33,11 +33,11 @@ export default async function ChatKitWidgetPage({ params }: PageProps) {
         );
     }
 
-    // Fetch widgets for this license
+    // Fetch widgets for this license's user (Schema v2.0: licenseId removed from widgets)
     const licenseWidgets = await db
         .select()
         .from(widgets)
-        .where(eq(widgets.licenseId, license.id));
+        .where(eq(widgets.userId, license.userId));
 
     // Find the active widget
     const widget = licenseWidgets.find(w => w.status === 'active') || licenseWidgets[0];
@@ -50,14 +50,13 @@ export default async function ChatKitWidgetPage({ params }: PageProps) {
         );
     }
 
-    // Check if it's a ChatKit widget
-    if (widget.widgetType !== 'chatkit' && (widget.config as WidgetConfig).connection?.provider !== 'chatkit') {
-        // Fallback or error if trying to load N8n widget via ChatKit route
-        // But for now, we might just render it if the config is compatible, or show error
-        // Ideally, the embed code should point to the correct URL.
-    }
+    const config = migrateConfig(widget.config);
 
-    const config = widget.config as WidgetConfig;
+    // Only ChatKit widgets may render through this route — an n8n widget
+    // loaded here would silently render with the wrong provider.
+    if (widget.widgetType !== 'chatkit' && config.connection.provider !== 'chatkit') {
+        notFound();
+    }
 
     return (
         <div className="h-screen w-screen overflow-hidden bg-transparent pointer-events-none">

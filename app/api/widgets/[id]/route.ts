@@ -14,10 +14,15 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { requireAuth } from '@/lib/auth/guard';
-import { getWidgetById, getWidgetWithLicense, updateWidget, deleteWidget, getUserById } from '@/lib/db/queries';
-import { createWidgetConfigSchema } from '@/lib/validation/widget-schema';
-import { deepMerge, stripLegacyConfigProperties, sanitizeConfig, forceN8nProviderConfig } from '@/lib/utils/config-helpers';
+import { handleAPIError } from '@/lib/utils/api-error';
+import { getWidgetById, updateWidget, deleteWidget, getUserById } from '@/lib/db/queries';
+import { getSchemaForKind, normalizeTier } from '@/lib/widget-config/schema';
+import { TIER_LIMITS, normalizeUserTier } from '@/lib/license/tiers';
+import { migrateConfig } from '@/lib/widget-config/migrate';
+import { deepMerge, sanitizeConfig, forceN8nProviderConfig } from '@/lib/utils/config-helpers';
 import { CHATKIT_SERVER_ENABLED } from '@/lib/feature-flags';
+import { assertPublicWebhookUrl, isPlaceholderWebhook } from '@/lib/security/url-guard';
+import { logActivity } from '@/lib/db/admin-queries';
 import { z } from 'zod';
 
 // =============================================================================
@@ -53,21 +58,7 @@ async function getWidgetWithOwnership(widgetId: string, userId: string): Promise
     };
   }
 
-  // Legacy (v1): Check ownership through license
-  if (widget.licenseId) {
-    const widgetWithLicense = await getWidgetWithLicense(widgetId);
-    if (!widgetWithLicense || widgetWithLicense.license.userId !== userId) {
-      return null; // Not owner
-    }
-
-    return {
-      widget: widgetWithLicense,
-      tier: widgetWithLicense.license.tier,
-      licenseKey: widgetWithLicense.license.licenseKey,
-    };
-  }
-
-  // Widget has neither userId nor licenseId - orphaned
+  // Widget has no userId — orphaned (licenseId column removed in Schema v2.0)
   return null;
 }
 
@@ -78,6 +69,8 @@ async function getWidgetWithOwnership(widgetId: string, userId: string): Promise
 const UpdateWidgetSchema = z.object({
   name: z.string().min(1).max(100).optional(),
   config: z.any().optional(),
+  embedType: z.enum(['popup', 'inline', 'fullpage', 'portal']).optional(),
+  allowedDomains: z.array(z.string().min(1)).optional(),
   status: z.enum(['active', 'paused']).optional(),
 });
 
@@ -107,14 +100,21 @@ export async function GET(
       return NextResponse.json({ error: 'Widget not found' }, { status: 404 });
     }
 
-    // 4. Return widget data with licenseKey/widgetKey
+    // 4. READ boundary: migrate chat-kind configs to canonical shape on the way out
+    const rawConfig = (result.widget as any).config;
+    const widgetKind: 'chat' | 'display' = (result.widget as any).kind === 'display' ? 'display' : 'chat';
+    const migratedConfig = widgetKind === 'chat' ? migrateConfig(rawConfig) : rawConfig;
+
     const normalizedWidget = !CHATKIT_SERVER_ENABLED
       ? {
           ...result.widget,
-          config: forceN8nProviderConfig((result.widget as any).config),
+          config: forceN8nProviderConfig(migratedConfig),
           widgetType: 'n8n',
         }
-      : result.widget;
+      : {
+          ...result.widget,
+          config: migratedConfig,
+        };
 
     return NextResponse.json({
       widget: {
@@ -134,9 +134,8 @@ export async function GET(
       return NextResponse.json({ error: errorMessage }, { status: 401 });
     }
 
-    // Log unexpected errors
-    console.error('Widget retrieval error:', error);
-    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
+    // Log unexpected errors and return consistent error response
+    return handleAPIError(error);
   }
 }
 
@@ -160,8 +159,21 @@ export async function PATCH(
     const widgetId = idSchema.parse(id);
 
     // 3. Parse and validate request body
-    const body = await request.json();
-    const updates = UpdateWidgetSchema.parse(body);
+    const rawBody = await request.json();
+
+    // Guard: kind is immutable — reject attempts to change it via PATCH
+    if ('kind' in rawBody) {
+      // We need the existing widget to compare — do a lightweight fetch first
+      const checkWidget = await getWidgetById(widgetId);
+      if (checkWidget && rawBody.kind !== checkWidget.kind) {
+        return NextResponse.json(
+          { error: 'kind cannot be changed via PATCH; create a new widget instead' },
+          { status: 400 }
+        );
+      }
+    }
+
+    const updates = UpdateWidgetSchema.parse(rawBody);
 
     // 4. Get widget and verify ownership (supports both v1 and v2.0)
     const result = await getWidgetWithOwnership(widgetId, user.sub);
@@ -185,22 +197,68 @@ export async function PATCH(
       updateData.status = updates.status;
     }
 
+    // Update embed type if provided
+    if (updates.embedType !== undefined) {
+      updateData.embedType = updates.embedType;
+    }
+
+    // Update allowed domains if provided (empty array means allow all)
+    if (updates.allowedDomains !== undefined) {
+      updateData.allowedDomains = updates.allowedDomains;
+    }
+
     // Handle config updates with deep merge and validation
     if (updates.config !== undefined) {
-      // Deep merge new config with existing config
-      const mergedConfig = deepMerge(widget.config, updates.config);
+      // Determine the widget's kind from the existing row — never trust the request body for this
+      const existingKind: 'chat' | 'display' = (widget.kind === 'display') ? 'display' : 'chat';
+
+      // WRITE boundary: migrate existing config FIRST (canonical shape), then deep-merge
+      // the incoming partial on top. This ensures a legacy stored config is normalized
+      // before the merge so canonical paths always win.
+      const existingCanonical = existingKind === 'chat'
+        ? migrateConfig(widget.config)
+        : widget.config;
+      const mergedConfig = deepMerge(existingCanonical, updates.config);
 
       // SANITIZATION: Enforce tier restrictions and fix data integrity
-      const sanitizedConfig = sanitizeConfig(mergedConfig, tier);
+      const sanitizedConfig = sanitizeConfig(mergedConfig, tier, existingKind);
 
-      // Validate merged config against tier restrictions
-      const configSchema = createWidgetConfigSchema(tier as any, true);
-      configSchema.parse(sanitizedConfig);
+      // Validate merged config against tier restrictions using canonical schema.
+      // brandingRequired = true when the tier does not allow branding removal.
+      // normalizeTier maps 'free'/'garbage' → 'basic' for the config-schema layer;
+      // TIER_LIMITS drives the entitlement decision.
+      const normalizedTier = normalizeTier(tier);
+      const brandingRequired = !TIER_LIMITS[normalizeUserTier(tier)].brandingRemovable;
+      const configSchema = getSchemaForKind(existingKind, normalizedTier, brandingRequired);
+      const parsed = configSchema.safeParse(sanitizedConfig);
+      if (!parsed.success) {
+        return NextResponse.json(
+          { error: 'Invalid widget configuration', details: parsed.error.flatten() },
+          { status: 400 }
+        );
+      }
 
-      // Strip legacy properties that might conflict with new structure
-      let cleanedConfig = stripLegacyConfigProperties(sanitizedConfig);
+      let cleanedConfig: any = parsed.data;
       if (!CHATKIT_SERVER_ENABLED) {
         cleanedConfig = forceN8nProviderConfig(cleanedConfig);
+      }
+
+      // SSRF defense-in-depth: reject a private/non-https webhook at save time.
+      // The placeholder sentinel ('https://example.com/webhook') is allowed here
+      // (the user may be mid-setup); deploy enforces a real, public endpoint.
+      const webhookUrl = cleanedConfig?.connection?.webhookUrl;
+      if (webhookUrl && typeof webhookUrl === 'string' && !isPlaceholderWebhook(webhookUrl)) {
+        try {
+          await assertPublicWebhookUrl(webhookUrl);
+        } catch (err) {
+          return NextResponse.json(
+            {
+              error: (err as Error).message,
+              fieldPath: 'connection.webhookUrl',
+            },
+            { status: 400 }
+          );
+        }
       }
 
       updateData.config = cleanedConfig;
@@ -248,12 +306,8 @@ export async function PATCH(
       return NextResponse.json({ error: errorMessage }, { status: 401 });
     }
 
-    // Log unexpected errors
-    console.error('Widget update error:', error);
-    return NextResponse.json({
-      error: 'Internal server error',
-      details: error instanceof Error ? error.message : String(error)
-    }, { status: 500 });
+    // Log unexpected errors and return consistent error response
+    return handleAPIError(error);
   }
 }
 
@@ -297,6 +351,9 @@ export async function DELETE(
     // 4. Soft delete widget (sets status='deleted')
     await deleteWidget(widgetId);
 
+    // Log activity
+    void logActivity(user.sub, 'widget_deleted', { widgetId });
+
     // 5. Return 204 No Content on success
     return new NextResponse(null, { status: 204 });
 
@@ -311,8 +368,7 @@ export async function DELETE(
       return NextResponse.json({ error: errorMessage }, { status: 401 });
     }
 
-    // Log unexpected errors
-    console.error('Widget deletion error:', error);
-    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
+    // Log unexpected errors and return consistent error response
+    return handleAPIError(error);
   }
 }

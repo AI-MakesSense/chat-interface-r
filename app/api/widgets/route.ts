@@ -15,35 +15,69 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { requireAuth } from '@/lib/auth/guard';
 import { db } from '@/lib/db/client';
-import { licenses, widgets, users } from '@/lib/db/schema';
+import { licenses, widgets } from '@/lib/db/schema';
 import { eq } from 'drizzle-orm';
+import { logActivity } from '@/lib/db/admin-queries';
 import {
   createWidget,
   createWidgetV2,
-  getActiveWidgetCount,
   getActiveWidgetCountForUser,
   getWidgetsPaginated,
   getWidgetsPaginatedV2,
   getUserById,
 } from '@/lib/db/queries';
 import { createDefaultConfig } from '@/lib/config/defaults';
-import { createWidgetConfigSchema } from '@/lib/validation/widget-schema';
-import { deepMerge, forceN8nProviderConfig, stripLegacyConfigProperties } from '@/lib/utils/config-helpers';
+import { getSchemaForKind, normalizeTier } from '@/lib/widget-config/schema';
+import { migrateConfig } from '@/lib/widget-config/migrate';
+import { TIER_LIMITS, canCreateWidget, normalizeUserTier } from '@/lib/license/tiers';
+import { deepMerge, forceN8nProviderConfig } from '@/lib/utils/config-helpers';
 import { CHATKIT_SERVER_ENABLED } from '@/lib/feature-flags';
+import { generateEmbedCode, extractInlineDimensions, resolveEmbedBaseUrlFromRequest, type EmbedType as GeneratedEmbedType } from '@/lib/embed';
+import { assertPublicWebhookUrl, isPlaceholderWebhook } from '@/lib/security/url-guard';
 import { z } from 'zod';
 
+/**
+ * SAVE-time SSRF defense-in-depth: validate a configured webhook URL when one is
+ * present. The display sentinel ('https://example.com/webhook') is ALLOWED here —
+ * the user may be mid-setup. The placeholder is rejected only at DEPLOY time.
+ * Returns a 400 NextResponse on rejection, or null when the URL is acceptable
+ * (or absent).
+ */
+async function rejectUnsafeWebhook(config: any): Promise<NextResponse | null> {
+  const webhookUrl = config?.connection?.webhookUrl;
+  if (!webhookUrl || typeof webhookUrl !== 'string') return null;
+  // Allow the placeholder at save/create time (deploy enforces a real URL).
+  if (isPlaceholderWebhook(webhookUrl)) return null;
+  try {
+    await assertPublicWebhookUrl(webhookUrl);
+    return null;
+  } catch (err) {
+    return NextResponse.json(
+      {
+        error: 'Invalid widget configuration',
+        details: {
+          fieldErrors: { 'connection.webhookUrl': [(err as Error).message] },
+        },
+      },
+      { status: 400 }
+    );
+  }
+}
+
 // =============================================================================
-// Tier Features Configuration (Schema v2.0)
+// Helpers
 // =============================================================================
 
-const TIER_LIMITS = {
-  free: { widgetLimit: 3 },
-  basic: { widgetLimit: 5 },
-  pro: { widgetLimit: -1 }, // Unlimited
-  agency: { widgetLimit: -1 }, // Unlimited
-} as const;
-
-type SubscriptionTier = keyof typeof TIER_LIMITS;
+/**
+ * Apply the read-boundary transformations to a raw stored widget config.
+ * Chat-kind configs are migrated to canonical schemaVersion 2 via migrateConfig.
+ * When ChatKit is disabled, the provider is forced to n8n.
+ * Display-kind configs pass through unchanged.
+ */
+function normalizeWidgetConfig(rawConfig: any, kind: string): any {
+  const migratedConfig = kind === 'chat' ? migrateConfig(rawConfig) : rawConfig;
+  return !CHATKIT_SERVER_ENABLED ? forceN8nProviderConfig(migratedConfig) : migratedConfig;
+}
 
 // =============================================================================
 // Request Validation Schemas
@@ -58,6 +92,7 @@ const CreateWidgetSchema = z.object({
   embedType: z.enum(['popup', 'inline', 'fullpage', 'portal']).optional(),
   allowedDomains: z.array(z.string()).optional(),
   widgetType: z.enum(['n8n', 'chatkit']).optional(),
+  kind: z.enum(['chat', 'display']).default('chat'),
 });
 
 // =============================================================================
@@ -72,7 +107,7 @@ export async function POST(request: NextRequest) {
 
     // 2. Parse and validate request body
     const body = await request.json();
-    const { licenseId, name, config: userConfig, embedType, allowedDomains, widgetType: requestWidgetType } = CreateWidgetSchema.parse(body);
+    const { licenseId, name, config: userConfig, embedType, allowedDomains, widgetType: requestWidgetType, kind } = CreateWidgetSchema.parse(body);
 
     // Force n8n-only mode when ChatKit is disabled.
     if (!CHATKIT_SERVER_ENABLED) {
@@ -91,17 +126,22 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'User not found' }, { status: 404 });
     }
 
-    // Get tier from user (Schema v2.0) or 'free' default
-    const userTier = (user.tier || 'free') as SubscriptionTier;
+    // Get tier from user (Schema v2.0) or 'free' default.
+    // normalizeUserTier handles null/unknown → 'free'.
+    const userTier = normalizeUserTier(user.tier);
 
-    // 4. Determine widget limit and check quota
-    let tier: SubscriptionTier;
-    let limit: number;
-    let activeCount: number;
+    // 4. Determine active tier and check quota.
+    // Both legacy and v2 paths count widgets per-user (not per-license) so the
+    // limit reflects the user's actual usage across all widgets. The legacy
+    // getActiveWidgetCount(licenseId) over-counted — it already resolved to the
+    // user total anyway, but its name was misleading. We now call
+    // getActiveWidgetCountForUser(userId) directly in both branches.
+    let tier = userTier;
     let license: any = null;
 
     if (licenseId) {
-      // Legacy path: Use license-based limits
+      // Legacy path: licenseId provided — verify ownership, carry license for
+      // response metadata. Tier comes from users.tier (v2 identity model).
       const [foundLicense] = await db
         .select()
         .from(licenses)
@@ -117,43 +157,69 @@ export async function POST(request: NextRequest) {
       }
 
       license = foundLicense;
-      tier = license.tier as SubscriptionTier;
-      limit = license.widgetLimit;
-      activeCount = await getActiveWidgetCount(licenseId);
-    } else {
-      // Schema v2.0 path: Use user-level tier limits
-      tier = userTier;
-      limit = TIER_LIMITS[tier].widgetLimit;
-      activeCount = await getActiveWidgetCountForUser(authUser.sub);
+      // Tier is always from users.tier; licenses.tier is billing metadata only.
     }
 
-    // Check widget limit
-    if (limit !== -1 && activeCount >= limit) {
+    // Count per-user (fix Task-8 over-count: getActiveWidgetCount resolved via
+    // license → userId anyway, so semantics are the same, but using
+    // getActiveWidgetCountForUser is explicit and correct for both paths).
+    const activeCount = await getActiveWidgetCountForUser(authUser.sub);
+
+    // Check widget limit via the central entitlements module.
+    if (!canCreateWidget(tier, activeCount)) {
+      const limit = TIER_LIMITS[tier].maxWidgets;
+      // Render unbounded tiers (pro/agency) as "unlimited" instead of "Infinity".
+      const limitLabel = Number.isFinite(limit) ? `max: ${limit}` : 'unlimited';
       return NextResponse.json(
-        { error: `Widget limit exceeded for ${tier} tier (max: ${limit})` },
+        { error: `Widget limit exceeded for ${tier} tier (${limitLabel})` },
         { status: 403 }
       );
     }
 
     // 5. Generate config (use defaults if not provided, merge if provided)
+    // For chat widgets: start from migrated defaults so the stored object is
+    // always canonical (schemaVersion 2) regardless of what createDefaultConfig
+    // returns. For display widgets: pass through as-is (migrateConfig is
+    // chat-only).
     let finalConfig;
     if (userConfig) {
-      // Deep merge user config with defaults
-      const defaults = createDefaultConfig(tier as any);
-      finalConfig = deepMerge(defaults, userConfig);
+      if (kind === 'chat') {
+        const defaults = migrateConfig(createDefaultConfig(tier as any, kind));
+        finalConfig = deepMerge(defaults, userConfig);
+      } else {
+        const defaults = createDefaultConfig(tier as any, kind);
+        finalConfig = deepMerge(defaults, userConfig);
+      }
     } else {
-      finalConfig = createDefaultConfig(tier as any);
+      finalConfig = kind === 'chat'
+        ? migrateConfig(createDefaultConfig(tier as any, kind))
+        : createDefaultConfig(tier as any, kind);
     }
 
-    // 6. Validate final config against tier restrictions
-    const configSchema = createWidgetConfigSchema(tier as any, true);
-    configSchema.parse(finalConfig);
-
-    // 7. Clean legacy properties that might conflict with new structure
-    let cleanedConfig = stripLegacyConfigProperties(finalConfig);
+    // 6. Validate final config against tier restrictions using canonical schema.
+    // brandingRequired = true when the tier does not allow branding removal.
+    // normalizeTier maps 'free'/'garbage' → 'basic' for the config-schema layer
+    // (LicenseTier); TIER_LIMITS drives the entitlement decision here.
+    const normalizedTier = normalizeTier(tier);
+    const brandingRequired = !TIER_LIMITS[normalizeUserTier(tier)].brandingRemovable;
+    const configSchema = getSchemaForKind(kind, normalizedTier, brandingRequired);
+    const parsed = configSchema.safeParse(finalConfig);
+    if (!parsed.success) {
+      return NextResponse.json(
+        { error: 'Invalid widget configuration', details: parsed.error.flatten() },
+        { status: 400 }
+      );
+    }
+    // Use the canonical validated result — includes schemaVersion: 2 and all defaults
+    let cleanedConfig: any = parsed.data;
     if (!CHATKIT_SERVER_ENABLED) {
       cleanedConfig = forceN8nProviderConfig(cleanedConfig);
     }
+
+    // 7. SSRF defense-in-depth: reject a private/non-https webhook at save time
+    // (placeholder sentinel allowed — see rejectUnsafeWebhook).
+    const webhookRejection = await rejectUnsafeWebhook(cleanedConfig);
+    if (webhookRejection) return webhookRejection;
 
     // 8. Determine widget type
     const finalWidgetType = CHATKIT_SERVER_ENABLED
@@ -163,12 +229,14 @@ export async function POST(request: NextRequest) {
     // 9. Create widget using appropriate method
     let widget;
     if (licenseId && license) {
-      // Legacy path: Create with licenseId
+      // Legacy path: licenseId was provided but widgets no longer carry licenseId —
+      // create via userId directly. Task 9 will remove this branch entirely.
       widget = await createWidget({
-        licenseId,
+        userId: authUser.sub,
         name,
         config: cleanedConfig,
         widgetType: finalWidgetType,
+        kind,
       });
     } else {
       // Schema v2.0 path: Create with userId directly
@@ -179,13 +247,17 @@ export async function POST(request: NextRequest) {
         embedType: embedType || 'popup',
         allowedDomains: allowedDomains || undefined,
         widgetType: finalWidgetType,
+        kind,
       });
     }
 
     // 10. Generate embed codes for Schema v2.0 widgets
-    const baseUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
+    const baseUrl = resolveEmbedBaseUrlFromRequest(request.url);
     const widgetKey = (widget as any).widgetKey;
-    const embedCodes = widgetKey ? generateEmbedCodes(baseUrl, widgetKey, (widget as any).embedType || 'popup') : null;
+    const embedCodes = widgetKey ? generateEmbedCodes(baseUrl, widgetKey, (widget as any).embedType || 'popup', (widget as any).config) : null;
+
+    // Log activity
+    void logActivity(authUser.sub, 'widget_created', { widgetId: widget.id, name: widget.name });
 
     // 11. Return 201 Created with widget data
     return NextResponse.json({
@@ -266,7 +338,7 @@ export async function GET(request: NextRequest) {
     }
 
     // 4. Get paginated widgets for the user
-    const baseUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
+    const baseUrl = resolveEmbedBaseUrlFromRequest(request.url);
 
     // Use legacy query if licenseId provided or legacy flag set
     if (licenseId || useLegacy) {
@@ -285,9 +357,8 @@ export async function GET(request: NextRequest) {
         widgets: result.widgets.map(w => {
           const widgetKey = (w as any).widgetKey;
           const widgetEmbedType = (w as any).embedType || 'popup';
-          const normalizedConfig = !CHATKIT_SERVER_ENABLED
-            ? forceN8nProviderConfig((w as any).config)
-            : (w as any).config;
+          // READ boundary: normalizeWidgetConfig handles migrate + chatkit-flag
+          const normalizedConfig = normalizeWidgetConfig((w as any).config, (w as any).kind);
           return {
             ...w,
             config: normalizedConfig,
@@ -296,7 +367,7 @@ export async function GET(request: NextRequest) {
             // Compute isDeployed from deployedAt
             isDeployed: !!(w as any).deployedAt,
             // Schema v2.0: Add embed codes if widgetKey exists
-            ...(widgetKey && { embedCodes: generateEmbedCodes(baseUrl, widgetKey, widgetEmbedType) }),
+            ...(widgetKey && { embedCodes: generateEmbedCodes(baseUrl, widgetKey, widgetEmbedType, normalizedConfig) }),
           };
         }),
         pagination: {
@@ -323,9 +394,8 @@ export async function GET(request: NextRequest) {
         widgets: result.widgets.map(w => {
           const widgetKey = (w as any).widgetKey;
           const widgetEmbedType = (w as any).embedType || 'popup';
-          const normalizedConfig = !CHATKIT_SERVER_ENABLED
-            ? forceN8nProviderConfig((w as any).config)
-            : (w as any).config;
+          // READ boundary: normalizeWidgetConfig handles migrate + chatkit-flag
+          const normalizedConfig = normalizeWidgetConfig((w as any).config, (w as any).kind);
           return {
             ...w,
             config: normalizedConfig,
@@ -333,7 +403,7 @@ export async function GET(request: NextRequest) {
             // Compute isDeployed from deployedAt
             isDeployed: !!(w as any).deployedAt,
             // Schema v2.0: Add embed codes if widgetKey exists
-            ...(widgetKey && { embedCodes: generateEmbedCodes(baseUrl, widgetKey, widgetEmbedType) }),
+            ...(widgetKey && { embedCodes: generateEmbedCodes(baseUrl, widgetKey, widgetEmbedType, normalizedConfig) }),
           };
         }),
         pagination: {
@@ -366,12 +436,25 @@ export async function GET(request: NextRequest) {
  * Generate embed codes for all embed types (Schema v2.0)
  * Returns an object with code snippets for each embed type
  */
-function generateEmbedCodes(baseUrl: string, widgetKey: string, primaryEmbedType: string) {
+function generateEmbedCodes(baseUrl: string, widgetKey: string, primaryEmbedType: string, config?: any) {
+  const widget = { widgetKey };
+  const validTypes: GeneratedEmbedType[] = ['popup', 'inline', 'fullpage', 'portal'];
+  const normalizedPrimary = validTypes.includes(primaryEmbedType as GeneratedEmbedType)
+    ? (primaryEmbedType as GeneratedEmbedType)
+    : 'popup';
+  // Canonical v2 stores inline dimensions at config.theme.size.*; extractInlineDimensions
+  // reads the canonical path and falls back to the legacy flat path.
+  const opts = { baseUrl, ...extractInlineDimensions(config) };
+  const popup = generateEmbedCode(widget, 'popup', opts).code;
+  const inline = generateEmbedCode(widget, 'inline', opts).code;
+  const fullpage = generateEmbedCode(widget, 'fullpage', opts).code;
+  const portal = generateEmbedCode(widget, 'portal', opts).code;
+
   return {
-    primary: primaryEmbedType,
-    popup: `<script src="${baseUrl}/w/${widgetKey}.js" async></script>`,
-    inline: `<div id="chat-widget-${widgetKey}"></div>\n<script src="${baseUrl}/w/${widgetKey}.js" data-embed="inline" async></script>`,
-    fullpage: `${baseUrl}/chat/${widgetKey}`,
-    portal: `${baseUrl}/chat/portal/${widgetKey}`,
+    primary: normalizedPrimary,
+    popup,
+    inline,
+    fullpage,
+    portal,
   };
 }

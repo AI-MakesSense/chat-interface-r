@@ -51,17 +51,21 @@ export function handleAPIError(error: unknown): Response {
         { status: 403 }
       );
     }
-
-    // Generic error with message
-    return Response.json(
-      { error: error.message } as APIErrorResponse,
-      { status: 400 }
-    );
   }
 
-  // Unknown error type
+  // Catch-all: any unexpected error (generic Error, DB/ORM/library throw, or
+  // unknown type) is a 500. Never leak internal error messages in production —
+  // return a generic message there, the real message only in non-production.
+  const isProd = process.env.NODE_ENV === 'production';
+  console.error('[api-error] unhandled:', error);
   return Response.json(
-    { error: 'Internal server error' } as APIErrorResponse,
+    {
+      error: isProd
+        ? 'Internal server error'
+        : error instanceof Error
+          ? error.message
+          : 'Internal server error',
+    } as APIErrorResponse,
     { status: 500 }
   );
 }

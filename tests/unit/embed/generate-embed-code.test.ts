@@ -17,6 +17,7 @@
 import {
   generateEmbedCode,
   generateAllEmbedCodes,
+  extractInlineDimensions,
   getPrimaryEmbedCode,
   generateWidgetKey,
   isValidWidgetKey,
@@ -66,10 +67,18 @@ describe('generateEmbedCode', () => {
       expect(result.language).toBe('html');
     });
 
-    it('should include container div', () => {
+    it('should include container div with default dimensions', () => {
       const result = generateEmbedCode(testWidget, 'inline');
       expect(result.code).toContain('<div id="chat-widget"');
       expect(result.code).toContain('style="width: 400px; height: 600px;"');
+    });
+
+    it('should use custom inline dimensions when provided', () => {
+      const result = generateEmbedCode(testWidget, 'inline', {
+        inlineWidth: 500,
+        inlineHeight: 700,
+      });
+      expect(result.code).toContain('style="width: 500px; height: 700px;"');
     });
 
     it('should include data-mode attribute', () => {
@@ -310,6 +319,61 @@ describe('getEmbedTypeInfo', () => {
     expect(info.label).toBe('Portal');
     expect(info.shortDescription).toContain('link');
     expect(info.tier).toBe('basic');
+  });
+});
+
+// =============================================================================
+// F2b. extractInlineDimensions Tests (F3 — canonical inline dimensions)
+// =============================================================================
+
+describe('extractInlineDimensions (F3)', () => {
+  const testWidget = { widgetKey: 'AbCdEfGh12345678' };
+
+  it('reads canonical config.theme.size.inlineWidth/inlineHeight', () => {
+    const config = { theme: { size: { inlineWidth: 720, inlineHeight: 480 } } };
+    expect(extractInlineDimensions(config)).toEqual({
+      inlineWidth: 720,
+      inlineHeight: 480,
+    });
+  });
+
+  it('falls back to legacy flat inlineWidth/inlineHeight', () => {
+    const config = { inlineWidth: 555, inlineHeight: 333 };
+    expect(extractInlineDimensions(config)).toEqual({
+      inlineWidth: 555,
+      inlineHeight: 333,
+    });
+  });
+
+  it('prefers canonical path over legacy when both present', () => {
+    const config = {
+      theme: { size: { inlineWidth: 720, inlineHeight: 480 } },
+      inlineWidth: 100,
+      inlineHeight: 100,
+    };
+    expect(extractInlineDimensions(config)).toEqual({
+      inlineWidth: 720,
+      inlineHeight: 480,
+    });
+  });
+
+  it('returns undefined dimensions for null/empty config', () => {
+    expect(extractInlineDimensions(null)).toEqual({
+      inlineWidth: undefined,
+      inlineHeight: undefined,
+    });
+    expect(extractInlineDimensions({})).toEqual({
+      inlineWidth: undefined,
+      inlineHeight: undefined,
+    });
+  });
+
+  it('produces configured (not 400x600 fallback) dims end-to-end via generateEmbedCode', () => {
+    const config = { theme: { size: { inlineWidth: 720, inlineHeight: 480 } } };
+    const opts = { ...extractInlineDimensions(config) };
+    const result = generateEmbedCode(testWidget, 'inline', opts);
+    expect(result.code).toContain('style="width: 720px; height: 480px;"');
+    expect(result.code).not.toContain('width: 400px; height: 600px;');
   });
 });
 

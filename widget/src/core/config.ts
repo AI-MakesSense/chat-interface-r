@@ -8,13 +8,39 @@
 
 import { WidgetConfig } from '../types';
 
+// NOTE: These literals MUST mirror lib/widget-config/schema.ts defaults.
+// The runtime cannot import the Zod schema (bundle size — type-only imports only;
+// never import runtime VALUES from lib/widget-config into widget/src).
+// Defaults correctness is guarded by tests/widget/config-defaults-parity.test.ts.
+//
+// Overlapping fields and their canonical equivalents:
+//   branding.companyName        ← brandingSchema   default 'My Company'
+//   branding.welcomeText        ← brandingSchema   default 'Welcome! How can we help you today?'
+//   branding.firstMessage       ← brandingSchema   default 'Hello! How can I assist you today?'
+//   style.position              ← positionSchema   default 'bottom-right'
+//   style.fontSize              ← typographySchema default 14
+//   features.fileAttachmentsEnabled ← attachmentsSchema default false
+//   features.allowedExtensions  ← attachmentsSchema default []
+//   features.maxFileSizeKB      ← attachmentsSchema default maxFileSizeMB(10) * 1024 = 10240
+//
+// Non-overlapping / translated-shape fields (kept local, no canonical equivalent):
+//   style.theme        — widget receives a boolean themeMode, canonical is theme.mode enum
+//   style.primaryColor — widget fallback only; server sends theme.color.accent.primary.
+//     Intentionally '#00bfff' (NOT canonical accent '#0ea5e9'): legacy renderers
+//     (ui-builder, header, message-list, toggle-button, chat-container,
+//     normal/portal-renderer) read this value directly as a background color, not
+//     as an accent token, so changing it would recolor misconfigured/window-only
+//     embeds that never receive a server payload.
+//   style.backgroundColor, textColor, cornerRadius, fontFamily — legacy style fields
+//   connection.captureContext — kept local; canonical connection is server-side only
+
 /**
  * Default configuration values
  */
 const DEFAULT_CONFIG: WidgetConfig = {
   branding: {
-    companyName: 'Support',
-    welcomeText: 'How can we help?',
+    companyName: 'My Company',
+    welcomeText: 'Welcome! How can we help you today?',
     firstMessage: 'Hello! How can I assist you today?',
   },
   style: {
@@ -30,7 +56,7 @@ const DEFAULT_CONFIG: WidgetConfig = {
   features: {
     fileAttachmentsEnabled: false,
     allowedExtensions: [],
-    maxFileSizeKB: 5120,
+    maxFileSizeKB: 10240,
   },
   connection: {
     captureContext: true,
@@ -120,7 +146,9 @@ export function readConfigFromWindow(): Partial<WidgetConfig> {
 }
 
 /**
- * Reads license flags from window.__LICENSE_FLAGS__
+ * Reads license flags from window.N8N_LICENSE_FLAGS — the SAME global the loader and
+ * index.ts write ({ tier, brandingEnabled }). Maps brandingEnabled → { branding } for
+ * the legacy footer contract. Defaults to showing branding when the global is absent.
  * @returns License flags or default values
  */
 export function readLicenseFlagsFromWindow(): { branding: boolean } {
@@ -128,13 +156,13 @@ export function readLicenseFlagsFromWindow(): { branding: boolean } {
     return { branding: true };
   }
 
-  const flags = (window as any).__LICENSE_FLAGS__;
+  const flags = (window as any).N8N_LICENSE_FLAGS;
 
   if (!flags || typeof flags !== 'object') {
     return { branding: true };
   }
 
   return {
-    branding: flags.branding !== undefined ? flags.branding : true,
+    branding: flags.brandingEnabled !== undefined ? flags.brandingEnabled : true,
   };
 }

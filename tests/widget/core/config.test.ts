@@ -116,13 +116,19 @@ describe('widget/src/core/config', () => {
   });
 
   describe('readLicenseFlagsFromWindow', () => {
+    afterEach(() => {
+      delete (window as any).N8N_LICENSE_FLAGS;
+    });
+
     test('uses defaults when flags missing', () => {
       const flags = readLicenseFlagsFromWindow();
       expect(flags.branding).toBe(true);
     });
 
-    test('reads branding flag from window', () => {
-      (window as any).__LICENSE_FLAGS__ = { branding: false };
+    test('reads brandingEnabled from the SAME global the loader/index.ts write (N8N_LICENSE_FLAGS)', () => {
+      // The written global shape is { tier, brandingEnabled } — reader must consume it,
+      // not the historical window.__LICENSE_FLAGS__ which nothing writes.
+      (window as any).N8N_LICENSE_FLAGS = { tier: 'pro', brandingEnabled: false };
       const flags = readLicenseFlagsFromWindow();
       expect(flags.branding).toBe(false);
     });

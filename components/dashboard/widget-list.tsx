@@ -9,7 +9,8 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { Widget } from '@/stores/widget-store';
+import { Widget, WidgetConfig } from '@/stores/widget-store';
+import { WidgetThumbnail } from '@/components/configurator/widget-thumbnail';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -17,6 +18,7 @@ import { Edit, Trash2, Globe, Calendar, X, Check, Code, Bot, Webhook } from 'luc
 import { EmbedTypeBadge } from '@/components/configurator/embed-type-selector';
 import type { EmbedType } from '@/stores/widget-store';
 import { CHATKIT_UI_ENABLED } from '@/lib/feature-flags';
+import { generateEmbedCode, resolveEmbedBaseUrl } from '@/lib/embed';
 
 /**
  * Determine widget type from config
@@ -92,17 +94,20 @@ export function WidgetList({ widgets, onDelete }: WidgetListProps) {
      * Schema v2.0: Prefers widgetKey, falls back to licenseKey for backward compatibility
      */
     const handleCopyEmbed = (widget: Widget) => {
-        const baseUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://chat-interface-r.vercel.app';
+        const baseUrl = resolveEmbedBaseUrl();
         const providerType = getWidgetType(widget);
         const widgetType = providerType === 'chatkit' ? 'ChatKit Agent' : 'N8n Workflow';
+        const selectedEmbedType = (widget.embedType || 'popup') as EmbedType;
 
         let embedCode: string;
 
         // Schema v2.0: Use widgetKey if available, otherwise fall back to licenseKey
         if (widget.widgetKey) {
-            // New v2.0 embed code using widgetKey
-            embedCode = `<!-- ${widgetType} Widget -->
-<script src="${baseUrl}/w/${widget.widgetKey}.js" async></script>`;
+            embedCode = generateEmbedCode(
+                { widgetKey: widget.widgetKey },
+                selectedEmbedType,
+                { baseUrl, inlineWidth: widget.config?.theme.size.inlineWidth, inlineHeight: widget.config?.theme.size.inlineHeight }
+            ).code;
         } else if (widget.licenseKey) {
             // Legacy embed code using licenseKey
             embedCode = `<!-- ${widgetType} Widget -->
@@ -139,14 +144,14 @@ export function WidgetList({ widgets, onDelete }: WidgetListProps) {
     return (
         <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
             {widgets.map((widget) => (
-                <Card key={widget.id} className="flex flex-col">
+                <Card key={widget.id} className="flex flex-col bg-zinc-900 border-zinc-800 text-white">
                     <CardHeader>
                         <div className="flex items-start justify-between">
                             <div>
-                                <CardTitle className="text-lg truncate pr-2" title={widget.name}>
+                                <CardTitle className="text-lg truncate pr-2 text-white" title={widget.name}>
                                     {widget.name}
                                 </CardTitle>
-                                <CardDescription className="text-xs mt-1 flex items-center gap-2">
+                                <CardDescription className="text-xs mt-1 flex items-center gap-2 text-zinc-400">
                                     {widget.widgetKey ? (
                                         <span className="font-mono">{widget.widgetKey.slice(0, 8)}...</span>
                                     ) : (
@@ -162,8 +167,19 @@ export function WidgetList({ widgets, onDelete }: WidgetListProps) {
                             </Badge>
                         </div>
                     </CardHeader>
-                    <CardContent className="flex-1">
-                        <div className="space-y-2 text-sm text-muted-foreground">
+                    {/* Widget Thumbnail Preview (static mock — live iframes per card would be too heavy) */}
+                    <div className="mx-4 mb-2 h-[120px] rounded-lg overflow-hidden bg-zinc-800 relative">
+                        {widget.config ? (
+                            <WidgetThumbnail config={widget.config as WidgetConfig} />
+                        ) : (
+                            <div className="w-full h-full flex items-center justify-center bg-zinc-800">
+                                <Globe className="h-8 w-8 text-zinc-600" />
+                            </div>
+                        )}
+                    </div>
+
+                    <CardContent className="flex-1 pt-0">
+                        <div className="space-y-2 text-sm text-zinc-400">
                             <div className="flex items-center gap-2">
                                 <Calendar className="h-4 w-4" />
                                 <span>Created {new Date(widget.createdAt).toLocaleDateString()}</span>
@@ -189,7 +205,7 @@ export function WidgetList({ widgets, onDelete }: WidgetListProps) {
                             })()}
                         </div>
                     </CardContent>
-                    <CardFooter className="flex flex-col gap-2 pt-4 border-t">
+                    <CardFooter className="flex flex-col gap-2 pt-4 border-t border-zinc-800">
                         <div className="flex w-full gap-2">
                             <Button
                                 variant="secondary"
@@ -242,7 +258,8 @@ export function WidgetList({ widgets, onDelete }: WidgetListProps) {
                                         onClick={() => {
                                             const provider = getWidgetType(widget);
                                             const path = provider === 'chatkit' ? '/configurator/chatkit' : '/configurator/n8n';
-                                            router.push(`${path}?widgetId=${widget.id}`);
+                                            const currentEmbedType = widget.embedType || 'popup';
+                                            router.push(`${path}?widgetId=${widget.id}&embedType=${currentEmbedType}`);
                                         }}
                                     >
                                         <Edit className="h-4 w-4" />

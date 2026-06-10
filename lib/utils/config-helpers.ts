@@ -5,55 +5,27 @@
  * Used by both widget creation and update API routes.
  */
 
-/**
- * Deep merge two objects recursively
- * Used to merge user config with defaults while preserving nested structure
- */
-export function deepMerge(target: any, source: any): any {
-  const output = { ...target };
-
-  for (const key in source) {
-    if (source[key] && typeof source[key] === 'object' && !Array.isArray(source[key])) {
-      // Recursively merge nested objects
-      output[key] = deepMerge(target[key] || {}, source[key]);
-    } else {
-      // Direct assignment for primitives and arrays
-      output[key] = source[key];
-    }
-  }
-
-  return output;
-}
-
-/**
- * Strip legacy config properties that conflict with new structure
- *
- * Removes old nested objects like:
- * - theme.mode (old) vs themeMode (new)
- * - theme.colors (old) vs color system (new)
- * - behavior, advancedStyling, etc.
- */
-export function stripLegacyConfigProperties(config: any): any {
-  const cleaned = { ...config };
-
-  // Remove legacy nested theme object if it exists
-  // The new structure uses flat properties like themeMode, not nested theme.mode
-  if (cleaned.theme && typeof cleaned.theme === 'object') {
-    delete cleaned.theme;
-  }
-
-  // Remove other legacy nested structures
-  delete cleaned.behavior;
-  delete cleaned.advancedStyling;
-
-  return cleaned;
-}
+// Re-export the canonical shared deepMerge so existing call sites keep working.
+// The old inline implementation assigned `undefined` values (incorrectly clobbering
+// base values); the shared one skips `undefined`, which is the correct semantics.
+export { deepMerge } from '@/lib/utils/deep-merge';
+import { TIER_LIMITS, normalizeUserTier } from '@/lib/license/tiers';
 
 /**
  * Sanitize configuration to ensure it passes validation
  * Handles legacy data, invalid formats, and tier restrictions
+ *
+ * @param config - The widget configuration to sanitize
+ * @param tier - Subscription tier for restriction enforcement
+ * @param kind - Widget kind ('chat' | 'display'). Defaults to 'chat' for backward compatibility.
+ *               Chat-only transformations (launcherIcon, advancedStyling) are skipped
+ *               when kind === 'display' to avoid injecting chat fields into display configs.
+ *
+ * NOTE: this function repairs invalid data (bad hex, http URLs, tier violations).
+ * It must NOT supply defaults — those live in exactly one place, the canonical
+ * Zod schema (lib/widget-config/schema.ts), and sanitize runs before safeParse.
  */
-export function sanitizeConfig(config: any, tier: string): any {
+export function sanitizeConfig(config: any, tier: string, kind: 'chat' | 'display' = 'chat'): any {
   const sanitized = JSON.parse(JSON.stringify(config)); // Deep clone
 
   // Helper to fix hex colors
@@ -76,34 +48,41 @@ export function sanitizeConfig(config: any, tier: string): any {
     return null;
   };
 
-  // 1. Tier Restrictions (Basic/Free)
-  if (tier === 'basic' || tier === 'free') {
-    if (sanitized.advancedStyling) sanitized.advancedStyling.enabled = false;
-    if (sanitized.features) {
-      sanitized.features.emailTranscript = false;
-      sanitized.features.ratingPrompt = false;
+  // 1. Tier Restrictions — enforce via the central entitlements module.
+  if (!TIER_LIMITS[normalizeUserTier(tier)].brandingRemovable) {
+    // advancedStyling and features are chat-only; guard ensures no-op for display configs
+    if (kind === 'chat') {
+      if (sanitized.advancedStyling) sanitized.advancedStyling.enabled = false;
+      if (sanitized.features) {
+        sanitized.features.emailTranscript = false;
+        sanitized.features.ratingPrompt = false;
+      }
     }
     if (sanitized.branding) sanitized.branding.brandingEnabled = true;
   }
 
   // 2. Data Integrity - Branding
   if (sanitized.branding) {
-    if (!sanitized.branding.companyName) sanitized.branding.companyName = 'My Company';
-    if (!sanitized.branding.welcomeText) sanitized.branding.welcomeText = 'How can we help?';
-    if (!sanitized.branding.firstMessage) sanitized.branding.firstMessage = 'Hello! How can I assist you today?';
+    // companyName / firstMessage / welcomeText fallbacks intentionally removed:
+    // sanitize runs BEFORE safeParse, so hardcoding values here suppressed the
+    // canonical schema defaults. Let the schema apply them.
 
-    // Fix launcher icon
-    if (sanitized.branding.launcherIcon === 'custom') {
-      const validUrl = fixUrl(sanitized.branding.customLauncherIconUrl);
-      if (!validUrl) {
-        sanitized.branding.launcherIcon = 'chat'; // Revert to default if URL invalid
-        sanitized.branding.customLauncherIconUrl = null;
+    // launcherIcon / customLauncherIconUrl are chat-only concepts; injecting them
+    // into a display config would add unexpected fields and corrupt validation.
+    if (kind === 'chat') {
+      // Fix launcher icon (chat-only concept)
+      if (sanitized.branding.launcherIcon === 'custom') {
+        const validUrl = fixUrl(sanitized.branding.customLauncherIconUrl);
+        if (!validUrl) {
+          sanitized.branding.launcherIcon = 'chat'; // Revert to default if URL invalid
+          sanitized.branding.customLauncherIconUrl = null;
+        } else {
+          sanitized.branding.customLauncherIconUrl = validUrl;
+        }
       } else {
-        sanitized.branding.customLauncherIconUrl = validUrl;
+        // Ensure it's null if not custom, to avoid validation errors
+        sanitized.branding.customLauncherIconUrl = null;
       }
-    } else {
-      // Ensure it's null if not custom, to avoid validation errors
-      sanitized.branding.customLauncherIconUrl = null;
     }
 
     sanitized.branding.logoUrl = fixUrl(sanitized.branding.logoUrl);

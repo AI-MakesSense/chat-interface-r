@@ -26,16 +26,32 @@ import { db } from '@/lib/db/client';
 import { widgets } from '@/lib/db/schema';
 import { eq, ne, and } from 'drizzle-orm';
 import { handleAPIError, errorResponse } from '@/lib/utils/api-error';
+import { TIER_LIMITS, normalizeUserTier, type Tier } from '@/lib/license/tiers';
 
 /**
- * Tier feature configuration
+ * Unlimited sentinel for the wire/response shape. The dashboard
+ * (components/dashboard/subscription-card.tsx) treats widgetLimit === -1 as
+ * "unlimited" (renders ∞, skips the usage bar), so the API must convert the
+ * shared module's Infinity → -1 at the response boundary. Do NOT leak Infinity
+ * (it is not valid JSON and serializes to null).
+ */
+const UNLIMITED_WIRE_VALUE = -1;
+const toWireLimit = (max: number): number =>
+  Number.isFinite(max) ? max : UNLIMITED_WIRE_VALUE;
+
+/**
+ * Tier feature configuration.
+ *
+ * Widget limits are NOT defined here — they come from the shared
+ * lib/license/tiers TIER_LIMITS (single source of truth). The fields below are
+ * display-only entitlements surfaced on the dashboard. `whiteLabel` mirrors
+ * brandingRemovable from the shared module and is derived per-tier at response
+ * time; the remaining fields are display config local to this route.
  */
 const TIER_FEATURES = {
   free: {
-    widgetLimit: 3,
     embedTypes: ['popup'],
     advancedStyling: false,
-    whiteLabel: false,
     fileAttachments: false,
     customFonts: false,
     domainWhitelist: false,
@@ -45,10 +61,8 @@ const TIER_FEATURES = {
     prioritySupport: false,
   },
   basic: {
-    widgetLimit: 5,
     embedTypes: ['popup', 'inline', 'fullpage', 'portal'],
     advancedStyling: false,
-    whiteLabel: false,
     fileAttachments: true,
     customFonts: false,
     domainWhitelist: true,
@@ -58,10 +72,8 @@ const TIER_FEATURES = {
     prioritySupport: false,
   },
   pro: {
-    widgetLimit: -1, // Unlimited
     embedTypes: ['popup', 'inline', 'fullpage', 'portal'],
     advancedStyling: true,
-    whiteLabel: true,
     fileAttachments: true,
     customFonts: true,
     domainWhitelist: true,
@@ -71,10 +83,8 @@ const TIER_FEATURES = {
     prioritySupport: true,
   },
   agency: {
-    widgetLimit: -1, // Unlimited
     embedTypes: ['popup', 'inline', 'fullpage', 'portal'],
     advancedStyling: true,
-    whiteLabel: true,
     fileAttachments: true,
     customFonts: true,
     domainWhitelist: true,
@@ -83,9 +93,9 @@ const TIER_FEATURES = {
     teamMembers: 5,
     prioritySupport: true,
   },
-} as const;
+} as const satisfies Record<Tier, Record<string, unknown>>;
 
-type SubscriptionTier = keyof typeof TIER_FEATURES;
+type SubscriptionTier = Tier;
 
 export async function GET(request: NextRequest) {
   try {
@@ -98,15 +108,22 @@ export async function GET(request: NextRequest) {
       return errorResponse('User not found', 404);
     }
 
-    // Get tier from user (Schema v2.0) or default to 'free'
-    const tier = ((user as any).tier || 'free') as SubscriptionTier;
+    // Get tier from user (Schema v2.0); normalizeUserTier handles null/unknown → 'free'
+    const tier = normalizeUserTier((user as any).tier);
     const status = (user as any).subscriptionStatus || 'active';
     const currentPeriodEnd = (user as any).currentPeriodEnd || null;
     const stripeCustomerId = (user as any).stripeCustomerId || null;
     const stripeSubscriptionId = (user as any).stripeSubscriptionId || null;
 
-    // Get features for this tier
-    const features = TIER_FEATURES[tier] || TIER_FEATURES.free;
+    // Get display features for this tier. widgetLimit + whiteLabel come from the
+    // shared TIER_LIMITS module (single source of truth); the rest are display
+    // config local to this route. widgetLimit uses the -1 unlimited wire value.
+    const limits = TIER_LIMITS[tier];
+    const features = {
+      ...TIER_FEATURES[tier],
+      widgetLimit: toWireLimit(limits.maxWidgets),
+      whiteLabel: limits.brandingRemovable,
+    };
 
     // Count user's active widgets
     const widgetCount = await db

@@ -1,50 +1,170 @@
 /**
  * Simple Markdown Parser for Chat Widget
- * * Renders basic markdown:
- * - **bold**
- * - *italic*
+ *
+ * Renders markdown to HTML:
+ * - # h1 through ###### h6
+ * - **bold**, *italic*
  * - [links](url)
- * - `code`
- * - ```code blocks```
+ * - `inline code`, ```code blocks```
+ * - | tables | with | alignment |
+ * - - unordered lists, 1. ordered lists
+ * - > blockquotes (multi-line merged)
+ * - --- horizontal rules
  * - Newlines to <br>
- * * Replaces heavy 'markdown-it' dependency to save bundle size.
+ *
+ * Replaces heavy 'markdown-it' dependency to save bundle size.
  */
 
 export function renderMarkdown(text: string): string {
   if (!text) return '';
 
   try {
-    // 1. Escape HTML first to prevent XSS
-    let html = escapeHtml(text);
+    // Normalize line endings and ensure trailing newline for block-level regex
+    let src = text.replace(/\r\n/g, '\n').replace(/\r/g, '\n');
+    if (!src.endsWith('\n')) src += '\n';
 
-    // 2. Code Blocks (```)
-    // We handle these first to avoid processing internal chars
-    html = html.replace(/```([\s\S]*?)```/g, '<pre><code>$1</code></pre>');
+    // 1. Escape HTML to prevent XSS
+    let html = escapeHtml(src);
 
-    // 3. Inline Code (`)
-    html = html.replace(/`([^`]+)`/g, '<code>$1</code>');
+    // 2. Code blocks (``` with optional language) — extract early to protect contents
+    const codeBlocks: string[] = [];
+    html = html.replace(/```[\w]*\n?([\s\S]*?)```/g, (_m, code: string) => {
+      codeBlocks.push(`<pre><code>${code.replace(/\n$/, '')}</code></pre>`);
+      return `\x00CB${codeBlocks.length - 1}\x00`;
+    });
 
-    // 4. Bold (**)
-    html = html.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>');
+    // 3. Inline code — extract to placeholders to protect contents from auto-linking
+    const inlineCodes: string[] = [];
+    html = html.replace(/`([^`]+)`/g, (_m, code: string) => {
+      inlineCodes.push(`<code>${code}</code>`);
+      return `\x00IC${inlineCodes.length - 1}\x00`;
+    });
 
-    // 5. Italic (*)
-    html = html.replace(/\*([^*]+)\*/g, '<em>$1</em>');
-
-    // 6. Links [text](url)
-    // Simple regex for links - checks for http/https to be safe
+    // 3b. Auto-link raw URLs (https://, http://, www.)
+    // Code blocks and inline code are already extracted as placeholders,
+    // so URLs inside code won't be matched.
     html = html.replace(
-      /\[([^\]]+)\]\((https?:\/\/[^\)]+)\)/g,
-      '<a href="$2" target="_blank" rel="noopener noreferrer">$1</a>'
+      /(?<!\]\()(?<!=["'])(https?:\/\/[^\s<>)\]]+|www\.[^\s<>)\]]+)/g,
+      (url: string) => {
+        // Strip trailing punctuation that's likely sentence-ending, not part of URL
+        const cleaned = url.replace(/[.,;!?:]+$/, '');
+        const trailing = url.slice(cleaned.length);
+        const href = cleaned.startsWith('www.') ? `https://${cleaned}` : cleaned;
+        return `<a href="${href}" target="_blank" rel="noopener noreferrer">${cleaned}</a>${trailing}`;
+      }
     );
 
-    // 7. Newlines to <br>
-    // FIX: Correct regex for newlines, ignoring those inside <pre> tags (basic check)
+    // 4. Tables — must run before line-level transforms
+    // Match consecutive lines that start and end with |
+    html = html.replace(
+      /(?:^\|.+\|[ \t]*$\n?)+/gm,
+      (block: string) => {
+        const rows = block.trim().split('\n').filter(r => r.trim());
+        if (rows.length < 2) return block;
+
+        const isSep = /^\|[\s\-:|]+\|$/.test(rows[1].trim());
+        if (!isSep) {
+          const body = rows.map(r => {
+            const cells = r.replace(/^\||\|$/g, '').split('|').map(c => `<td>${c.trim()}</td>`).join('');
+            return `<tr>${cells}</tr>`;
+          }).join('');
+          return `<table><tbody>${body}</tbody></table>\n`;
+        }
+
+        // Parse column alignment from separator row
+        const aligns = rows[1].replace(/^\||\|$/g, '').split('|').map(c => {
+          const t = c.trim();
+          if (t.startsWith(':') && t.endsWith(':')) return 'center';
+          if (t.endsWith(':')) return 'right';
+          if (t.startsWith(':')) return 'left';
+          return '';
+        });
+        const attr = (i: number) => aligns[i] ? ` align="${aligns[i]}"` : '';
+
+        const header = rows[0].replace(/^\||\|$/g, '').split('|')
+          .map((c, i) => `<th${attr(i)}>${c.trim()}</th>`).join('');
+
+        const body = rows.slice(2).map(r => {
+          const cells = r.replace(/^\||\|$/g, '').split('|')
+            .map((c, i) => `<td${attr(i)}>${c.trim()}</td>`).join('');
+          return `<tr>${cells}</tr>`;
+        }).join('');
+
+        return `<table><thead><tr>${header}</tr></thead><tbody>${body}</tbody></table>\n`;
+      }
+    );
+
+    // 5. Headers (# through ######)
+    html = html.replace(/^(#{1,6})\s+(.+)$/gm, (_m, h: string, content: string) => {
+      return `<h${h.length}>${content}</h${h.length}>`;
+    });
+
+    // 6. Bold (**)
+    html = html.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>');
+
+    // 7. Italic (*)
+    html = html.replace(/\*([^*]+)\*/g, '<em>$1</em>');
+
+    // 8. Horizontal rules (---, ___, ***)
+    html = html.replace(/^(?:---+|___+|\*\*\*+)\s*$/gm, '<hr>');
+
+    // 9. Blockquotes — merge consecutive lines
+    html = html.replace(
+      /(?:^&gt;\s?(.+)$\n?)+/gm,
+      (block: string) => {
+        const lines = block.trim().split('\n')
+          .map(l => l.replace(/^&gt;\s?/, ''));
+        return `<blockquote>${lines.join('<br>')}</blockquote>`;
+      }
+    );
+
+    // 10. Ordered lists — collect consecutive numbered lines
+    html = html.replace(
+      /(?:^\d+\.\s+.+$\n?)+/gm,
+      (block: string) => {
+        const items = block.trim().split('\n')
+          .map(l => `<li>${l.replace(/^\d+\.\s+/, '')}</li>`).join('');
+        return `<ol>${items}</ol>`;
+      }
+    );
+
+    // 11. Unordered lists — collect consecutive - or * lines
+    html = html.replace(
+      /(?:^[-*]\s+.+$\n?)+/gm,
+      (block: string) => {
+        const items = block.trim().split('\n')
+          .map(l => `<li>${l.replace(/^[-*]\s+/, '')}</li>`).join('');
+        return `<ul>${items}</ul>`;
+      }
+    );
+
+    // 12. Links [text](url)
+    html = html.replace(
+      /\[([^\]]+)\]\(([^)]+)\)/g,
+      (_m, text: string, url: string) => {
+        // If text was auto-linked, strip the <a> tags to get clean text
+        const cleanText = text.replace(/<a [^>]*>([^<]*)<\/a>/g, '$1');
+        return `<a href="${url}" target="_blank" rel="noopener noreferrer">${cleanText}</a>`;
+      }
+    );
+
+    // 13. Newlines to <br> (but not inside block elements)
     html = html.replace(/\n/g, '<br>');
+
+    // Clean up <br> adjacent to block elements
+    html = html.replace(/<\/(h[1-6]|pre|blockquote|ul|ol|li|hr|table|thead|tbody|tr|th|td)><br>/g, '</$1>');
+    html = html.replace(/<br><(h[1-6]|pre|blockquote|ul|ol|hr|table|thead|tbody|tr)/g, '<$1');
+    // Remove trailing <br> at end
+    html = html.replace(/(<br>)+$/, '');
+
+    // 14. Restore inline code and code blocks
+    html = html.replace(/\x00IC(\d+)\x00/g, (_m, idx: string) => inlineCodes[parseInt(idx)]);
+    html = html.replace(/\x00CB(\d+)\x00/g, (_m, idx: string) => codeBlocks[parseInt(idx)]);
 
     return html;
   } catch (error) {
     console.warn('Markdown rendering failed, falling back to plain text', error);
-    return text; // Fallback to raw text if regex fails
+    return text;
   }
 }
 
@@ -57,8 +177,7 @@ function escapeHtml(unsafe: string): string {
     '<': '&lt;',
     '>': '&gt;',
     '"': '&quot;',
-    "'": '&#039;' // FIX: Correctly quoted key and value
+    "'": '&#039;'
   };
-
   return unsafe.replace(/[&<>"']/g, (char) => map[char] || char);
 }

@@ -12,7 +12,7 @@
 import { notFound } from 'next/navigation';
 import { getWidgetByKeyWithUser } from '@/lib/db/queries';
 import { ChatKitEmbed } from '@/components/chatkit-embed';
-import { WidgetConfig } from '@/stores/widget-store';
+import { migrateConfig } from '@/lib/widget-config/migrate';
 import { CHATKIT_SERVER_ENABLED } from '@/lib/feature-flags';
 
 interface PageProps {
@@ -55,7 +55,7 @@ export default async function ChatKitWidgetPage({ params }: PageProps) {
   }
 
   // Check if it's a ChatKit widget
-  const config = widget.config as WidgetConfig;
+  const config = migrateConfig(widget.config);
   if (widget.widgetType !== 'chatkit' && config.connection?.provider !== 'chatkit') {
     return (
       <div className="flex items-center justify-center h-screen bg-neutral-50 text-neutral-500">
@@ -84,7 +84,7 @@ export async function generateMetadata({ params }: PageProps) {
     return { title: 'Widget Not Found' };
   }
 
-  const config = widget.config as WidgetConfig;
+  const config = migrateConfig(widget.config);
   const companyName = config?.branding?.companyName || 'ChatKit Widget';
 
   return {

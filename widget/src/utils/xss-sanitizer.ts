@@ -82,6 +82,8 @@ export class XssSanitizer {
       'tr',
       'th',
       'td',
+      // Horizontal rules
+      'hr',
       // Images (for markdown images)
       'img',
     ],
