@@ -267,4 +267,83 @@ describe('Widget Serve Route (compat bootstrap)', () => {
     jest.dontMock('@/lib/security/rate-limit');
     jest.dontMock('@/lib/db/queries');
   });
+
+  describe('ChatKit served-JS injection guard (finding #17)', () => {
+    const chatkitUrl = `https://chat-interface-r.vercel.app/chatkit/${widgetKey}`;
+
+    function loadChatkitGet(widgetOverrides: Record<string, any>) {
+      jest.resetModules();
+      jest.doMock('@/lib/feature-flags', () => ({ CHATKIT_SERVER_ENABLED: true }));
+      jest.doMock('@/lib/security/rate-limit', () => ({
+        checkRateLimit: jest.fn().mockResolvedValue({ allowed: true }),
+      }));
+      jest.doMock('@/lib/db/queries', () => ({
+        getWidgetByKeyWithUser: jest.fn().mockResolvedValue(
+          n8nWidget({
+            widgetType: 'chatkit',
+            allowedDomains: [],
+            user: { id: 'u', tier: 'agency', subscriptionStatus: 'active' },
+            ...widgetOverrides,
+          })
+        ),
+      }));
+      return require('@/app/w/[widgetKey]/route').GET;
+    }
+
+    async function serve(GetChatkit: any) {
+      const response = await GetChatkit(
+        makeRequest({ origin: 'https://example.com', host: 'chat-interface-r.vercel.app' }),
+        { params: Promise.resolve({ widgetKey: `${widgetKey}.js` }) }
+      );
+      expect(response.status).toBe(200);
+      return response.text();
+    }
+
+    afterEach(() => {
+      jest.resetModules();
+      jest.dontMock('@/lib/feature-flags');
+      jest.dontMock('@/lib/security/rate-limit');
+      jest.dontMock('@/lib/db/queries');
+    });
+
+    it('does not interpolate a non-hex accentColor into the served popup script', async () => {
+      const GetChatkit = loadChatkitGet({
+        embedType: 'popup',
+        // Legacy DB rows predate hex validation on the write path — a stored
+        // value like this would break out of the cssText string and execute.
+        config: { chatkitAccentPrimary: '#fff;}};alert(1);//' },
+      });
+
+      const js = await serve(GetChatkit);
+      expect(js).not.toContain('alert(1)');
+      // Fell back to the default accent color.
+      expect(js).toContain('#0f172a');
+    });
+
+    it('passes valid 3/6/8-digit hex accent colors through unchanged', async () => {
+      for (const hex of ['#abc', '#A1B2C3', '#A1B2C3FF']) {
+        const GetChatkit = loadChatkitGet({
+          embedType: 'popup',
+          config: { chatkitAccentPrimary: hex },
+        });
+        const js = await serve(GetChatkit);
+        expect(js).toContain(`background: ${hex};`);
+      }
+    });
+
+    it('serves a JSON-encoded iframe src in the popup script', async () => {
+      const GetChatkit = loadChatkitGet({ embedType: 'popup', config: {} });
+      const js = await serve(GetChatkit);
+      expect(js).toContain(`iframe.src = ${JSON.stringify(chatkitUrl)};`);
+      // No unresolved template artifacts in the served script.
+      expect(js).not.toContain('${');
+    });
+
+    it('serves a JSON-encoded iframe src in the inline script', async () => {
+      const GetChatkit = loadChatkitGet({ embedType: 'inline', config: {} });
+      const js = await serve(GetChatkit);
+      expect(js).toContain(`iframe.src = ${JSON.stringify(chatkitUrl)};`);
+      expect(js).not.toContain('${');
+    });
+  });
 });

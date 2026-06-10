@@ -256,7 +256,7 @@ export async function GET(
   if (targetContainer) {
     // Inline mode - embed in the target container
     var iframe = document.createElement('iframe');
-    iframe.src = "${widgetUrl}";
+    iframe.src = ${JSON.stringify(widgetUrl)};
     iframe.style.cssText = "width: 100%; height: 100%; border: none; background: transparent;";
     iframe.allow = "clipboard-write";
     targetContainer.innerHTML = '';
@@ -269,7 +269,12 @@ export async function GET(
       } else {
         // Popup mode (default): floating chat bubble with toggle
         const config = widget.config as any;
-        const accentColor = config?.chatkitAccentPrimary || config?.accentColor || '#0f172a';
+        // Served-JS injection guard: these values are interpolated into a
+        // script we serve to customer pages. Write paths validate them today,
+        // but legacy rows predate that validation — never trust stored data
+        // when building executable output.
+        const rawAccent = config?.chatkitAccentPrimary || config?.accentColor || '#0f172a';
+        const accentColor = /^#[0-9A-Fa-f]{3,8}$/.test(String(rawAccent)) ? String(rawAccent) : '#0f172a';
         const position = config?.style?.position || 'bottom-right';
         const positionStyles = position === 'bottom-left'
           ? 'left: 20px; right: auto;'
@@ -295,7 +300,7 @@ export async function GET(
   container.style.cssText = "position: fixed; bottom: 90px; ${positionStyles} width: 400px; height: 600px; max-height: calc(100vh - 120px); border-radius: 16px; overflow: hidden; box-shadow: 0 8px 32px rgba(0,0,0,0.2); z-index: 999999; display: none; background: white;";
 
   var iframe = document.createElement('iframe');
-  iframe.src = "${widgetUrl}";
+  iframe.src = ${JSON.stringify(widgetUrl)};
   iframe.style.cssText = "width: 100%; height: 100%; border: none; background: transparent;";
   iframe.allow = "clipboard-write";
 
