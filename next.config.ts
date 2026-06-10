@@ -39,8 +39,24 @@ const nextConfig: NextConfig = {
     return [
       {
         // Apply security headers to all routes EXCEPT widget-serving and embeddable paths
-        source: "/((?!w/|api/widget/|api/embed/|chat/|chatkit/).*)",
+        source: "/((?!w/|api/widget/|api/embed/|chat/|chatkit/|widget/).*)",
         headers: securityHeaders,
+      },
+      {
+        // Content-hashed widget bundles never change for a given URL — cache forever.
+        source: "/widget/v/:path*",
+        headers: [
+          { key: "Cache-Control", value: "public, max-age=31536000, immutable" },
+          { key: "Access-Control-Allow-Origin", value: "*" },
+        ],
+      },
+      {
+        // Stable loader URL — short cache so loader fixes propagate quickly.
+        source: "/widget/loader.js",
+        headers: [
+          { key: "Cache-Control", value: "public, max-age=300, stale-while-revalidate=3600" },
+          { key: "Access-Control-Allow-Origin", value: "*" },
+        ],
       },
     ];
   },

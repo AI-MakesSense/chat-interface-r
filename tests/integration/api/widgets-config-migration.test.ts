@@ -349,8 +349,10 @@ describe('GET /api/w/[widgetKey]/config — canonical translation', () => {
 
     expect(res.status).toBe(200);
     const body = await res.json();
+    // Loader envelope: config now lives under runtime.uiConfig
+    const uiConfig = body.runtime.uiConfig;
     // companyName migrated from legacy branding section
-    expect(body.branding?.companyName).toBe('Legacy Co');
+    expect(uiConfig.branding?.companyName).toBe('Legacy Co');
   });
 
   it('returns style.position derived from canonical theme.position.position', async () => {
@@ -360,9 +362,10 @@ describe('GET /api/w/[widgetKey]/config — canonical translation', () => {
     const res = await widgetKeyConfigRoute.GET(req, { params: Promise.resolve({ widgetKey: WIDGET_KEY }) });
 
     const body = await res.json();
+    const uiConfig = body.runtime.uiConfig;
     // LEGACY_CONFIG has style.position = 'bottom-left'; after migration it maps to
     // theme.position.position = 'bottom-left'. translateConfig reads canonical path.
-    expect(body.style?.position).toBe('bottom-left');
+    expect(uiConfig.style?.position).toBe('bottom-left');
   });
 
   it('does not expose webhookUrl in the translated config', async () => {
@@ -372,8 +375,10 @@ describe('GET /api/w/[widgetKey]/config — canonical translation', () => {
     const res = await widgetKeyConfigRoute.GET(req, { params: Promise.resolve({ widgetKey: WIDGET_KEY }) });
 
     const body = await res.json();
-    expect(body.connection?.webhookUrl).toBeUndefined();
-    expect(body.connection?.relayEndpoint).toContain('/api/chat-relay');
+    const uiConfig = body.runtime.uiConfig;
+    expect(uiConfig.connection?.webhookUrl).toBeUndefined();
+    expect(uiConfig.connection?.apiKey).toBeUndefined();
+    expect(uiConfig.connection?.relayEndpoint).toContain('/api/chat-relay');
   });
 
   it('does not emit theme.color.accent for a legacy config that never had an accent flag', async () => {
@@ -386,7 +391,8 @@ describe('GET /api/w/[widgetKey]/config — canonical translation', () => {
 
     expect(res.status).toBe(200);
     const body = await res.json();
-    expect(body.theme?.color?.accent).toBeUndefined();
+    const uiConfig = body.runtime.uiConfig;
+    expect(uiConfig.theme?.color?.accent).toBeUndefined();
   });
 
   it('emits the full prompt text for legacy starter prompts with a prompt field', async () => {
@@ -416,8 +422,9 @@ describe('GET /api/w/[widgetKey]/config — canonical translation', () => {
 
     expect(res.status).toBe(200);
     const body = await res.json();
-    expect(body.startScreen?.prompts).toHaveLength(1);
-    expect(body.startScreen.prompts[0].label).toBe('Short');
-    expect(body.startScreen.prompts[0].prompt).toBe('Longer text');
+    const uiConfig = body.runtime.uiConfig;
+    expect(uiConfig.startScreen?.prompts).toHaveLength(1);
+    expect(uiConfig.startScreen.prompts[0].label).toBe('Short');
+    expect(uiConfig.startScreen.prompts[0].prompt).toBe('Longer text');
   });
 });

@@ -136,7 +136,7 @@ describe('GET /api/w/[widgetKey]/config for display widgets', () => {
     } as any);
 
     const body = await res.json();
-    expect(body.kind).toBe('display');
+    expect(body.runtime.uiConfig.kind).toBe('display');
   });
 
   it('strips webhookUrl from the served config (server-only secret)', async () => {
@@ -149,7 +149,7 @@ describe('GET /api/w/[widgetKey]/config for display widgets', () => {
 
     const body = await res.json();
     // webhookUrl must not be exposed to the client
-    expect(body.connection?.webhookUrl).toBeUndefined();
+    expect(body.runtime.uiConfig.connection?.webhookUrl).toBeUndefined();
   });
 
   it('exposes relayEndpoint derived from the request URL', async () => {
@@ -161,8 +161,8 @@ describe('GET /api/w/[widgetKey]/config for display widgets', () => {
     } as any);
 
     const body = await res.json();
-    expect(body.connection.relayEndpoint).toBeDefined();
-    expect(body.connection.relayEndpoint).toContain('/api/chat-relay');
+    expect(body.runtime.uiConfig.connection.relayEndpoint).toBeDefined();
+    expect(body.runtime.uiConfig.connection.relayEndpoint).toContain('/api/chat-relay');
   });
 
   it('preserves triggerMessage in the connection block', async () => {
@@ -174,7 +174,7 @@ describe('GET /api/w/[widgetKey]/config for display widgets', () => {
     } as any);
 
     const body = await res.json();
-    expect(body.connection.triggerMessage).toBe('List required documents.');
+    expect(body.runtime.uiConfig.connection.triggerMessage).toBe('List required documents.');
   });
 
   it('preserves the display section (position, header title, emptyMessage)', async () => {
@@ -186,10 +186,11 @@ describe('GET /api/w/[widgetKey]/config for display widgets', () => {
     } as any);
 
     const body = await res.json();
-    expect(body.display).toBeDefined();
-    expect(body.display.position).toBe('right');
-    expect(body.display.header.title).toBe('Required documents');
-    expect(body.display.emptyMessage).toBe('No documents available.');
+    const uiConfig = body.runtime.uiConfig;
+    expect(uiConfig.display).toBeDefined();
+    expect(uiConfig.display.position).toBe('right');
+    expect(uiConfig.display.header.title).toBe('Required documents');
+    expect(uiConfig.display.emptyMessage).toBe('No documents available.');
   });
 
   it('returns 404 for a malformed widgetKey', async () => {

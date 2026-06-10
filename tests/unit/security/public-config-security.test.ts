@@ -53,7 +53,10 @@ describe('Public Config Security Hardening', () => {
     });
 
     expect(response.status).toBe(200);
-    const config = await response.json();
+    const payload = await response.json();
+    // Loader envelope: { bundlePath, runtime: { uiConfig, relay, flags } }
+    expect(typeof payload.bundlePath).toBe('string');
+    const config = payload.runtime.uiConfig;
     expect(config.connection?.relayEndpoint).toContain('/api/chat-relay');
     expect(config.connection?.webhookUrl).toBeUndefined();
     // ChatKit/AgentKit credentials must never reach the public payload either

@@ -14,6 +14,8 @@ import { CHATKIT_SERVER_ENABLED } from '@/lib/feature-flags';
 import { migrateConfig } from '@/lib/widget-config/migrate';
 import { translateDisplayConfig } from '@/lib/widget/translate-display-config';
 import { COMPOSER_DEFAULT_PLACEHOLDER } from '@/lib/widget-config/schema';
+import { getBundlePath } from '@/lib/widget/manifest';
+import { TIER_LIMITS, normalizeUserTier } from '@/lib/license/tiers';
 import type { WidgetConfig } from '@/widget/src/types';
 import type { ChatWidgetConfig } from '@/lib/widget-config/schema';
 
@@ -210,22 +212,54 @@ export async function GET(
     // to the canonical schemaVersion 2 form, then translate canonical paths only.
     // For display widgets: pass through to translateDisplayConfig unchanged.
     const dbConfig = widget.config as any;
-    const config =
-      widget.kind === 'display'
-        ? translateDisplayConfig(dbConfig, request.url)
-        : translateConfig(
-            migrateConfig(dbConfig),
-            request.url,
-            widgetKey,
-            userTier
-          );
 
-    return NextResponse.json(config, {
-      headers: {
-        'Access-Control-Allow-Origin': '*',
-        'Cache-Control': 'public, max-age=10, must-revalidate',
+    // brandingEnabled (license flag): the "Powered by" footer is forced ON unless the
+    // user's tier may remove branding AND the stored config opts out. Mirrors the old
+    // inject.ts flag derivation (license.brandingEnabled), but sourced from the central
+    // entitlements module + canonical config instead of the legacy licenses row.
+    let brandingEnabled = true;
+    let uiConfig: WidgetConfig;
+
+    if (widget.kind === 'display') {
+      uiConfig = translateDisplayConfig(dbConfig, request.url);
+      const tierBranding = TIER_LIMITS[normalizeUserTier(userTier)].brandingRemovable;
+      brandingEnabled = tierBranding ? dbConfig?.branding?.brandingEnabled !== false : true;
+    } else {
+      const canonical = migrateConfig(dbConfig);
+      uiConfig = translateConfig(canonical, request.url, widgetKey, userTier);
+      const tierBranding = TIER_LIMITS[normalizeUserTier(userTier)].brandingRemovable;
+      brandingEnabled = tierBranding ? canonical.branding.brandingEnabled : true;
+    }
+
+    const origin = new URL(request.url).origin;
+
+    // Loader-compatible envelope (Task 16/17): the embed loader sets
+    // window.ChatWidgetConfig = runtime, then injects origin + bundlePath. The runtime
+    // shape { uiConfig, relay, flags } matches the legacy serve.ts/inject.ts injection
+    // shape ({ uiConfig, relay }) plus an additive `flags` block.
+    return NextResponse.json(
+      {
+        bundlePath: getBundlePath(),
+        runtime: {
+          uiConfig,
+          relay: {
+            relayUrl: `${origin}/api/chat-relay`,
+            widgetId: widget.id,
+            licenseKey: widget.widgetKey,
+          },
+          flags: {
+            tier: userTier,
+            brandingEnabled,
+          },
+        },
       },
-    });
+      {
+        headers: {
+          'Access-Control-Allow-Origin': '*',
+          'Cache-Control': 'public, max-age=60',
+        },
+      }
+    );
 
   } catch (error) {
     console.error('[Widget Config v2] Error:', error);

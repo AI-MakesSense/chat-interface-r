@@ -77,6 +77,10 @@ if (typeof window !== 'undefined') {
     if (injectedRelay && injectedRelay.relayUrl && (injectedConfig.branding || (injectedConfig.uiConfig && injectedConfig.uiConfig.branding))) {
       console.log('[N8n Chat Widget] Using existing full configuration');
       try {
+        // Mirror pre-injected license flags onto the legacy global some renderers read.
+        if (injectedConfig.flags && typeof window !== 'undefined' && !(window as any).N8N_LICENSE_FLAGS) {
+          (window as any).N8N_LICENSE_FLAGS = injectedConfig.flags;
+        }
         const fastConfig = injectedConfig.uiConfig ?? injectedConfig;
         const isDisplay = (fastConfig as any).kind === 'display';
         const fastRenderer = isDisplay ? new DisplayRenderer() : new ChatRenderer();
@@ -148,24 +152,40 @@ if (typeof window !== 'undefined') {
       clearTimeout(fetchTimeout);
       if (!response.ok) throw new Error('Config fetch failed');
 
-      const remoteConfig: WidgetConfig = await response.json();
+      const payload = await response.json();
 
-      // 4. Construct Runtime Config
+      // 4. Normalize to the runtime { uiConfig, relay, flags } shape.
+      // The v2 endpoint (/w/<key>/config) now returns { bundlePath, runtime } where
+      // `runtime` is { uiConfig, relay, flags } (Task 17). The legacy endpoint
+      // (/api/widget/<license>/config) still returns a FLAT WidgetConfig. Detect which.
+      const isEnvelope = !!(payload && payload.runtime && payload.runtime.uiConfig);
+      const envelopeRuntime = isEnvelope ? payload.runtime : null;
+      const remoteConfig: WidgetConfig = envelopeRuntime ? envelopeRuntime.uiConfig : payload;
+      const envelopeRelay = envelopeRuntime?.relay || {};
+      const envelopeFlags = envelopeRuntime?.flags;
+
+      // 5. Construct Runtime Config
       // CRITICAL FIX: Nest the remoteConfig inside 'uiConfig' to match widget.ts expectations
       const runtimeConfig: WidgetRuntimeConfig = {
         uiConfig: remoteConfig, // Nesting the config here!
         relay: {
-          relayUrl: injectedRelay.relayUrl || remoteConfig.connection?.relayEndpoint || `${apiBaseUrl}/api/chat-relay`,
-          widgetId: injectedRelay.widgetId || '', // Use injected ID if available
-          licenseKey: widgetKey // Use widgetKey for v2.0 (licenseKey for backward compatibility)
+          relayUrl: injectedRelay.relayUrl || envelopeRelay.relayUrl || remoteConfig.connection?.relayEndpoint || `${apiBaseUrl}/api/chat-relay`,
+          widgetId: injectedRelay.widgetId || envelopeRelay.widgetId || '', // Use injected ID if available
+          licenseKey: envelopeRelay.licenseKey || widgetKey // Use widgetKey for v2.0 (licenseKey for backward compatibility)
         },
+        ...(envelopeFlags ? { flags: envelopeFlags } : {}),
         display: displayConfig,
       } as unknown as WidgetRuntimeConfig;
+
+      // Mirror license flags onto the legacy global some renderers still read.
+      if (envelopeFlags && typeof window !== 'undefined') {
+        (window as any).N8N_LICENSE_FLAGS = envelopeFlags;
+      }
 
       // Save config to window so the internal message handler can find it if needed
       (window as any).ChatWidgetConfig = runtimeConfig;
 
-      // 5. Initialize — dispatch on config.kind
+      // 6. Initialize — dispatch on config.kind
       const isDisplay = remoteConfig.kind === 'display';
       const renderer = isDisplay ? new DisplayRenderer() : new ChatRenderer();
       await renderer.mount(runtimeConfig, document.body);
