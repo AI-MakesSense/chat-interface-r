@@ -6,7 +6,7 @@
  */
 
 import { createRenderer } from './core/create-renderer';
-import { WidgetRuntimeConfig, WidgetConfig } from './types';
+import { WidgetRuntimeConfig } from './types';
 import { Widget as WidgetConstructor } from './core/widget';
 import { initPreviewBridge } from './preview/preview-bridge';
 
@@ -128,107 +128,28 @@ if (typeof window !== 'undefined') {
       }
     }
 
-    // 2. Determine Widget Key & API Base URL
-    let widgetKey = injectedRelay.licenseKey || '';
-    let apiBaseUrl = '';
-    let isV2 = false; // Track if using v2.0 URL pattern
-
-    // Strategy A: Check container ID
-    const container = document.querySelector('div[id^="n8n-chat-"]');
-    if (!widgetKey && container) {
-      widgetKey = container.id.replace('n8n-chat-', '');
-    }
-
-    // Strategy B: Check script tag (supports both legacy and v2.0 URL patterns)
-    // IMPORTANT: Always check script URL to detect v2 pattern, even if we have a widgetKey
-    if (scriptTag && scriptTag.src) {
-      const url = new URL(scriptTag.src);
-      apiBaseUrl = url.origin;
-
-      // Always check for v2.0 URL pattern to set isV2 flag
-      const v2Match = url.pathname.match(/\/w\/([A-Za-z0-9]{16})(?:\.js)?$/);
-      if (v2Match && v2Match[1]) {
-        // v2.0 pattern detected: /w/[widgetKey].js
-        if (!widgetKey) {
-          widgetKey = v2Match[1];
-        }
-        isV2 = true;
-      } else if (!widgetKey) {
-        // Fallback to legacy pattern: /api/widget/[licenseKey]/chat-widget.js
-        const legacyMatch = url.pathname.match(/\/api\/widget\/([^\/]+)\/chat-widget/);
-        if (legacyMatch && legacyMatch[1]) {
-          widgetKey = legacyMatch[1];
-        }
-      }
-    }
-
-    // Fallback: If no script tag found, default to window origin (e.g. development)
-    if (!apiBaseUrl) {
-      apiBaseUrl = window.location.origin;
-    }
-
-    if (!widgetKey) {
-      console.warn('[N8n Chat Widget] Could not determine widget key.');
-      return;
-    }
-
-    // 3. Fetch UI Configuration
-    // Use v2.0 endpoint for v2 widgets, legacy endpoint otherwise
-    const configUrl = isV2
-      ? `${apiBaseUrl}/w/${widgetKey}/config`
-      : `${apiBaseUrl}/api/widget/${widgetKey}/config`;
-
-    try {
-      const fetchController = new AbortController();
-      const fetchTimeout = setTimeout(() => fetchController.abort(), 8000);
-      const response = await fetch(configUrl, { signal: fetchController.signal });
-      clearTimeout(fetchTimeout);
-      if (!response.ok) throw new Error('Config fetch failed');
-
-      const payload = await response.json();
-
-      // 4. Normalize to the runtime { uiConfig, relay, flags } shape.
-      // The v2 endpoint (/w/<key>/config) now returns { bundlePath, runtime } where
-      // `runtime` is { uiConfig, relay, flags } (Task 17). The legacy endpoint
-      // (/api/widget/<license>/config) still returns a FLAT WidgetConfig. Detect which.
-      const isEnvelope = !!(payload && payload.runtime && payload.runtime.uiConfig);
-      const envelopeRuntime = isEnvelope ? payload.runtime : null;
-      const remoteConfig: WidgetConfig = envelopeRuntime ? envelopeRuntime.uiConfig : payload;
-      const envelopeRelay = envelopeRuntime?.relay || {};
-      const envelopeFlags = envelopeRuntime?.flags;
-
-      // 5. Construct Runtime Config
-      // CRITICAL FIX: Nest the remoteConfig inside 'uiConfig' to match widget.ts expectations
-      const runtimeConfig: WidgetRuntimeConfig = {
-        uiConfig: remoteConfig, // Nesting the config here!
-        relay: {
-          relayUrl: injectedRelay.relayUrl || envelopeRelay.relayUrl || remoteConfig.connection?.relayEndpoint || `${apiBaseUrl}/api/chat-relay`,
-          widgetId: injectedRelay.widgetId || envelopeRelay.widgetId || '', // Use injected ID if available
-          licenseKey: envelopeRelay.licenseKey || widgetKey // Use widgetKey for v2.0 (licenseKey for backward compatibility)
-        },
-        ...(envelopeFlags ? { flags: envelopeFlags } : {}),
-        display: displayConfig,
-      } as unknown as WidgetRuntimeConfig;
-
-      // Mirror license flags onto the legacy global some renderers still read.
-      if (envelopeFlags && typeof window !== 'undefined') {
-        (window as any).N8N_LICENSE_FLAGS = envelopeFlags;
-      }
-
-      // Save config to window so the internal message handler can find it if needed
-      (window as any).ChatWidgetConfig = runtimeConfig;
-
-      // 6. Initialize — dispatch on config.kind
-      const isDisplay = remoteConfig.kind === 'display';
-      const renderer = createRenderer(isDisplay ? 'display' : 'chat');
-      await renderer.mount(runtimeConfig, document.body);
-      exposeTeardown(renderer);
-
-    } catch (error) {
-      console.error('[N8n Chat Widget] Boot error:', error);
-      if (container) {
-        container.innerHTML = '<div style="color:red;padding:10px;border:1px solid red">Widget Error: Config Load Failed</div>';
-      }
+    // 2. No pre-injected config → error clearly. We do NOT fall back to a
+    //    runtime config fetch.
+    //
+    // The bundle is only ever loaded by /widget/loader.js (the sole customer-facing
+    // URL; the legacy /api/widget/<license>/chat-widget.js compat route bootstraps
+    // the same loader). The loader always fetches /api/w/<key>/config and pre-injects
+    // window.ChatWidgetConfig (the { uiConfig, relay, flags } runtime) BEFORE this
+    // bundle runs, so the fast path above is the only reachable mount path.
+    //
+    // The previous slow-path fetch fell back to two DELETED routes
+    // (/w/<key>/config — missing the /api prefix — and /api/widget/<key>/config,
+    // removed in Tasks 9 & 19), so it could never have succeeded. If config is
+    // somehow absent, surface a clear error instead of fetching a dead endpoint.
+    console.error(
+      '[N8n Chat Widget] No pre-injected configuration found. The widget must be ' +
+      'loaded via /widget/loader.js, which injects window.ChatWidgetConfig before ' +
+      'this bundle runs. Direct bundle embeds are not supported.'
+    );
+    const errorContainer = document.querySelector('div[id^="n8n-chat-"]');
+    if (errorContainer) {
+      errorContainer.innerHTML =
+        '<div style="color:red;padding:10px;border:1px solid red">Widget Error: Configuration not found</div>';
     }
   }
 })();

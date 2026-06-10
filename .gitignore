@@ -53,3 +53,9 @@ public/widget/manifest.json
 
 # Sentry Config File
 .env.sentry-build-plugin
+
+# scratch / local tooling artifacts (not committed)
+.playwright-mcp/
+ui-audit/
+test-embed.html
+.superpowers/
