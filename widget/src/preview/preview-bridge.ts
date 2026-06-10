@@ -38,9 +38,13 @@ export function initPreviewBridge(): boolean {
   // assignment — the handler's clearInterval(readyTimer) always sees a defined value.
   let readyTimer: ReturnType<typeof setInterval>;
 
-  window.addEventListener('message', async (event: MessageEvent) => {
-    const msg = event.data;
-    if (!msg || msg.type !== 'widget:config') return;
+  // Serialize mounts: a second widget:config arriving while a mount is in
+  // flight must not interleave teardown/mount (double-mount race). We keep
+  // only the LATEST pending config — intermediate configs are obsolete.
+  let mountInFlight = false;
+  let pendingMsg: any = null;
+
+  async function mountFromMessage(msg: any): Promise<void> {
     try {
       // Tear down any previous mount before remounting with the new config.
       if (dispose) {
@@ -97,6 +101,35 @@ export function initPreviewBridge(): boolean {
         '*'
       );
     }
+  }
+
+  window.addEventListener('message', (event: MessageEvent) => {
+    // Only the embedding parent may drive the preview. The iframe is sandboxed
+    // (null origin), so origin checks are unavailable — source identity is the
+    // strongest available check.
+    if (event.source !== window.parent) return;
+    const msg = event.data;
+    if (!msg || msg.type !== 'widget:config') return;
+
+    if (mountInFlight) {
+      pendingMsg = msg; // coalesce: newest config wins
+      return;
+    }
+    void (async () => {
+      mountInFlight = true;
+      try {
+        // mountFromMessage never rethrows (its catch posts widget:error), so one
+        // failed mount cannot break the pending-config drain loop below.
+        await mountFromMessage(msg);
+        while (pendingMsg) {
+          const next = pendingMsg;
+          pendingMsg = null;
+          await mountFromMessage(next);
+        }
+      } finally {
+        mountInFlight = false;
+      }
+    })();
   });
 
   // Announce readiness repeatedly until the first config arrives (the parent may

@@ -9,6 +9,10 @@
  *    element appears) and posts widget:mounted to the parent
  *  - on a mount error: posts widget:error, stops the ready-interval, and leaves no
  *    orphan [data-n8n-widget-root] in the DOM
+ *  - ignores widget:config from any source other than window.parent (the iframe is
+ *    sandboxed/null-origin, so source identity is the strongest available check)
+ *  - serializes concurrent configs: a config arriving while a mount is in flight is
+ *    queued (newest wins) and mounted only after the in-flight mount settles
  *
  * window.parent.postMessage is mocked. window.location.search is set by redefining
  * window.location (jsdom). createRenderer is mocked so the error test can inject a
@@ -33,6 +37,20 @@ function setSearch(search: string): void {
     configurable: true,
     value: { ...window.location, search, href: `http://localhost/${search}` },
   });
+}
+
+// Flush the async message-handler chain (multiple awaits) — a macrotask runs only
+// after the entire microtask queue has drained.
+function flushAsync(): Promise<void> {
+  return new Promise((r) => setTimeout(r, 0));
+}
+
+function deferred(): { promise: Promise<void>; resolve: () => void } {
+  let resolve!: () => void;
+  const promise = new Promise<void>((res) => {
+    resolve = res;
+  });
+  return { promise, resolve };
 }
 
 describe('initPreviewBridge', () => {
@@ -112,6 +130,8 @@ describe('initPreviewBridge', () => {
     window.dispatchEvent(
       new MessageEvent('message', {
         data: { type: 'widget:config', kind: 'chat', config, tier: 'pro' },
+        // The bridge only accepts configs whose source is the embedding parent.
+        source: window.parent,
       })
     );
 
@@ -146,6 +166,7 @@ describe('initPreviewBridge', () => {
     window.dispatchEvent(
       new MessageEvent('message', {
         data: { type: 'widget:config', kind: 'chat', config: {}, tier: 'agency' },
+        source: window.parent,
       })
     );
 
@@ -168,5 +189,101 @@ describe('initPreviewBridge', () => {
       (c) => c[0] && c[0].type === 'widget:ready'
     );
     expect(readyAfterError).toBe(false);
+  });
+
+  it('ignores widget:config from a non-parent source', async () => {
+    setSearch('?preview=1');
+    expect(initPreviewBridge()).toBe(true);
+    mockCreateRenderer.mockClear();
+    parentPostMessage.mockClear();
+
+    // source defaults to null when omitted (jsdom) — not the parent.
+    window.dispatchEvent(
+      new MessageEvent('message', {
+        data: { type: 'widget:config', kind: 'chat', config: {}, tier: 'agency' },
+      })
+    );
+    // An explicit non-parent source (window.parent is a distinct fake object here,
+    // so window !== window.parent and the guard is exercised in both directions:
+    // the parent-sourced mount test above passes it, this one must be rejected).
+    window.dispatchEvent(
+      new MessageEvent('message', {
+        data: { type: 'widget:config', kind: 'chat', config: {}, tier: 'agency' },
+        source: window,
+      })
+    );
+    await flushAsync();
+
+    expect(document.querySelector('[data-n8n-widget-root]')).toBeNull();
+    expect(mockCreateRenderer).not.toHaveBeenCalled();
+    expect(parentPostMessage).not.toHaveBeenCalledWith(
+      { type: 'widget:mounted' },
+      '*'
+    );
+  });
+
+  it('serializes concurrent configs: latest pending config mounts after the in-flight mount settles', async () => {
+    setSearch('?preview=1');
+
+    const mount1 = deferred();
+    const mount2 = deferred();
+    const order: string[] = [];
+    const renderer1 = {
+      mount: jest.fn().mockImplementation(() => {
+        order.push('mount1');
+        return mount1.promise;
+      }),
+      dispose: jest.fn().mockImplementation(() => {
+        order.push('dispose1');
+      }),
+    };
+    const renderer2 = {
+      mount: jest.fn().mockImplementation(() => {
+        order.push('mount2');
+        return mount2.promise;
+      }),
+      dispose: jest.fn(),
+    };
+    mockCreateRenderer.mockClear();
+    mockCreateRenderer
+      .mockReturnValueOnce(renderer1 as any)
+      .mockReturnValueOnce(renderer2 as any);
+
+    expect(initPreviewBridge()).toBe(true);
+
+    const post = (id: string) =>
+      window.dispatchEvent(
+        new MessageEvent('message', {
+          data: { type: 'widget:config', kind: 'chat', config: { id }, tier: 'agency' },
+          source: window.parent,
+        })
+      );
+
+    post('A');
+    post('B'); // arrives while mount A is in flight — superseded by C below
+    post('C');
+    await flushAsync();
+
+    // While mount A is unresolved, B and C must NOT interleave a teardown/mount.
+    expect(mockCreateRenderer).toHaveBeenCalledTimes(1);
+    expect(renderer1.mount).toHaveBeenCalledTimes(1);
+    expect((renderer1.mount.mock.calls[0][0] as any).uiConfig).toEqual({ id: 'A' });
+
+    mount1.resolve();
+    await flushAsync();
+
+    // After mount A settles: renderer1 disposed, then ONLY the latest config (C)
+    // mounts — the intermediate config B is dropped.
+    expect(renderer1.dispose).toHaveBeenCalledTimes(1);
+    expect(mockCreateRenderer).toHaveBeenCalledTimes(2);
+    expect(renderer2.mount).toHaveBeenCalledTimes(1);
+    expect((renderer2.mount.mock.calls[0][0] as any).uiConfig).toEqual({ id: 'C' });
+    expect(order).toEqual(['mount1', 'dispose1', 'mount2']);
+
+    mount2.resolve();
+    await flushAsync();
+    // B never produced a mount of its own.
+    expect(mockCreateRenderer).toHaveBeenCalledTimes(2);
+    expect(parentPostMessage).toHaveBeenCalledWith({ type: 'widget:mounted' }, '*');
   });
 });
