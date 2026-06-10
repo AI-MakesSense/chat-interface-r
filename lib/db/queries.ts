@@ -313,18 +313,22 @@ export async function getWidgetById(id: string): Promise<Widget | null> {
 /**
  * Get widget with license data (Schema v2.0 compatibility shim)
  * Widgets no longer carry a licenseId column; this resolves the license via
- * the widget's userId → first active license for that user.
- * Task 9 will rewrite callers to use userId directly.
+ * the widget's userId → first active license by creation order.
+ * Returns null if the widget has no active license.
+ *
+ * @deprecated transitional shim — Task 9 removes this; resolve identity via
+ * userId directly (and source tier from users.tier, not license.tier).
  */
 export async function getWidgetWithLicense(id: string): Promise<WidgetWithLicense | null> {
   const widget = await getWidgetById(id);
   if (!widget) return null;
 
-  // Resolve license via widget owner
+  // Resolve first active license for the widget owner, deterministically.
   const [license] = await db
     .select()
     .from(licenses)
-    .where(eq(licenses.userId, widget.userId))
+    .where(and(eq(licenses.userId, widget.userId), eq(licenses.status, 'active')))
+    .orderBy(licenses.createdAt)
     .limit(1);
 
   if (!license) return null;
@@ -470,13 +474,14 @@ export async function getWidgetsByLicenseId(
 /**
  * Get all widgets for a user (Schema v2.0 direct query).
  * licenseId parameter is ignored (preserved for call-site compatibility only).
- * Task 9 will remove the licenseId parameter.
+ * `license` is nullable — a user with zero licenses yields `license: null`.
+ * Task 9 will remove the licenseId parameter and the license shape entirely.
  */
 export async function getWidgetsByUserId(
   userId: string,
   includeDeleted = false,
   _licenseId?: string
-): Promise<Array<Widget & { license: License }>> {
+): Promise<Array<Widget & { license: License | null }>> {
   // Build conditions array
   const conditions = [eq(widgets.userId, userId)];
 
@@ -491,7 +496,7 @@ export async function getWidgetsByUserId(
     .where(and(...conditions))
     .orderBy(desc(widgets.createdAt));
 
-  // Look up the user's first license for backward-compat shape
+  // Look up the user's first license for backward-compat shape (may be absent)
   const [license] = await db
     .select()
     .from(licenses)
@@ -500,7 +505,7 @@ export async function getWidgetsByUserId(
 
   return widgetResults.map(w => ({
     ...w,
-    license: license as License,
+    license: license ?? null,
     licenseKey: license?.licenseKey ?? null,
   }));
 }
@@ -508,7 +513,10 @@ export async function getWidgetsByUserId(
 /**
  * Get count of active widgets for a license (Schema v2.0 compatibility shim).
  * Resolves the license's userId and counts that user's active widgets.
- * Task 9 will replace callers with getActiveWidgetCountForUser.
+ *
+ * NOTE: returns the user TOTAL across all their licenses — it over-counts
+ * relative to a per-license widgetLimit (conservative / over-restrictive).
+ * Task 9 replaces callers with getActiveWidgetCountForUser.
  */
 export async function getActiveWidgetCount(licenseId: string): Promise<number> {
   const [license] = await db
@@ -643,7 +651,7 @@ export async function getWidgetsPaginated(
     includeDeleted?: boolean;
   } = {}
 ): Promise<{
-  widgets: Array<Widget & { license: License }>;
+  widgets: Array<Widget & { license: License | null }>;
   total: number;
 }> {
   // Parse and validate pagination params
@@ -675,7 +683,7 @@ export async function getWidgetsPaginated(
     .limit(limit)
     .offset(offset);
 
-  // Look up user's license once for backward-compat shape
+  // Look up user's license once for backward-compat shape (may be absent)
   const [userLicense] = await db
     .select()
     .from(licenses)
@@ -684,7 +692,7 @@ export async function getWidgetsPaginated(
 
   const widgetsWithLicenses = results.map(w => ({
     ...w,
-    license: userLicense as License,
+    license: userLicense ?? null,
     licenseKey: userLicense?.licenseKey ?? null,
   }));
 

@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 // FIX: Changed import from 'middleware' to 'guard' to avoid Next.js reserved filename conflict
 import { requireAuth } from '@/lib/auth/guard';
-import { getWidgetWithLicense } from '@/lib/db/queries';
+import { getWidgetById, getUserById } from '@/lib/db/queries';
 import { ZipGenerator } from '@/lib/zip-generator';
 import { z } from 'zod';
 
@@ -44,33 +44,40 @@ export async function GET(
 
     const { type } = queryValidation.data;
 
-    // 4. Get widget with license information
-    const widget = await getWidgetWithLicense(widgetId);
+    // 4. Resolve widget + owner directly (Schema v2.0: widgets belong to users,
+    //    not licenses, so license-free owners must not 404 on their own widget).
+    const widget = await getWidgetById(widgetId);
 
     if (!widget) {
       return NextResponse.json({ error: 'Widget not found' }, { status: 404 });
     }
 
-    // 5. Verify ownership
-    if (widget.license.userId !== user.sub) {
+    // 5. Verify ownership via the widget's userId
+    if (widget.userId !== user.sub) {
       return NextResponse.json(
         { error: 'You do not own this widget' },
         { status: 403 }
       );
     }
 
+    const widgetUser = await getUserById(widget.userId);
+    if (!widgetUser) {
+      return NextResponse.json({ error: 'Widget owner not found' }, { status: 404 });
+    }
+
     // 6. Verify status
-    if (widget.status !== 'active' || widget.license.status !== 'active') {
+    if (widget.status !== 'active') {
       return NextResponse.json(
-        { error: 'Widget or License is not active' },
+        { error: 'Widget is not active' },
         { status: 400 }
       );
     }
 
-    // 7. Prepare Generator Data
+    // 7. Prepare Generator Data. The embedded package keys off the public
+    //    widgetKey (v2); licenseKey no longer exists for license-free owners.
     const generator = new ZipGenerator();
     const config = widget.config as any;
-    const licenseKey = widget.license.licenseKey;
+    const licenseKey = widget.widgetKey;
 
     // Dynamic Base URL detection
     const protocol = request.headers.get('x-forwarded-proto') || 'http';

@@ -15,7 +15,7 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { requireAuth } from '@/lib/auth/guard';
-import { getWidgetWithLicense, getWidgetById, getUserById, deployWidget } from '@/lib/db/queries';
+import { getWidgetById, getUserById, deployWidget } from '@/lib/db/queries';
 import { getWidgetConfigSchemaForKind, normalizeTier } from '@/lib/validation/widget-schema';
 import { z } from 'zod';
 
@@ -38,41 +38,20 @@ export async function POST(
     const idSchema = z.string().uuid();
     const widgetId = idSchema.parse(id);
 
-    // 3. Get widget with license information (legacy path)
-    //    V2.0 widgets have licenseId = NULL so the inner join returns null — fall back to direct lookup.
-    const widgetWithLicense = await getWidgetWithLicense(widgetId);
-
-    let ownerUserId: string;
-    let tier: string;
-    // `widget` holds only the base Widget columns (status, kind, config) used below.
-    // Both paths produce a value that satisfies this shape.
-    let widget: { status: string; kind: string; config: unknown };
-
-    if (widgetWithLicense) {
-      // Legacy path: widget is associated with a license
-      ownerUserId = widgetWithLicense.license.userId;
-      tier = widgetWithLicense.license.tier;
-      widget = widgetWithLicense;
-    } else {
-      // V2.0 path: widget is associated directly with a user (licenseId is NULL)
-      const v2Widget = await getWidgetById(widgetId);
-      if (!v2Widget) {
-        return NextResponse.json({ error: 'Widget not found' }, { status: 404 });
-      }
-      if (!v2Widget.userId) {
-        // Widget exists but has neither a license nor a userId — data integrity issue
-        return NextResponse.json({ error: 'Widget not found' }, { status: 404 });
-      }
-      const widgetUser = await getUserById(v2Widget.userId);
-      if (!widgetUser) {
-        // The widget's owner account has been deleted — return 404 rather
-        // than falling through to a misleading 'free' tier validation failure.
-        return NextResponse.json({ error: 'Widget owner not found' }, { status: 404 });
-      }
-      ownerUserId = v2Widget.userId;
-      tier = widgetUser.tier ?? 'free';
-      widget = v2Widget;
+    // 3. Resolve widget + owner. Tier is always sourced from users.tier
+    //    (the canonical tier per the account model), never from a license.
+    const widget = await getWidgetById(widgetId);
+    if (!widget) {
+      return NextResponse.json({ error: 'Widget not found' }, { status: 404 });
     }
+    const widgetUser = await getUserById(widget.userId);
+    if (!widgetUser) {
+      // The widget's owner account has been deleted — return 404 rather
+      // than falling through to a misleading 'free' tier validation failure.
+      return NextResponse.json({ error: 'Widget owner not found' }, { status: 404 });
+    }
+    const ownerUserId = widget.userId;
+    const tier = widgetUser.tier ?? 'free';
 
     // 4. Verify ownership
     if (ownerUserId !== user.sub) {

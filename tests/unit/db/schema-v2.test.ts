@@ -397,9 +397,11 @@ describe('Schema v2.0 Constraints (Task 8)', () => {
     expect(cols).toContain('widgetId');
   });
 
-  it('NewWidget type should require userId (type-level assertion)', () => {
-    // This compiles only if userId is required (notNull) in NewWidget.
-    // If userId were optional, the type would allow omitting it.
+  it('NewWidget type should require userId (compile-time enforced by ts-jest)', () => {
+    // ts-jest type-checks this file at compile time, so the `NewWidget`
+    // annotation below fails the build if userId/widgetKey were optional —
+    // that compile-time check is the real assertion. The runtime expect()
+    // calls only verify the literal values, not the type constraint.
     const w: NewWidget = {
       userId: 'some-uuid',
       widgetKey: 'abcdefgh12345678',
