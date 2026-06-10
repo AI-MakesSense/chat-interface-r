@@ -89,6 +89,16 @@ describe('sanitizeConfig', () => {
     expect(result.branding.firstMessage).toBeUndefined();
   });
 
+  it('preserves empty-string companyName/firstMessage (sanitize does not repair emptiness; schema min(1) rejects downstream with a 400)', () => {
+    const result = sanitizeConfig(
+      { branding: { companyName: '', firstMessage: '' } },
+      'pro',
+      'chat'
+    );
+    expect(result.branding.companyName).toBe('');
+    expect(result.branding.firstMessage).toBe('');
+  });
+
   it('preserves explicitly provided companyName and firstMessage', () => {
     const result = sanitizeConfig(
       { branding: { companyName: 'Acme', firstMessage: 'Hi there!' } },

@@ -26,6 +26,18 @@ describe('canonical chat widget config schema', () => {
     expect(result.success).toBe(false);
   });
 
+  it('rejects empty-string companyName and firstMessage (min(1) — sanitizeConfig no longer silently replaces them)', () => {
+    const result = chatWidgetConfigSchema.safeParse({
+      branding: { companyName: '', firstMessage: '' },
+    });
+    expect(result.success).toBe(false);
+    if (!result.success) {
+      const paths = result.error.issues.map((i) => i.path.join('.'));
+      expect(paths).toContain('branding.companyName');
+      expect(paths).toContain('branding.firstMessage');
+    }
+  });
+
   it('basic tier cannot disable branding', () => {
     const schema = createTierAwareSchema('basic', true);
     const cfg = chatWidgetConfigSchema.parse({});

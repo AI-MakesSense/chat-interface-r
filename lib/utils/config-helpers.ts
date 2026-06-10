@@ -63,18 +63,13 @@ export function sanitizeConfig(config: any, tier: string, kind: 'chat' | 'displa
 
   // 2. Data Integrity - Branding
   if (sanitized.branding) {
-    // companyName / firstMessage fallbacks intentionally removed: sanitize runs
-    // BEFORE safeParse, so hardcoding values here suppressed the canonical
-    // schema defaults (same divergence class as the welcomeText fix). Let the
-    // schema apply them.
+    // companyName / firstMessage / welcomeText fallbacks intentionally removed:
+    // sanitize runs BEFORE safeParse, so hardcoding values here suppressed the
+    // canonical schema defaults. Let the schema apply them.
 
-    // welcomeText and firstMessage are chat-only branding fields.
-    // Injecting them into a display config would add unexpected fields and corrupt validation.
+    // launcherIcon / customLauncherIconUrl are chat-only concepts; injecting them
+    // into a display config would add unexpected fields and corrupt validation.
     if (kind === 'chat') {
-      // welcomeText fallback intentionally removed: it diverged from the canonical
-      // schema default ('Welcome! How can we help you today?') and, since sanitize
-      // runs before safeParse, suppressed the schema default. Let the schema apply it.
-
       // Fix launcher icon (chat-only concept)
       if (sanitized.branding.launcherIcon === 'custom') {
         const validUrl = fixUrl(sanitized.branding.customLauncherIconUrl);
