@@ -46,13 +46,13 @@ function buildLoaderBootstrap(origin: string, widgetKey: string): string {
   return `(function(){var s=document.createElement('script');s.src=${loaderSrc};s.async=true;s.setAttribute('data-widget-key',${keyLiteral});document.head.appendChild(s);})();`;
 }
 
-const JS_UNAVAILABLE = new NextResponse(
-  '// widget unavailable',
-  {
+/** Fresh Response per call — a shared NextResponse's body is one-shot and
+ *  would fail on the second 404 served by a warm instance. */
+const jsUnavailable = () =>
+  new NextResponse('// widget unavailable', {
     status: 404,
     headers: { 'Content-Type': 'application/javascript' },
-  }
-);
+  });
 
 export async function GET(
   request: NextRequest,
@@ -62,13 +62,13 @@ export async function GET(
     const { license: licenseKey } = await params;
 
     if (!licenseKey) {
-      return JS_UNAVAILABLE;
+      return jsUnavailable();
     }
 
     // Step 1: Look up the license.
     const license = await getLicenseByKey(licenseKey);
     if (!license || license.status !== 'active') {
-      return JS_UNAVAILABLE;
+      return jsUnavailable();
     }
 
     // Step 2: Find the owner's active widgets. The legacy URL carries no widget
@@ -82,7 +82,7 @@ export async function GET(
           `[Widget Compat Adapter] License ${licenseKey.slice(0, 8)}... has ${activeWidgets.length}+ active widgets — ambiguous legacy embed, refusing to guess. Re-embed with the widgetKey snippet.`
         );
       }
-      return JS_UNAVAILABLE;
+      return jsUnavailable();
     }
     const widget = activeWidgets[0];
 
@@ -100,6 +100,6 @@ export async function GET(
 
   } catch (error) {
     console.error('[Widget Compat Adapter] Error:', error);
-    return JS_UNAVAILABLE;
+    return jsUnavailable();
   }
 }

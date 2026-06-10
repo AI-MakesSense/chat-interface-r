@@ -9,9 +9,9 @@
  * widgets the adapter must fail closed (JS-comment 404 + warn) instead of
  * silently serving the wrong widget.
  *
- * Note: the route reuses a single module-level JS_UNAVAILABLE NextResponse, so
- * its body may only be consumed once per module instance — exactly one 404 test
- * reads the body; the rest assert on status only.
+ * Every 404 test reads the response body: the 404 is produced by a per-request
+ * factory (jsUnavailable()), and consuming the body in each test regression-tests
+ * that no shared one-shot Response is reused across requests.
  */
 import { describe, it, expect, beforeEach, afterEach, jest } from '@jest/globals';
 
@@ -111,6 +111,7 @@ describe('Legacy Widget Compat Adapter (GET /api/widget/[license]/chat-widget.js
     const res = await callRoute(LICENSE_KEY);
 
     expect(res.status).toBe(404);
+    expect(await res.text()).toContain('widget unavailable');
     expect(warnSpy).not.toHaveBeenCalled();
   });
 
@@ -120,6 +121,7 @@ describe('Legacy Widget Compat Adapter (GET /api/widget/[license]/chat-widget.js
     const res = await callRoute(LICENSE_KEY);
 
     expect(res.status).toBe(404);
+    expect(await res.text()).toContain('widget unavailable');
     expect(dbQueries.getActiveWidgetsForUser).not.toHaveBeenCalled();
   });
 
@@ -129,6 +131,7 @@ describe('Legacy Widget Compat Adapter (GET /api/widget/[license]/chat-widget.js
     const res = await callRoute('nonexistent-license-key');
 
     expect(res.status).toBe(404);
+    expect(await res.text()).toContain('widget unavailable');
     expect(dbQueries.getActiveWidgetsForUser).not.toHaveBeenCalled();
   });
 
@@ -139,6 +142,7 @@ describe('Legacy Widget Compat Adapter (GET /api/widget/[license]/chat-widget.js
     const res = await callRoute(LICENSE_KEY);
 
     expect(res.status).toBe(404);
+    expect(await res.text()).toContain('widget unavailable');
     expect(warnSpy).not.toHaveBeenCalled();
   });
 });
