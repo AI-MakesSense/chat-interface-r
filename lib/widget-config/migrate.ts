@@ -337,6 +337,17 @@ export function migrateConfig(raw: unknown): ChatWidgetConfig {
     const lower = ext.toLowerCase();
     return lower.startsWith('.') ? lower : '.' + lower;
   };
+  // Units heuristic for legacy maxFileSize: the old serving path read
+  // features.maxFileSize as KILOBYTES (`maxFileSizeKB: ... || 5120`), but the
+  // canonical field is maxFileSizeMB (1–50). Carrying a KB value through
+  // unchanged would either overflow the range (5120 → repaired to the 10MB
+  // default) or silently reinterpret it (a 20KB cap becomes 20MB). Values
+  // above 50 cannot possibly be MB (the schema caps at 50), so they are
+  // treated as KB and converted; values ≤ 50 are taken as MB as-is. A small
+  // KB value (≤ 50) is indistinguishable from MB and is read as MB — that is
+  // accepted: such caps were almost certainly authored as MB.
+  const normalizeMaxFileSizeMB = (v: number): number =>
+    v > 50 ? Math.max(1, Math.round(v / 1024)) : v;
   const feat = candidate.features as AnyRecord;
   if (
     typeof feat.fileAttachments === 'boolean' ||
@@ -354,7 +365,7 @@ export function migrateConfig(raw: unknown): ChatWidgetConfig {
         ? { allowedExtensions: feat.allowedExtensions.map(normalizeExtension) }
         : {}),
       ...(typeof feat.maxFileSize === 'number' && canonicalAttachments.maxFileSizeMB === undefined
-        ? { maxFileSizeMB: feat.maxFileSize }
+        ? { maxFileSizeMB: normalizeMaxFileSizeMB(feat.maxFileSize) }
         : {}),
       // Canonical attachment keys always win — spread them last
       ...existingAttachments,
@@ -422,6 +433,29 @@ export function migrateConfig(raw: unknown): ChatWidgetConfig {
         ? ((candidate.features as AnyRecord).attachments as AnyRecord)
         : {}),
       enabled: src.enableAttachments,
+    };
+  }
+  // Top-level flat allowedExtensions / maxFileSize: the old translate read
+  // these alongside enableAttachments (`accept: dbConfig.allowedExtensions`,
+  // `maxSize: dbConfig.maxFileSize`). Same normalization as the legacy
+  // features.* path; canonical features.attachments keys win (absent-check
+  // against the canonical snapshot captured before any legacy writes).
+  // Flat beats legacy store shape, so overwriting a features.* value here is
+  // the intended tier-2-over-tier-3 precedence.
+  if (Array.isArray(src.allowedExtensions) && canonicalAttachments.allowedExtensions === undefined) {
+    (candidate.features as AnyRecord).attachments = {
+      ...((candidate.features as AnyRecord).attachments && typeof (candidate.features as AnyRecord).attachments === 'object'
+        ? ((candidate.features as AnyRecord).attachments as AnyRecord)
+        : {}),
+      allowedExtensions: src.allowedExtensions.map(normalizeExtension),
+    };
+  }
+  if (typeof src.maxFileSize === 'number' && canonicalAttachments.maxFileSizeMB === undefined) {
+    (candidate.features as AnyRecord).attachments = {
+      ...((candidate.features as AnyRecord).attachments && typeof (candidate.features as AnyRecord).attachments === 'object'
+        ? ((candidate.features as AnyRecord).attachments as AnyRecord)
+        : {}),
+      maxFileSizeMB: normalizeMaxFileSizeMB(src.maxFileSize),
     };
   }
 

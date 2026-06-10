@@ -412,6 +412,34 @@ describe('migrateConfig — legacy behavioral parity', () => {
     expect(out.features.attachments.allowedExtensions).toEqual(['.pdf', '.png', '.png']);
   });
 
+  // Issue 1b: TOP-LEVEL flat allowedExtensions (read by the old translate
+  // alongside enableAttachments) must map into features.attachments, normalized.
+  it('maps top-level flat allowedExtensions into features.attachments, normalized', () => {
+    const out = migrateConfig({
+      enableAttachments: true,
+      allowedExtensions: ['pdf', 'png'],
+    });
+    expect(out.features.attachments.enabled).toBe(true);
+    expect(out.features.attachments.allowedExtensions).toEqual(['.pdf', '.png']);
+  });
+
+  // Units heuristic: legacy features.maxFileSize was KB (old serving emitted
+  // maxFileSizeKB: ... || 5120). Values > 50 cannot be MB (schema caps at 50)
+  // → treated as KB and converted; values ≤ 50 read as MB.
+  it('converts a KB-scale legacy features.maxFileSize to MB (5120 KB → 5 MB)', () => {
+    const out = migrateConfig({
+      features: { fileAttachments: true, maxFileSize: 5120 },
+    });
+    expect(out.features.attachments.maxFileSizeMB).toBe(5);
+  });
+
+  it('keeps a small legacy features.maxFileSize as MB (20 → 20)', () => {
+    const out = migrateConfig({
+      features: { maxFileSize: 20 },
+    });
+    expect(out.features.attachments.maxFileSizeMB).toBe(20);
+  });
+
   // Issue 3: optional prompt field on starter prompts survives migration
   it('preserves the prompt field on legacy starter prompt objects', () => {
     const out = migrateConfig({
