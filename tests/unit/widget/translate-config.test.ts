@@ -52,6 +52,36 @@ describe('translateConfig — captureContext passthrough', () => {
   });
 });
 
+describe('translateConfig — shadeLevel scale mapping', () => {
+  function configWithShadeLevel(shadeLevel: number) {
+    const cfg = createDefaultConfig('pro');
+    cfg.colorSystem.useTintedGrayscale = true;
+    cfg.colorSystem.shadeLevel = shadeLevel;
+    return cfg;
+  }
+
+  it('maps canonical default 10 to runtime shade 0 (neutral)', () => {
+    const out = translateConfig(configWithShadeLevel(10), ORIGIN, WIDGET_KEY, 'pro', false);
+    expect(out.theme.color?.grayscale?.shade).toBe(0);
+  });
+
+  it('maps canonical 0 to -4 and canonical 20 to +4', () => {
+    const low = translateConfig(configWithShadeLevel(0), ORIGIN, WIDGET_KEY, 'pro', false);
+    expect(low.theme.color?.grayscale?.shade).toBe(-4);
+
+    const high = translateConfig(configWithShadeLevel(20), ORIGIN, WIDGET_KEY, 'pro', false);
+    expect(high.theme.color?.grayscale?.shade).toBe(4);
+  });
+
+  it('maps intermediate values linearly with rounding', () => {
+    const five = translateConfig(configWithShadeLevel(5), ORIGIN, WIDGET_KEY, 'pro', false);
+    expect(five.theme.color?.grayscale?.shade).toBe(-2); // Math.round((5-10)*0.4)
+
+    const thirteen = translateConfig(configWithShadeLevel(13), ORIGIN, WIDGET_KEY, 'pro', false);
+    expect(thirteen.theme.color?.grayscale?.shade).toBe(1); // Math.round(1.2)
+  });
+});
+
 describe('translateConfig — chatkit flag wiring (F4)', () => {
   it('enables agentKit only when chatkitEnabled AND provider is chatkit', () => {
     const cfg = createDefaultConfig('pro');

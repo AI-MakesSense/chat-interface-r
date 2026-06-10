@@ -123,9 +123,12 @@ export const themeSchema = z.object({
  * defaults TRUE (store default) — the other toggles default false.
  *
  * tintLevel/shadeLevel ranges mirror the config-sidebar slider caps (0–20,
- * see components/configurator/config-sidebar.tsx). The cap is also a
- * correctness bound: chat-preview's HSL formula (`lit = 98 - sLevel * 2`)
- * goes black/negative above ~20.
+ * 10 = neutral; see components/configurator/config-sidebar.tsx). The cap is
+ * also a correctness bound: chat-preview's HSL formula (`lit = 98 - sLevel * 2`)
+ * goes black/negative above ~20. NOTE: the runtime GrayscaleConfig.shade
+ * consumed by the widget bundle is -4..4 — lib/widget/translate-config.ts
+ * converts at the boundary. chatkit.grayscaleShade is already stored as -4..4
+ * (ChatKit's native scale) and is NOT converted.
  */
 export const colorSystemSchema = z.object({
   useAccent: z.boolean().default(true),

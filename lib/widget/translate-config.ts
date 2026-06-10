@@ -66,7 +66,12 @@ export function translateConfig(
     theme.color.grayscale = {
       hue: cs.tintHue,
       tint: cs.tintLevel,
-      shade: cs.shadeLevel,
+      // Canonical shadeLevel is a 0-20 slider (10 = neutral); the runtime
+      // GrayscaleConfig.shade is -4..4 (css-variables.ts applies shade*2 %
+      // lightness). Map linearly: 0→-4, 10→0, 20→+4. Conversion lives HERE,
+      // at the canonical→runtime boundary, so stored configs and the sidebar
+      // slider keep the 0-20 scale.
+      shade: Math.round((cs.shadeLevel - 10) * 0.4),
     };
   }
 
