@@ -52,6 +52,7 @@ export interface FieldDef {
   label: string;
   section: SectionId;
   control: 'text' | 'textarea' | 'color' | 'toggle' | 'slider' | 'select' | 'url' | 'icon-picker' | 'prompt-list';
+  masked?: boolean; // render text input as a password field (e.g. API keys)
   tierGate?: 'pro'; // hidden + locked below this tier
   min?: number;
   max?: number;
@@ -481,6 +482,8 @@ export const CHAT_FIELD_REGISTRY: FieldDef[] = [
     label: 'API key',
     section: 'connection',
     control: 'text',
+    masked: true,
+    placeholder: 'sk-…',
     showIf: (c) => c.connection.provider === 'chatkit',
   },
 

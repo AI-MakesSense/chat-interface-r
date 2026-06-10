@@ -299,6 +299,7 @@ function ConfiguratorPage() {
                     onReset={resetConfig}
                     widgetName={currentWidget?.name}
                     lockedProvider="chatkit"
+                    tier={currentWidget?.license?.tier}
                 />
 
                 {/* Preview Canvas */}
