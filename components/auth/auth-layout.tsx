@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { ChatPreview } from '@/components/configurator/chat-preview';
+import { WidgetThumbnail } from '@/components/configurator/widget-thumbnail';
 import { PRESET_CONFIGS } from '@/lib/preset-configs';
 import { BRAND_NAME, BRAND_TAGLINE } from '@/lib/brand';
 import { MessageSquare } from 'lucide-react';
@@ -13,7 +13,9 @@ interface AuthLayoutProps {
 /**
  * Split-screen auth layout.
  * Left: brand + form (always visible).
- * Right: cycling ChatPreview showcase (visible at lg+).
+ * Right: cycling static-thumbnail showcase (visible at lg+). Uses the static
+ * WidgetThumbnail rather than the live-bundle iframe because all presets are
+ * stacked for the crossfade — several live mounts on the auth page would be wasteful.
  */
 export function AuthLayout({ children }: AuthLayoutProps) {
   const [activeIndex, setActiveIndex] = useState(0);
@@ -57,7 +59,7 @@ export function AuthLayout({ children }: AuthLayoutProps) {
                 pointerEvents: 'none',
               }}
             >
-              <ChatPreview config={config} />
+              <WidgetThumbnail config={config} />
             </div>
           ))}
         </div>

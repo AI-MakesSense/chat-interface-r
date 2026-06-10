@@ -10,7 +10,7 @@
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { Widget, WidgetConfig } from '@/stores/widget-store';
-import { ChatPreview } from '@/components/configurator/chat-preview';
+import { WidgetThumbnail } from '@/components/configurator/widget-thumbnail';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -167,25 +167,15 @@ export function WidgetList({ widgets, onDelete }: WidgetListProps) {
                             </Badge>
                         </div>
                     </CardHeader>
-                    {/* Widget Thumbnail Preview */}
+                    {/* Widget Thumbnail Preview (static mock — live iframes per card would be too heavy) */}
                     <div className="mx-4 mb-2 h-[120px] rounded-lg overflow-hidden bg-zinc-800 relative">
-                        <div
-                            className="absolute top-0 left-1/2 origin-top-left"
-                            style={{
-                                width: 400,
-                                height: 600,
-                                transform: 'translateX(-50%) scale(0.3)',
-                                pointerEvents: 'none',
-                            }}
-                        >
-                            {widget.config ? (
-                                <ChatPreview config={widget.config as WidgetConfig} />
-                            ) : (
-                                <div className="w-full h-full flex items-center justify-center bg-zinc-800">
-                                    <Globe className="h-8 w-8 text-zinc-600" />
-                                </div>
-                            )}
-                        </div>
+                        {widget.config ? (
+                            <WidgetThumbnail config={widget.config as WidgetConfig} />
+                        ) : (
+                            <div className="w-full h-full flex items-center justify-center bg-zinc-800">
+                                <Globe className="h-8 w-8 text-zinc-600" />
+                            </div>
+                        )}
                     </div>
 
                     <CardContent className="flex-1 pt-0">

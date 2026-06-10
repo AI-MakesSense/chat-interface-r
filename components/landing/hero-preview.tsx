@@ -1,13 +1,17 @@
 'use client';
 
 import React, { useState, useEffect, useRef } from 'react';
-import { ChatPreview } from '@/components/configurator/chat-preview';
+import { WidgetThumbnail } from '@/components/configurator/widget-thumbnail';
 import { PRESET_CONFIGS } from '@/lib/preset-configs';
 
 /**
  * Animated hero preview — cycles through preset widget configs
  * with a smooth crossfade. Non-interactive (pointer-events: none).
- * Responsive: scales the 400×600 ChatPreview to fit the container.
+ * Responsive: scales the 400×600 static thumbnail to fit the container.
+ *
+ * Uses the static WidgetThumbnail (not the live-bundle iframe) on purpose: this
+ * stacks ALL presets simultaneously for the crossfade, so live iframes would mean
+ * several real-bundle mounts running at once on the landing page.
  */
 export function HeroPreview() {
   const [activeIndex, setActiveIndex] = useState(0);
@@ -54,7 +58,7 @@ export function HeroPreview() {
             }}
           >
             <div className="w-full h-full rounded-2xl overflow-hidden shadow-2xl ring-1 ring-white/10">
-              <ChatPreview config={config} />
+              <WidgetThumbnail config={config} />
             </div>
           </div>
         </div>

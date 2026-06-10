@@ -2,13 +2,19 @@
 
 import React, { useState, useRef, useEffect } from 'react';
 import { WidgetConfig } from '@/stores/widget-store';
-import { ChatPreview } from './chat-preview';
+import { WidgetPreviewFrame } from './widget-preview-frame';
 import { ChatKitPreview } from './chatkit-preview';
 import { ChevronDown, MessageCircle, X, AppWindow, LayoutTemplate } from 'lucide-react';
 import { CHATKIT_UI_ENABLED } from '@/lib/feature-flags';
 
 interface PreviewCanvasProps {
   config: WidgetConfig;
+  /**
+   * License tier driving preview branding (pro/agency may hide the "Powered by"
+   * footer). Defaults to 'agency' so a tier-less preview shows the white-labeled
+   * widget rather than forcing branding on.
+   */
+  tier?: string;
   onDimensionsChange?: (width: number, height: number) => void;
 }
 
@@ -19,7 +25,7 @@ interface Dimensions {
   height: number;
 }
 
-export const PreviewCanvas: React.FC<PreviewCanvasProps> = ({ config, onDimensionsChange }) => {
+export const PreviewCanvas: React.FC<PreviewCanvasProps> = ({ config, tier = 'agency', onDimensionsChange }) => {
   const [size, setSize] = useState<Dimensions>({
     width: config.theme.size.inlineWidth || 400,
     height: config.theme.size.inlineHeight || 600,
@@ -234,7 +240,11 @@ export const PreviewCanvas: React.FC<PreviewCanvasProps> = ({ config, onDimensio
             {isChatKit ? (
               <ChatKitPreview config={config} />
             ) : (
-              <ChatPreview config={config} />
+              <WidgetPreviewFrame
+                kind="chat"
+                config={config}
+                tier={tier}
+              />
             )}
           </div>
 
@@ -287,7 +297,11 @@ export const PreviewCanvas: React.FC<PreviewCanvasProps> = ({ config, onDimensio
             {isChatKit ? (
               <ChatKitPreview config={config} />
             ) : (
-              <ChatPreview config={config} />
+              <WidgetPreviewFrame
+                kind="chat"
+                config={config}
+                tier={tier}
+              />
             )}
           </div>
 

@@ -304,6 +304,7 @@ function ConfiguratorPage() {
                 {/* Preview Canvas */}
                 <PreviewCanvas
                     config={currentConfig}
+                    tier={currentWidget?.license?.tier}
                     onDimensionsChange={(width, height) => updateConfig({ theme: { size: { inlineWidth: width, inlineHeight: height } } })}
                 />
             </div>

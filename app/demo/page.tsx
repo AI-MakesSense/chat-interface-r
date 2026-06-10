@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import Link from 'next/link';
 import { ArrowRight, MessageSquare } from 'lucide-react';
-import { ChatPreview } from '@/components/configurator/chat-preview';
+import { WidgetPreviewFrame } from '@/components/configurator/widget-preview-frame';
 import { PRESET_CONFIGS } from '@/lib/preset-configs';
 import { BRAND_NAME } from '@/lib/brand';
 import { Button } from '@/components/ui/button';
@@ -71,7 +71,7 @@ export default function DemoPage() {
                 {/* Preview */}
                 <div className="flex justify-center mb-16">
                     <div className="w-full max-w-[400px] aspect-[2/3] rounded-2xl overflow-hidden shadow-2xl ring-1 ring-white/10 transition-all duration-500">
-                        <ChatPreview config={config} />
+                        <WidgetPreviewFrame kind="chat" config={config} tier="agency" />
                     </div>
                 </div>
 
