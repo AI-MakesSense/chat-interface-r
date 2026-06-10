@@ -181,7 +181,9 @@ function translateConfig(dbConfig: any, requestUrl: string): WidgetConfig {
         features: {
             fileAttachmentsEnabled: dbConfig.enableAttachments || dbConfig.features?.fileAttachments || false,
             allowedExtensions: dbConfig.features?.allowedExtensions || ['pdf', 'doc', 'docx', 'txt', 'png', 'jpg', 'jpeg'],
-            maxFileSizeKB: dbConfig.features?.maxFileSize || 5120,
+            // 10240 mirrors the canonical attachmentsSchema default
+            // (lib/widget-config/schema.ts: maxFileSizeMB 10 × 1024).
+            maxFileSizeKB: dbConfig.features?.maxFileSize || 10240,
         },
         connection: {
             relayEndpoint: `${new URL(requestUrl).origin}/api/chat-relay`,

@@ -22,12 +22,19 @@
  * only the BUNDLE cannot.
  */
 
-import { chatWidgetConfigSchema } from '@/lib/widget-config/schema';
+import { chatWidgetConfigSchema, type ChatWidgetConfig } from '@/lib/widget-config/schema';
 import { mergeConfig } from '@/widget/src/core/config';
+import { normalizeMaxFileSizeKB } from '@/widget/src/widget';
+import type { WidgetConfig } from '@/widget/src/types';
 
 describe('widget runtime defaults parity with canonical schema', () => {
-  const canonical = chatWidgetConfigSchema.parse({});
-  const runtime = mergeConfig({});
+  let canonical: ChatWidgetConfig;
+  let runtime: WidgetConfig;
+
+  beforeAll(() => {
+    canonical = chatWidgetConfigSchema.parse({});
+    runtime = mergeConfig({});
+  });
 
   // ── Branding ────────────────────────────────────────────────────────────────
   // translateConfig() maps: cfg.branding.companyName → branding.companyName
@@ -48,13 +55,15 @@ describe('widget runtime defaults parity with canonical schema', () => {
   // ── Style / Position ────────────────────────────────────────────────────────
   // translateConfig() maps: cfg.theme.position.position → style.position
   it('style.position matches canonical positionSchema default', () => {
-    expect(runtime.style!.position).toBe(canonical.theme.position.position);
+    expect(runtime.style).toBeDefined();
+    expect(runtime.style?.position).toBe(canonical.theme.position.position);
   });
 
   // translateConfig() maps: cfg.theme.typography.fontSize → theme.typography.baseSize
   // Widget reads fontSize from style.fontSize as a fallback.
   it('style.fontSize matches canonical typographySchema default', () => {
-    expect(runtime.style!.fontSize).toBe(canonical.theme.typography.fontSize);
+    expect(runtime.style).toBeDefined();
+    expect(runtime.style?.fontSize).toBe(canonical.theme.typography.fontSize);
   });
 
   // ── Features ────────────────────────────────────────────────────────────────
@@ -96,5 +105,56 @@ describe('widget runtime defaults parity with canonical schema', () => {
       allowedExtensions: [],
       maxFileSizeKB: 10240,
     });
+  });
+});
+
+describe('widget.ts normalizeMaxFileSizeKB (createChatWidget normalisation path)', () => {
+  let canonical: ChatWidgetConfig;
+
+  beforeAll(() => {
+    canonical = chatWidgetConfigSchema.parse({});
+  });
+
+  // C-02 guard: when neither composer.attachments.maxSize nor
+  // features.maxFileSizeKB is present, the fallback must be the canonical
+  // default (maxFileSizeMB 10 × 1024 = 10240), NOT a stale literal.
+  it('falls back to canonical 10240 KB when config lacks features.maxFileSizeKB', () => {
+    expect(normalizeMaxFileSizeKB({})).toBe(10240);
+    expect(normalizeMaxFileSizeKB({})).toBe(canonical.features.attachments.maxFileSizeMB * 1024);
+  });
+
+  it('falls back to 10240 when features exists but maxFileSizeKB is absent', () => {
+    expect(
+      normalizeMaxFileSizeKB({
+        features: { fileAttachmentsEnabled: true, allowedExtensions: ['.pdf'] } as never,
+      })
+    ).toBe(10240);
+  });
+
+  it('prefers composer.attachments.maxSize (bytes → KB) over the legacy path', () => {
+    expect(
+      normalizeMaxFileSizeKB({
+        composer: { attachments: { enabled: true, maxSize: 2048 * 1024 } },
+        features: { fileAttachmentsEnabled: true, allowedExtensions: [], maxFileSizeKB: 512 },
+      })
+    ).toBe(2048);
+  });
+
+  it('uses explicit features.maxFileSizeKB when composer maxSize is absent', () => {
+    expect(
+      normalizeMaxFileSizeKB({
+        features: { fileAttachmentsEnabled: true, allowedExtensions: [], maxFileSizeKB: 512 },
+      })
+    ).toBe(512);
+  });
+
+  // ?? semantics: an explicit 0 is passed through (0 is invalid upstream, but
+  // the normaliser must not silently rewrite explicit values).
+  it('does not clobber an explicit 0 (?? not ||)', () => {
+    expect(
+      normalizeMaxFileSizeKB({
+        features: { fileAttachmentsEnabled: false, allowedExtensions: [], maxFileSizeKB: 0 },
+      })
+    ).toBe(0);
   });
 });

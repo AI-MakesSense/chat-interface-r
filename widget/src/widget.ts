@@ -192,6 +192,23 @@ export interface WidgetCleanup {
   destroy: () => void;
 }
 
+/**
+ * Normalizes the max attachment size (KB) from either the new composer path
+ * (composer.attachments.maxSize, in bytes) or the legacy features path
+ * (features.maxFileSizeKB, in KB).
+ *
+ * The 10240 fallback MUST mirror DEFAULT_CONFIG.features.maxFileSizeKB in
+ * widget/src/core/config.ts (canonical attachmentsSchema maxFileSizeMB 10 × 1024).
+ * Uses ?? (not ||) so an explicit value of 0 is not clobbered — 0 is invalid
+ * upstream, but ?? is the honest operator for "absent" semantics.
+ * Guarded by tests/widget/config-defaults-parity.test.ts.
+ */
+export function normalizeMaxFileSizeKB(config: Partial<WidgetConfig>): number {
+  return config.composer?.attachments?.maxSize
+    ? config.composer.attachments.maxSize / 1024
+    : config.features?.maxFileSizeKB ?? 10240;
+}
+
 export function createChatWidget(runtimeConfig: WidgetRuntimeConfig): WidgetCleanup {
   const messages: Message[] = [];
   let isOpen = false;
@@ -257,7 +274,7 @@ export function createChatWidget(runtimeConfig: WidgetRuntimeConfig): WidgetClea
       // Unified: new path (composer.attachments.enabled) + legacy (features.fileAttachmentsEnabled)
       fileAttachmentsEnabled: config.composer?.attachments?.enabled || config.features?.fileAttachmentsEnabled || false,
       allowedExtensions: config.composer?.attachments?.accept || config.features?.allowedExtensions || ['jpg', 'jpeg', 'png', 'gif', 'pdf', 'doc', 'docx'],
-      maxFileSizeKB: config.composer?.attachments?.maxSize ? config.composer.attachments.maxSize / 1024 : config.features?.maxFileSizeKB || 5000,
+      maxFileSizeKB: normalizeMaxFileSizeKB(config),
     },
     connection: config.connection,
     license: config.license,
