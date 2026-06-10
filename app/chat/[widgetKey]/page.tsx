@@ -17,6 +17,7 @@ import { getWidgetByKey, getWidgetByKeyWithUser } from '@/lib/db/queries';
 import { CHATKIT_SERVER_ENABLED } from '@/lib/feature-flags';
 import FullpageWidget from './fullpage-widget';
 import { migrateConfig } from '@/lib/widget-config/migrate';
+import { getBundlePath } from '@/lib/widget/manifest';
 
 interface PageProps {
   params: Promise<{
@@ -56,6 +57,9 @@ export default async function FullpageChatPage({ params }: PageProps) {
   // Extract config from JSONB
   const config = migrateConfig(widget.config);
 
+  // Content-hashed bundle path (build manifest) for the fullpage boot.
+  const bundlePath = getBundlePath();
+
   // ChatKit fullpage is disabled when provider flag is off.
   if (!CHATKIT_SERVER_ENABLED) {
     const isChatKitWidget = widget.widgetType === 'chatkit' || config?.connection?.provider === 'chatkit';
@@ -76,6 +80,7 @@ export default async function FullpageChatPage({ params }: PageProps) {
         <FullpageWidget
           widgetKey={widgetKey}
           config={config}
+          bundlePath={bundlePath}
         />
       </div>
     </>

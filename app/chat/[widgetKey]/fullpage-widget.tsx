@@ -22,9 +22,11 @@ import { CHATKIT_UI_ENABLED } from '@/lib/feature-flags';
 interface FullpageWidgetProps {
   widgetKey: string;
   config: WidgetConfig;
+  /** Content-hashed bundle path from the build manifest (server-read). */
+  bundlePath: string;
 }
 
-export default function FullpageWidget({ widgetKey, config }: FullpageWidgetProps) {
+export default function FullpageWidget({ widgetKey, config, bundlePath }: FullpageWidgetProps) {
   // Check if this is a ChatKit widget
   const isChatKit = CHATKIT_UI_ENABLED && config?.connection?.provider === 'chatkit';
   const scriptInjected = useRef(false);
@@ -52,25 +54,67 @@ export default function FullpageWidget({ widgetKey, config }: FullpageWidgetProp
     };
   }, []);
 
-  // Inject the widget script manually (not via Next.js <Script>)
+  // Boot the widget from the content-hashed bundle (Task 18).
+  //
+  // Mirrors the embed loader: fetch /api/w/<key>/config to get the runtime
+  // envelope, set window.ChatWidgetConfig, then inject the hashed bundle. The
+  // bundle's fast-path reads ChatWidgetConfig and the data-mode attribute off
+  // its own <script> tag to mount in portal mode.
+  //
+  // Why not the loader.js URL? The fullpage route already knows the bundlePath
+  // (server-read from the manifest), so it injects the bundle directly and skips
+  // the loader's extra round-trip. The cleanup path disposes the renderer via the
+  // bundle's teardown hook so SPA navigation does not leak listeners/timers.
+  //
+  // bundlePath/widgetKey are fixed per page load; config is intentionally NOT a
+  // dep (it never changes after the server render).
   useEffect(() => {
     if (isChatKit || scriptInjected.current) return;
     scriptInjected.current = true;
 
-    const script = document.createElement('script');
-    script.src = `/w/${widgetKey}.js`;
-    script.async = true;
-    script.setAttribute('data-mode', 'portal');
-    script.setAttribute('data-container', 'chat-portal');
-    script.id = `n8n-fullpage-${widgetKey}`;
-    document.body.appendChild(script);
+    let cancelled = false;
+    const scriptId = `n8n-fullpage-${widgetKey}`;
+
+    (async () => {
+      try {
+        const res = await fetch(`/api/w/${encodeURIComponent(widgetKey)}/config`, {
+          mode: 'cors',
+        });
+        if (!res.ok) throw new Error(`config fetch failed: HTTP ${res.status}`);
+        const data = await res.json();
+        if (cancelled) return;
+
+        (window as any).ChatWidgetConfig = data.runtime;
+
+        const script = document.createElement('script');
+        // Prefer the manifest path the config endpoint returns; fall back to the
+        // server-provided bundlePath prop.
+        script.src = data.bundlePath || bundlePath;
+        script.async = true;
+        script.setAttribute('data-mode', 'portal');
+        script.setAttribute('data-container', 'chat-portal');
+        script.id = scriptId;
+        document.body.appendChild(script);
+      } catch (err) {
+        console.error('[Fullpage] Widget boot failed:', err);
+      }
+    })();
 
     return () => {
-      // Clean up on unmount
-      const el = document.getElementById(`n8n-fullpage-${widgetKey}`);
+      cancelled = true;
+      // Dispose the active renderer (removes listeners/timers/DOM) before SPA nav.
+      const teardown = (window as any).__n8nWidgetTeardown;
+      if (typeof teardown === 'function') {
+        try {
+          teardown();
+        } catch {
+          /* best-effort cleanup */
+        }
+      }
+      const el = document.getElementById(scriptId);
       if (el) el.remove();
     };
-  }, [widgetKey, isChatKit]);
+  }, [widgetKey, isChatKit, bundlePath]);
 
   // ChatKit widget - render the ChatKit embed component
   if (isChatKit) {

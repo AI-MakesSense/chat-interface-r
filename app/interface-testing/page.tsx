@@ -68,9 +68,14 @@ export default function InterfaceTestingPage() {
                 </section>
             </main>
 
-            {/* Widget Script */}
-            <div id="n8n-chat-undefined"></div>
-            <script src="https://chat-interface-r.vercel.app/api/embed/bundle.js" defer></script>
+            {/* Widget Script (loader-based embed — Task 18).
+                Replace YOUR_WIDGET_KEY with a real 16-char widgetKey to test against
+                a live widget. */}
+            <script
+                src="https://chat-interface-r.vercel.app/widget/loader.js"
+                data-widget-key="YOUR_WIDGET_KEY"
+                async
+            ></script>
         </div>
     );
 }

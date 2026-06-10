@@ -25,6 +25,14 @@
       const bundle = document.createElement('script');
       bundle.src = origin + data.bundlePath;
       bundle.async = true;
+      // Forward display-mode attributes so inline/portal embeds reach the bundle.
+      // The bundle reads data-mode / data-container off its own <script> tag; the
+      // loader is that tag's stand-in, so copy them through. Popup (no attrs) is
+      // unaffected.
+      const mode = script.getAttribute('data-mode');
+      if (mode) bundle.setAttribute('data-mode', mode);
+      const container = script.getAttribute('data-container');
+      if (container) bundle.setAttribute('data-container', container);
       bundle.onerror = () => console.error('[n8n-widget] loader: bundle failed to load', bundle.src);
       document.head.appendChild(bundle);
     })

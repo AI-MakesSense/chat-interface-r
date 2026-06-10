@@ -150,7 +150,7 @@ export function generateEmbedCode(
         language: 'html',
         icon: 'message-circle',
         code: `<!-- Chat Widget -->
-<script src="${baseUrl}/w/${key}.js" crossorigin="anonymous" async></script>`,
+<script src="${baseUrl}/widget/loader.js" data-widget-key="${key}" async></script>`,
       };
 
     case 'inline': {
@@ -165,8 +165,8 @@ export function generateEmbedCode(
         code: `<!-- Chat Widget (Inline) -->
 <div id="chat-widget" style="width: ${inlineW}px; height: ${inlineH}px;"></div>
 <script
-  src="${baseUrl}/w/${key}.js"
-  crossorigin="anonymous"
+  src="${baseUrl}/widget/loader.js"
+  data-widget-key="${key}"
   data-mode="inline"
   data-container="chat-widget"
   async

@@ -38,6 +38,21 @@ if (typeof window !== 'undefined') {
     scriptTag = scriptCandidates[scriptCandidates.length - 1] || null;
   }
 
+  // Expose a teardown hook so host pages (e.g. the SPA fullpage route) can
+  // dispose the active renderer on unmount. SPA navigation does not re-evaluate
+  // the injected bundle script, so without this the renderer's listeners/timers
+  // would leak across client-side route changes.
+  function exposeTeardown(renderer: { dispose: () => void | Promise<void> }): void {
+    if (typeof window === 'undefined') return;
+    (window as any).__n8nWidgetTeardown = () => {
+      try {
+        void renderer.dispose();
+      } finally {
+        delete (window as any).__n8nWidgetTeardown;
+      }
+    };
+  }
+
   // Wait for DOM to be ready
   if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', init);
@@ -92,6 +107,7 @@ if (typeof window !== 'undefined') {
           { ...(injectedConfig as WidgetRuntimeConfig), display: displayConfig },
           document.body
         );
+        exposeTeardown(fastRenderer);
         return;
       } catch (error) {
         console.error('[N8n Chat Widget] Initialization error:', error);
@@ -193,6 +209,7 @@ if (typeof window !== 'undefined') {
       const isDisplay = remoteConfig.kind === 'display';
       const renderer = isDisplay ? new DisplayRenderer() : new ChatRenderer();
       await renderer.mount(runtimeConfig, document.body);
+      exposeTeardown(renderer);
 
     } catch (error) {
       console.error('[N8n Chat Widget] Boot error:', error);

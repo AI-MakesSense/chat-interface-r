@@ -1,6 +1,4 @@
 import JSZip from 'jszip';
-import fs from 'fs/promises';
-import path from 'path';
 // Make sure this import matches where your WidgetConfig type is defined
 import type { WidgetConfig } from '@/stores/widget-store';
 import { HTMLTemplates } from './zip-generator/html-templates';
@@ -8,17 +6,20 @@ import { ExtensionTemplates, IconGenerator } from './zip-generator/extension-tem
 
 export type PackageType = 'website' | 'portal' | 'extension';
 
+/**
+ * Downloaded packages are loader-based (Task 18). Instead of bundling the widget
+ * runtime (the old chat-widget.iife.js, now deleted), every generated HTML embeds
+ * the hosted loader snippet pointing at the SaaS origin:
+ *
+ *   <script src="${baseUrl}/widget/loader.js" data-widget-key="KEY" async></script>
+ *
+ * This makes the download a self-contained, auto-updating embed and removes the
+ * dependency on a local bundle file. The `licenseKey` parameter carries the public
+ * widgetKey (the download route passes widget.widgetKey).
+ */
 export class ZipGenerator {
-  private widgetScriptPath: string;
-
-  constructor() {
-    // Path to compiled widget bundle in public folder
-    this.widgetScriptPath = path.join(process.cwd(), 'public', 'widget', 'chat-widget.iife.js');
-  }
-
   /**
    * Generate website widget package
-   * UPDATED: Now accepts licenseKey and baseUrl
    */
   async generateWebsitePackage(
     config: WidgetConfig,
@@ -30,16 +31,12 @@ export class ZipGenerator {
 
     const zip = new JSZip();
 
-    // 1. Add widget script
-    const widgetScript = await this.getWidgetScript();
-    zip.file('chat-widget.js', widgetScript);
-
-    // 2. Add index.html
+    // 1. Add index.html (loader-based embed)
     const sanitizedConfig = this.sanitizeConfig(config);
-    const indexHtml = HTMLTemplates.generateWebsiteHTML(sanitizedConfig);
+    const indexHtml = HTMLTemplates.generateWebsiteHTML(sanitizedConfig, licenseKey, baseUrl);
     zip.file('index.html', indexHtml);
 
-    // 3. Add README (Dynamic)
+    // 2. Add README (Dynamic)
     const readme = READMETemplates.generateWebsiteREADME(licenseKey, baseUrl);
     zip.file('README.md', readme);
 
@@ -48,7 +45,6 @@ export class ZipGenerator {
 
   /**
    * Generate portal page package
-   * UPDATED: Now accepts licenseKey and baseUrl
    */
   async generatePortalPackage(
     config: WidgetConfig,
@@ -60,16 +56,12 @@ export class ZipGenerator {
 
     const zip = new JSZip();
 
-    // 1. Add widget script
-    const widgetScript = await this.getWidgetScript();
-    zip.file('chat-widget.js', widgetScript);
-
-    // 2. Add portal.html
+    // 1. Add portal.html (loader-based embed)
     const sanitizedConfig = this.sanitizeConfig(config);
-    const portalHtml = HTMLTemplates.generatePortalHTML(sanitizedConfig, widgetId);
+    const portalHtml = HTMLTemplates.generatePortalHTML(sanitizedConfig, widgetId, licenseKey, baseUrl);
     zip.file('portal.html', portalHtml);
 
-    // 3. Add README (Dynamic)
+    // 2. Add README (Dynamic)
     const readme = READMETemplates.generatePortalREADME(widgetId, licenseKey, baseUrl);
     zip.file('README.md', readme);
 
@@ -78,7 +70,6 @@ export class ZipGenerator {
 
   /**
    * Generate Chrome extension package
-   * UPDATED: Now accepts licenseKey and baseUrl
    */
   async generateExtensionPackage(
     config: WidgetConfig,
@@ -90,16 +81,12 @@ export class ZipGenerator {
 
     const zip = new JSZip();
 
-    // 1. Add widget script
-    const widgetScript = await this.getWidgetScript();
-    zip.file('chat-widget.js', widgetScript);
-
-    // 2. Add extension files
+    // 1. Add extension files (sidepanel embeds the hosted loader)
     const sanitizedConfig = this.sanitizeConfig(config);
-    const manifest = ExtensionTemplates.generateManifest(sanitizedConfig);
+    const manifest = ExtensionTemplates.generateManifest(sanitizedConfig, baseUrl);
     zip.file('manifest.json', JSON.stringify(manifest, null, 2));
 
-    const sidepanelHtml = ExtensionTemplates.generateSidepanel(sanitizedConfig, widgetId);
+    const sidepanelHtml = ExtensionTemplates.generateSidepanel(licenseKey, baseUrl);
     zip.file('sidepanel.html', sidepanelHtml);
 
     const backgroundScript = ExtensionTemplates.generateBackground();
@@ -122,15 +109,6 @@ export class ZipGenerator {
     zip.file('README.md', readme);
 
     return await this.createZip(zip);
-  }
-
-  private async getWidgetScript(): Promise<string> {
-    try {
-      return await fs.readFile(this.widgetScriptPath, 'utf-8');
-    } catch (error) {
-      console.error('Missing widget script at:', this.widgetScriptPath);
-      throw new Error('System configuration error: Widget script not found.');
-    }
   }
 
   private validateConfig(config: WidgetConfig): void {
@@ -215,12 +193,12 @@ class READMETemplates {
 
 This package contains a reference implementation to help you get started.
 
-## ✅ Option 1: Hosted Embed (Recommended)
+## ✅ Hosted Embed (Recommended)
 
-This is the easiest way. Add this single line to your HTML, just before the closing \`</body>\` tag:
+Add this single line to your HTML, just before the closing \`</body>\` tag:
 
 \`\`\`html
-<script src="${baseUrl}/api/widget/${licenseKey}/chat-widget.js"></script>
+<script src="${baseUrl}/widget/loader.js" data-widget-key="${licenseKey}" async></script>
 \`\`\`
 
 **Benefits:**
@@ -228,23 +206,9 @@ This is the easiest way. Add this single line to your HTML, just before the clos
 - Secure relay (hides your N8n webhook URL)
 - No CORS issues
 
----
-
-## ⚙️ Option 2: Self-Hosted
-
-If you prefer to host the files yourself:
-
-1. Upload \`chat-widget.js\` to your server.
-2. Add the following code to your HTML:
-
-\`\`\`html
-<script>
-  window.ChatWidgetConfig = {
-    // ... see index.html for your specific config ...
-  };
-</script>
-<script src="/path/to/chat-widget.js"></script>
-\`\`\`
+The included \`index.html\` is a ready-to-use demo page with this snippet already
+in place — open it in a browser to see the widget, or copy the snippet above into
+your own site.
 `;
   }
 
@@ -255,26 +219,19 @@ This package contains a full-page chat interface.
 
 ## ✅ Quick Deployment
 
-Simply create an HTML page with this content:
+The included \`portal.html\` is a ready-to-host full-page chat. It embeds the hosted
+loader:
 
 \`\`\`html
-<!DOCTYPE html>
-<html>
-<head>
-  <title>Support Chat</title>
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-</head>
-<body>
-  <script src="${baseUrl}/api/widget/${licenseKey}/chat-widget.js"></script>
-</body>
-</html>
+<script src="${baseUrl}/widget/loader.js" data-widget-key="${licenseKey}" data-mode="portal" async></script>
 \`\`\`
 
-Host this HTML file at your own domain (e.g., \`chat.yourcompany.com\`).
+Host \`portal.html\` at your own domain (e.g., \`chat.yourcompany.com\`), or link
+directly to the hosted portal: \`${baseUrl}/chat/${licenseKey}\`.
 
 ## Widget Details
 - **Widget ID:** \`${widgetId}\`
-- **License Key:** \`${licenseKey}\`
+- **Widget Key:** \`${licenseKey}\`
 `;
   }
 

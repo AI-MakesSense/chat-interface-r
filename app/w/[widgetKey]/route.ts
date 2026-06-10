@@ -24,7 +24,6 @@ import { normalizeDomain } from '@/lib/license/domain';
 import { extractDomainFromReferer, createResponseHeaders } from '@/lib/widget/headers';
 import { createErrorScript, logWidgetError, ErrorType } from '@/lib/widget/error';
 import { checkRateLimit } from '@/lib/security/rate-limit';
-import { serveWidgetBundle } from '@/lib/widget/serve';
 import { CHATKIT_SERVER_ENABLED } from '@/lib/feature-flags';
 
 /**
@@ -321,33 +320,15 @@ export async function GET(
       });
     }
 
-    // For n8n widgets, serve the widget bundle
-    // Create a mock license object for backward compatibility with serveWidgetBundle
-    const mockLicense = {
-      id: user.id,
-      licenseKey: cleanWidgetKey,
-      tier: userTier,
-      domains: allowedDomains,
-      status: 'active' as const,
-      brandingEnabled: userTier === 'free' || userTier === 'basic',
-    };
-
+    // For n8n widgets, the injection/serve pipeline is gone (Task 18). The widget
+    // is now served by the stable loader (which fetches /api/w/<key>/config and
+    // injects the content-hashed bundle). This route remains as a compat shim for
+    // any cached/legacy `/w/<key>.js` embeds: 302 to the loader with the key.
+    // All authorization above (status, subscription, domain, rate limits) still
+    // runs before the redirect, and the loader's config call re-checks domain authz.
     const requestOrigin = new URL(request.url).origin;
-    const { bundle: widgetBundle, etag } = await serveWidgetBundle(mockLicense as any, widget.id, requestOrigin);
-
-    // Step 12: Conditional response — return 304 if browser has current version
-    const ifNoneMatch = request.headers.get('if-none-match');
-    if (ifNoneMatch && ifNoneMatch === etag) {
-      return new NextResponse(null, {
-        status: 304,
-        headers: createResponseHeaders(etag)
-      });
-    }
-
-    return new NextResponse(widgetBundle, {
-      status: 200,
-      headers: createResponseHeaders(etag)
-    });
+    const loaderUrl = `${requestOrigin}/widget/loader.js?key=${encodeURIComponent(cleanWidgetKey)}`;
+    return NextResponse.redirect(loaderUrl, { status: 302 });
 
   } catch (error) {
     console.error('[Widget Serving v2] Internal error:', error);

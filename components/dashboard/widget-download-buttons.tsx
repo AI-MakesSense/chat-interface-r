@@ -43,9 +43,11 @@ export function WidgetDownloadButtons({ widgetId, widgetName, licenseKey, widget
     setBaseUrl(resolveEmbedBaseUrl());
   }, []);
 
-  // Prefer v2.0 widgetKey embed, fall back to legacy licenseKey
+  // Loader-based embed (Task 18): the loader is the only URL customers reference.
+  // Fall back to the legacy license-key URL only when no widgetKey exists; that
+  // legacy URL is now a 302 compat adapter that redirects to the loader.
   const embedCode = widgetKey
-    ? `<script src="${baseUrl}/w/${widgetKey}.js" crossorigin="anonymous" async></script>`
+    ? `<script src="${baseUrl}/widget/loader.js" data-widget-key="${widgetKey}" async></script>`
     : `<script src="${baseUrl}/api/widget/${licenseKey}/chat-widget.js" async></script>`;
 
   const copyToClipboard = () => {
