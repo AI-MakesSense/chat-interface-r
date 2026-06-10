@@ -49,17 +49,43 @@ function isHex(v: unknown): v is string {
  * array container. Splices for the same array are applied in descending index
  * order within a pass so earlier removals don't shift later indices.
  */
-function repairSection(sectionSchema: z.ZodTypeAny, raw: unknown): unknown {
+/**
+ * Replace a section with schema defaults, loudly. Every call site here is a
+ * data-loss path — existing stored data for the section is discarded — so the
+ * warning makes the loss visible in logs (ADV-006). Absent/null sections
+ * getting defaults is the NORMAL case and must NOT route through this helper.
+ */
+function sectionDefaultFallback(
+  sectionName: string,
+  sectionSchema: z.ZodTypeAny,
+  reason: string
+): unknown {
+  console.warn(
+    `[migrateConfig] Section '${sectionName}' could not be repaired (${reason}) — replaced with schema defaults. Original data for this section is dropped.`
+  );
+  return sectionSchema.parse({});
+}
+
+function repairSection(
+  sectionName: string,
+  sectionSchema: z.ZodTypeAny,
+  raw: unknown
+): unknown {
   let candidate: AnyRecord;
   if (raw && typeof raw === 'object') {
     try {
       candidate = structuredClone(raw) as AnyRecord;
     } catch {
       // Non-cloneable values (functions, etc.) — fall back to section defaults
-      return sectionSchema.parse({});
+      return sectionDefaultFallback(sectionName, sectionSchema, 'non-cloneable value');
     }
-  } else {
+  } else if (raw == null) {
+    // Absent/null section — filling with defaults is normal, not data loss.
     candidate = {};
+  } else {
+    // Data-bearing primitive (string/number/boolean) where an object section
+    // was expected — nothing to leaf-repair; the stored value is discarded.
+    return sectionDefaultFallback(sectionName, sectionSchema, 'section is wrong type');
   }
 
   for (let i = 0; i < 25; i++) {
@@ -72,8 +98,10 @@ function repairSection(sectionSchema: z.ZodTypeAny, raw: unknown): unknown {
     const splices = new Map<unknown[], Set<number>>();
 
     for (const issue of r.error.issues) {
-      // Section itself is the wrong type — no point deleting leaves
-      if (issue.path.length === 0) return sectionSchema.parse({});
+      // Section itself rejected at the root — no point deleting leaves
+      if (issue.path.length === 0) {
+        return sectionDefaultFallback(sectionName, sectionSchema, 'section is wrong type');
+      }
 
       // Array-aware: if the path crosses an array, schedule removal of the
       // offending ELEMENT at the FIRST array container.
@@ -130,10 +158,12 @@ function repairSection(sectionSchema: z.ZodTypeAny, raw: unknown): unknown {
       }
     }
 
-    if (!deleted) return sectionSchema.parse({});
+    if (!deleted) {
+      return sectionDefaultFallback(sectionName, sectionSchema, 'no repair progress');
+    }
   }
 
-  return sectionSchema.parse({});
+  return sectionDefaultFallback(sectionName, sectionSchema, 'iteration cap reached');
 }
 
 /**
@@ -172,7 +202,7 @@ function lenientParse(candidate: AnyRecord): ChatWidgetConfig {
   for (const s of sections) {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const sectionSchema = (chatWidgetConfigSchema.shape as any)[s];
-    repaired[s] = repairSection(sectionSchema, candidate[s] ?? {});
+    repaired[s] = repairSection(s, sectionSchema, candidate[s] ?? {});
   }
 
   return chatWidgetConfigSchema.parse(chatWidgetConfigSchema.parse(repaired));

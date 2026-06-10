@@ -397,6 +397,30 @@ describe('migrateConfig', () => {
     expect(out.startScreen.greeting).toBe('Hi');
     expect(out.startScreen.starterPrompts).toEqual([]);
   });
+
+  // ADV-006: section-default fallback is data loss and must be visible in logs
+  it('warns when a section falls back to defaults entirely', () => {
+    const warn = jest.spyOn(console, 'warn').mockImplementation(() => {});
+    // a section whose value is a wrong type triggers the section-default fallback
+    migrateConfig({ schemaVersion: 2, branding: 'not-an-object' });
+    expect(warn).toHaveBeenCalledWith(expect.stringContaining('branding'));
+    warn.mockRestore();
+  });
+
+  // ADV-006: absent sections getting defaults is NORMAL — no warn spam
+  it('does not warn for absent/null sections or leaf-level repairs (no data loss)', () => {
+    const warn = jest.spyOn(console, 'warn').mockImplementation(() => {});
+    // bare v2 blob: every section absent → defaults, silently
+    migrateConfig({ schemaVersion: 2 });
+    // null section: treated as absent → defaults, silently
+    migrateConfig({ schemaVersion: 2, branding: null });
+    // leaf-level repair preserves the section → no section-default fallback
+    migrateConfig({ schemaVersion: 2, branding: { companyName: 'Acme', logoUrl: 'javascript:alert(1)' } });
+    // valid v2 happy path
+    migrateConfig(migrateConfig({}));
+    expect(warn).not.toHaveBeenCalled();
+    warn.mockRestore();
+  });
 });
 
 // ── Live-embed behavioral parity fixes (spec review) ─────────────────────────

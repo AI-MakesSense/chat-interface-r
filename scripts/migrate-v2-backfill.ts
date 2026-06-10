@@ -15,6 +15,13 @@
  * Prints a per-step count summary; exits non-zero if any widget still lacks
  * userId or widgetKey after a live run (covers orphaned widgets with no license).
  *
+ * Exit codes (scriptable contract for deploy automation):
+ *   0 — backfill complete and verified (or dry run finished)
+ *   2 — backfill ran, but dangling widgets (license row missing) need manual
+ *       review; every unresolved widget is accounted for by the dangling set
+ *   1 — unexpected failure, or unresolved widgets NOT explained by dangling
+ *       license links (mixed/unknown failure)
+ *
  * Atomicity: runs without a transaction (neon-http limitation). Crash mid-run
  * is safe — each step filters on the null columns it populates; re-run resumes
  * where it left off. No rollback needed or possible.
@@ -218,6 +225,13 @@ async function main() {
     }
     if (noKey.length > 0) {
       console.error('  Widgets missing widgetKey:', noKey.map((r) => r.id).join(', '));
+    }
+    if (dangling.length > 0 && noUser.length === dangling.length && noKey.length === 0) {
+      // Everything unresolved is accounted for by dangling widgets — this is
+      // the "manual review required" outcome, not a script failure.
+      // Exit codes: 0 = complete, 2 = dangling widgets need manual action,
+      // 1 = unexpected failure. Lets deploy scripts branch on the outcome.
+      process.exit(2);
     }
     process.exit(1);
   }
