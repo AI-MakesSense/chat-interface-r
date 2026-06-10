@@ -62,6 +62,10 @@ const bundles = readdirSync(VERSIONED_DIR)
   .filter((f) => /^chat-widget\.[0-9a-f]{8}\.js$/.test(f))
   .map((f) => ({ f, mtime: statSync(join(VERSIONED_DIR, f)).mtimeMs }))
   .sort((a, b) => b.mtime - a.mtime);
-for (const { f } of bundles.slice(3)) unlinkSync(join(VERSIONED_DIR, f));
+for (const { f } of bundles.slice(3)) {
+  // Never delete the bundle we just wrote, even if stale files have
+  // future-dated mtimes (CI clock skew / NFS) that sort them ahead of it.
+  if (f !== bundleName) unlinkSync(join(VERSIONED_DIR, f));
+}
 
 console.log(`Built ${bundleName} (${(code.length / 1024).toFixed(1)} KB) + loader.js`);

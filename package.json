@@ -4,7 +4,8 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
-    "build": "npm run build:widget && next build",
+    "predev": "pnpm build:widget",
+    "build": "pnpm build:widget && next build",
     "start": "next start",
     "lint": "eslint",
     "db:generate": "drizzle-kit generate",

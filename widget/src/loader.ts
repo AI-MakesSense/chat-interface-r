@@ -4,9 +4,13 @@
  */
 (() => {
   const script = document.currentScript as HTMLScriptElement | null;
+  if (!script) {
+    console.error('[n8n-widget] loader: could not find script element');
+    return;
+  }
   // Compat adapter (Task 9) redirects legacy embeds here with ?key=...
-  const key = script?.dataset.widgetKey || new URL(script?.src || '', location.href).searchParams.get('key');
-  if (!script || !key) {
+  const key = script.dataset.widgetKey || new URL(script.src || '', location.href).searchParams.get('key');
+  if (!key) {
     console.error('[n8n-widget] loader: missing data-widget-key attribute');
     return;
   }
