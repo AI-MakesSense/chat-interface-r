@@ -13,13 +13,16 @@ Applies to: `drizzle/0001_drop_widget_configs_and_license_id.sql` (irreversible 
    Save both numbers in the deploy notes. If any dashboard/metric feeds on these rows, expect attribution gaps for the historical window.
 3. **Run backfill:** `pnpm db:backfill-v2 -- --dry-run`, review the printed counts, then `pnpm db:backfill-v2`.
    Exit codes (the script's contract): `0` complete and verified; `2` dangling widgets need manual review (see below); `1` failure — stop and investigate.
+   The header comment of `scripts/migrate-v2-backfill.ts` is the canonical definition of this exit-code contract — if this runbook and the script ever disagree, the script wins.
+
+   Ordering safety: running `pnpm db:migrate` before the backfill is safe — the migration's pre-flight guard aborts before any destructive DDL and the error message names the fix.
 
    (`pnpm db:deploy-v2` chains backfill + migrate in one step; prefer the separate
    steps above for production so you can review backfill output before any DDL runs.)
 
 ## Dangling widgets (exit code 2)
 
-Widgets whose `license_id` points at a deleted license cannot be backfilled automatically. Preview (same condition the script uses):
+Widgets whose `license_id` points at a deleted license cannot be backfilled automatically. Preview (this SQL mirrors the `findDanglingWidgets` condition in `scripts/migrate-v2-backfill.ts` — keep them in sync):
 
 ```sql
 SELECT w.id, w.name, w.license_id, w.created_at
@@ -57,4 +60,22 @@ WHERE table_name = 'analytics_events' AND column_name = 'license_id';
 
 ## Rollback
 
-There is no down migration. Restore = promote the `pre-v2-migration` Neon branch and redeploy the previous app release. Any writes after the migration are lost — decide within the incident window.
+There is no down migration. Restore = roll production's branch back to the `pre-v2-migration` snapshot and redeploy the previous app release. Any writes after the migration are lost — decide within the incident window.
+
+1. **Restore the database** (restores `main` to the head of the snapshot branch; the broken state is preserved under a new name for forensics):
+
+   ```bash
+   neonctl branches restore main pre-v2-migration --preserve-under-name post-v2-failed
+   ```
+
+   Syntax verified against neonctl as of 2026-06 (`neonctl branches restore <target-id|name> <source>`); re-verify with `neonctl branches restore --help` before running in an incident.
+   Console alternative: Neon Console → your project → **Branches** → select `main` → **Restore** → choose source branch `pre-v2-migration`.
+
+2. **Redeploy the previous app release:**
+
+   ```bash
+   vercel rollback                    # instant rollback to the previous production deployment
+   vercel rollback <deployment-url>   # or pin a specific deployment
+   ```
+
+   Dashboard alternative: Vercel → project → **Deployments** → previous production deployment → ⋯ → **Instant Rollback**.

@@ -226,6 +226,7 @@ async function main() {
     if (noKey.length > 0) {
       console.error('  Widgets missing widgetKey:', noKey.map((r) => r.id).join(', '));
     }
+    // Subset check + equal cardinality ⇒ set equality (ids are PKs, no dupes).
     const noUserIds = new Set(noUser.map((w) => w.id));
     if (
       dangling.length > 0 &&

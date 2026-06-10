@@ -6,13 +6,14 @@
 --
 -- Schema v2.0 changes applied here:
 --   0. PRE-FLIGHT: abort if backfill incomplete (NULL user_id/widget_key)
---   1. DROP TABLE widget_configs (superseded by widgets.config JSONB column)
---   2. widgets.user_id  → SET NOT NULL
---   3. widgets.widget_key → SET NOT NULL
---   4. widgets.license_id → DROP COLUMN + DROP INDEX
---   5. analytics_events.user_id → ADD COLUMN (nullable FK to users)
---   6. analytics_events.widget_id → ADD COLUMN (nullable FK to widgets)
---   7. analytics_events.license_id → DROP COLUMN LAST (data loss acceptable; analytics only)
+--   1. SET lock_timeout = '3s' (bounds ACCESS EXCLUSIVE lock waits for all DDL below)
+--   2. DROP TABLE widget_configs (superseded by widgets.config JSONB column)
+--   3. widgets.user_id  → SET NOT NULL
+--   4. widgets.widget_key → SET NOT NULL
+--   5. widgets.license_id → DROP COLUMN + DROP INDEX
+--   6. analytics_events.user_id → ADD COLUMN (nullable FK to users)
+--   7. analytics_events.widget_id → ADD COLUMN (nullable FK to widgets)
+--   8. analytics_events.license_id → DROP COLUMN LAST (data loss acceptable; analytics only)
 --      Ordering: ADD the new columns + FKs BEFORE dropping license_id so there is
 --      never a window where an insert with the new shape has no target column.
 
