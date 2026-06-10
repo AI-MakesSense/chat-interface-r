@@ -18,8 +18,12 @@ import { TIER_LIMITS, normalizeUserTier } from '@/lib/license/tiers';
  * @param config - The widget configuration to sanitize
  * @param tier - Subscription tier for restriction enforcement
  * @param kind - Widget kind ('chat' | 'display'). Defaults to 'chat' for backward compatibility.
- *               Chat-only transformations (launcherIcon, welcomeText, firstMessage, advancedStyling)
- *               are skipped when kind === 'display' to avoid injecting chat fields into display configs.
+ *               Chat-only transformations (launcherIcon, advancedStyling) are skipped
+ *               when kind === 'display' to avoid injecting chat fields into display configs.
+ *
+ * NOTE: this function repairs invalid data (bad hex, http URLs, tier violations).
+ * It must NOT supply defaults — those live in exactly one place, the canonical
+ * Zod schema (lib/widget-config/schema.ts), and sanitize runs before safeParse.
  */
 export function sanitizeConfig(config: any, tier: string, kind: 'chat' | 'display' = 'chat'): any {
   const sanitized = JSON.parse(JSON.stringify(config)); // Deep clone
@@ -59,7 +63,10 @@ export function sanitizeConfig(config: any, tier: string, kind: 'chat' | 'displa
 
   // 2. Data Integrity - Branding
   if (sanitized.branding) {
-    if (!sanitized.branding.companyName) sanitized.branding.companyName = 'My Company';
+    // companyName / firstMessage fallbacks intentionally removed: sanitize runs
+    // BEFORE safeParse, so hardcoding values here suppressed the canonical
+    // schema defaults (same divergence class as the welcomeText fix). Let the
+    // schema apply them.
 
     // welcomeText and firstMessage are chat-only branding fields.
     // Injecting them into a display config would add unexpected fields and corrupt validation.
@@ -67,7 +74,6 @@ export function sanitizeConfig(config: any, tier: string, kind: 'chat' | 'displa
       // welcomeText fallback intentionally removed: it diverged from the canonical
       // schema default ('Welcome! How can we help you today?') and, since sanitize
       // runs before safeParse, suppressed the schema default. Let the schema apply it.
-      if (!sanitized.branding.firstMessage) sanitized.branding.firstMessage = 'Hello! How can I assist you today?';
 
       // Fix launcher icon (chat-only concept)
       if (sanitized.branding.launcherIcon === 'custom') {

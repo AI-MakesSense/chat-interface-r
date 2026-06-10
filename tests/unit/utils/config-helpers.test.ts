@@ -8,9 +8,12 @@
  *
  * Tests:
  * - createDefaultConfig: returns display-shaped config for kind=display
+ * - sanitizeConfig: repairs invalid data but never supplies defaults
+ *   (defaults live in exactly one place: the canonical Zod schema)
  */
 
 import { createDefaultConfig } from '@/lib/config/defaults';
+import { sanitizeConfig } from '@/lib/utils/config-helpers';
 
 describe('createDefaultConfig', () => {
   it('returns display-shaped config for kind=display', () => {
@@ -76,5 +79,23 @@ describe('createDefaultConfig', () => {
     expect(a).not.toBe(b);
     (a as any).theme.color.accent = '#999999';
     expect((b as any).theme.color.accent).not.toBe('#999999');
+  });
+});
+
+describe('sanitizeConfig', () => {
+  it('leaves missing companyName/firstMessage absent so the canonical schema default applies', () => {
+    const result = sanitizeConfig({ branding: {} }, 'pro', 'chat');
+    expect(result.branding.companyName).toBeUndefined();
+    expect(result.branding.firstMessage).toBeUndefined();
+  });
+
+  it('preserves explicitly provided companyName and firstMessage', () => {
+    const result = sanitizeConfig(
+      { branding: { companyName: 'Acme', firstMessage: 'Hi there!' } },
+      'pro',
+      'chat'
+    );
+    expect(result.branding.companyName).toBe('Acme');
+    expect(result.branding.firstMessage).toBe('Hi there!');
   });
 });
