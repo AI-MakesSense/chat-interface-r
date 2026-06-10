@@ -49,10 +49,14 @@ export function isPrivateIp(ip: string): boolean {
     // Unique-local fc00::/7 (fc and fd prefixes)
     if (lower.startsWith('fc') || lower.startsWith('fd')) return true;
 
-    // Link-local fe80::/10
-    if (lower.startsWith('fe80')) return true;
+    // Link-local fe80::/10 (first 10 bits 1111111010 → fe80:: through febf::)
+    const head = parseInt(lower.split(':')[0] || '', 16);
+    if (!isNaN(head) && (head & 0xffc0) === 0xfe80) return true;
 
-    // v4-mapped ::ffff:x.x.x.x — strip prefix and recurse
+    // v4-mapped ::ffff:x.x.x.x — strip prefix and recurse.
+    // Only the standard 2-hextet (::ffff:a00:1) and dotted (::ffff:10.0.0.1)
+    // forms are treated as v4-mapped; any other ::ffff: shape falls through and
+    // is handled as an ordinary IPv6 address (correctly classified public).
     if (lower.startsWith('::ffff:')) {
       const v4part = lower.slice('::ffff:'.length);
       // v4part may be dotted-decimal (::ffff:10.0.0.1) or compressed hex (::ffff:a00:1)

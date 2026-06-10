@@ -100,6 +100,16 @@ describe('isPrivateIp', () => {
   it('flags :: (unspecified) as private', () => {
     expect(isPrivateIp('::')).toBe(true);
   });
+
+  // TG-001: full fe80::/10 link-local range, not just fe80::/16
+  it.each(['fe80::1', 'fe90::1', 'feaf::1', 'febf::1'])(
+    'flags %s as private (link-local fe80::/10)',
+    (ip) => expect(isPrivateIp(ip)).toBe(true)
+  );
+
+  it('allows fec0::1 as public (outside /10 — deprecated site-local, not link-local)', () => {
+    expect(isPrivateIp('fec0::1')).toBe(false);
+  });
 });
 
 // ---------------------------------------------------------------------------
@@ -155,6 +165,13 @@ describe('assertPublicWebhookUrl', () => {
     mockDns('10.0.0.5', 4);
     await expect(
       assertPublicWebhookUrl('https://rebind.internal.test/hook')
+    ).rejects.toThrow(/private/i);
+  });
+
+  it('rejects a hostname resolving to a single private IPv6 (TG-003)', async () => {
+    mockDns('fe90::1', 6);
+    await expect(
+      assertPublicWebhookUrl('https://v6-linklocal.example.com/hook')
     ).rejects.toThrow(/private/i);
   });
 
