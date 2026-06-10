@@ -25,7 +25,11 @@ import { WidgetConfig } from '../types';
 //
 // Non-overlapping / translated-shape fields (kept local, no canonical equivalent):
 //   style.theme        — widget receives a boolean themeMode, canonical is theme.mode enum
-//   style.primaryColor — widget fallback only; server sends theme.color.accent.primary
+//   style.primaryColor — widget fallback only; server sends theme.color.accent.primary.
+//     Intentionally '#00bfff' (NOT canonical accent '#0ea5e9'): legacy renderers
+//     (ui-builder, header, message-list, normal/portal-renderer) read this value
+//     directly as a background color, not as an accent token, so changing it would
+//     recolor misconfigured/window-only embeds that never receive a server payload.
 //   style.backgroundColor, textColor, cornerRadius, fontFamily — legacy style fields
 //   connection.captureContext — kept local; canonical connection is server-side only
 
