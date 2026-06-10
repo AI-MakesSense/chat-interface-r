@@ -15,7 +15,6 @@
 import { notFound, redirect } from 'next/navigation';
 import { getWidgetById, getUserById } from '@/lib/db/queries';
 import { isSubscriptionActive } from '@/lib/widget/resolve-widget';
-import PortalWidget from './portal-widget';
 
 interface PageProps {
   params: Promise<{
@@ -45,23 +44,16 @@ export default async function PortalPage({ params }: PageProps) {
     notFound();
   }
 
-  // v2 widgets should use widgetKey route
-  if ((widget as any).widgetKey) {
-    redirect(`/chat/${(widget as any).widgetKey}`);
+  // widgetKey is NOT NULL post-Task-8. An un-backfilled widget (no widgetKey)
+  // is unsupported here — it cannot authorize against the relay (which resolves
+  // strictly by widgetKey), so a UUID fallback would only produce a 403 at runtime.
+  if (!widget.widgetKey) {
+    notFound();
   }
 
-  // Extract config from JSONB
-  const config = widget.config as any;
-
-  return (
-    <div className="portal-container">
-      <PortalWidget
-        widgetId={widgetId}
-        config={config}
-        license={(widget as any).widgetKey || widgetId}
-      />
-    </div>
-  );
+  // Every valid portal request resolves to the canonical widgetKey route; this
+  // page itself never renders (it always redirects or 404s).
+  redirect(`/chat/${widget.widgetKey}`);
 }
 
 // Generate metadata for the page

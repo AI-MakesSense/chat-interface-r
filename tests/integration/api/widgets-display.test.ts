@@ -192,7 +192,9 @@ describe('GET /api/w/[widgetKey]/config for display widgets', () => {
     expect(body.display.emptyMessage).toBe('No documents available.');
   });
 
-  it('returns 400 for a malformed widgetKey', async () => {
+  it('returns 404 for a malformed widgetKey', async () => {
+    // Resolver returns 404 (not 400) for malformed keys by design — this avoids
+    // leaking valid-key syntax to probing clients.
     const badKey = 'not-valid!';
     const req = new Request(`http://localhost/w/${badKey}/config`, {
       headers: { Origin: 'https://example.com' },
@@ -201,7 +203,7 @@ describe('GET /api/w/[widgetKey]/config for display widgets', () => {
       params: Promise.resolve({ widgetKey: badKey }),
     } as any);
 
-    expect(res.status).toBe(400);
+    expect(res.status).toBe(404);
   });
 
   it('returns 404 for an unknown widgetKey', async () => {

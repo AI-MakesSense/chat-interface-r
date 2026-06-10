@@ -346,6 +346,11 @@ export function migrateConfig(raw: unknown): ChatWidgetConfig {
   // treated as KB and converted; values ≤ 50 are taken as MB as-is. A small
   // KB value (≤ 50) is indistinguishable from MB and is read as MB — that is
   // accepted: such caps were almost certainly authored as MB.
+  //
+  // Edge case for the KB branch (v > 50): KB values in [51, 511] divide to
+  // < 0.5 MB and round to 0; the Math.max(1, …) floor clamps them up to 1 MB
+  // (e.g. 100 KB → round(0.098) = 0 → clamped to 1 MB). This is intentional —
+  // 1 MB is the schema minimum, so a sub-1-MB cap can't be represented anyway.
   const normalizeMaxFileSizeMB = (v: number): number =>
     v > 50 ? Math.max(1, Math.round(v / 1024)) : Math.max(1, Math.round(v));
   const feat = candidate.features as AnyRecord;

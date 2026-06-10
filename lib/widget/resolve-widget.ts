@@ -12,9 +12,13 @@
  */
 import { getWidgetByKeyWithUser } from '@/lib/db/queries';
 import { normalizeDomain } from '@/lib/license/domain';
+import type { Widget, User } from '@/lib/db/schema';
+
+/** A widget joined with its owning user — the shape getWidgetByKeyWithUser returns. */
+export type WidgetWithUser = Widget & { user: User };
 
 export type ResolveResult =
-  | { ok: true; widget: any; user: any }
+  | { ok: true; widget: WidgetWithUser; user: User }
   | { ok: false; status: number; error: string };
 
 /**
@@ -22,7 +26,7 @@ export type ResolveResult =
  * Treats 'active' and 'past_due' as live; 'canceled' is live until
  * currentPeriodEnd; everything else is inactive.
  */
-export function isSubscriptionActive(user: any): boolean {
+export function isSubscriptionActive(user: User): boolean {
   const status = user?.subscriptionStatus || 'active';
   if (status === 'active' || status === 'past_due') return true;
   if (status === 'canceled') {

@@ -205,6 +205,8 @@ async function handleN8nRelay(
     ...body,
     message: body.message,
     chatInput: body.message,
+    // widgetId is forwarded to n8n for workflow use only — NOT an authorization input
+    // (resolution is by widgetKey).
     widgetId: body.widgetId,
     licenseKey: body.licenseKey,
     metadata: {
