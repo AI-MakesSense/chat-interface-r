@@ -3,6 +3,27 @@
  *
  * Purpose: Defines TypeScript types for widget configuration and internal state
  * Responsibility: Type safety and IntelliSense support
+ *
+ * CANONICAL SCHEMA RELATIONSHIP
+ * ─────────────────────────────
+ * The server-side canonical config lives in lib/widget-config/schema.ts (schemaVersion 2).
+ * The types in THIS file describe the TRANSLATED runtime payload shape produced by
+ * translateConfig() in app/api/w/[widgetKey]/config/route.ts — NOT the canonical shape.
+ * Every interface here intentionally diverges from its canonical counterpart:
+ *
+ *   BrandingConfig  — runtime subset (4 fields vs 9 in canonical brandingSchema)
+ *   StyleConfig     — legacy flat shape; canonical uses nested theme.position/typography
+ *   FeaturesConfig  — flat maxFileSizeKB vs canonical attachments.maxFileSizeMB
+ *   ConnectionConfig — runtime relayEndpoint vs canonical webhookUrl/workflowId/apiKey
+ *   ThemeConfig     — ChatKit-compatible runtime shape vs canonical theme.mode/colors/...
+ *   StartScreenConfig — runtime prompts[] vs canonical starterPrompts[]
+ *   ComposerConfig  — runtime superset (attachments, models) vs canonical (placeholder, disclaimer)
+ *
+ * Therefore NO type re-exports from lib/widget-config/schema are present here.
+ * CONSTRAINT: never import runtime VALUES from lib/widget-config into widget/src —
+ * that would pull Zod into the widget bundle. Type-only imports (`import type { ... }`)
+ * are safe at the TypeScript level but are NOT used here because the shapes differ.
+ * Defaults parity is guarded by tests/widget/config-defaults-parity.test.ts.
  */
 
 export interface WidgetConfig {

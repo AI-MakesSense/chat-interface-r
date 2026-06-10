@@ -8,13 +8,34 @@
 
 import { WidgetConfig } from '../types';
 
+// NOTE: These literals MUST mirror lib/widget-config/schema.ts defaults.
+// The runtime cannot import the Zod schema (bundle size — type-only imports only;
+// never import runtime VALUES from lib/widget-config into widget/src).
+// Defaults correctness is guarded by tests/widget/config-defaults-parity.test.ts.
+//
+// Overlapping fields and their canonical equivalents:
+//   branding.companyName        ← brandingSchema   default 'My Company'
+//   branding.welcomeText        ← brandingSchema   default 'Welcome! How can we help you today?'
+//   branding.firstMessage       ← brandingSchema   default 'Hello! How can I assist you today?'
+//   style.position              ← positionSchema   default 'bottom-right'
+//   style.fontSize              ← typographySchema default 14
+//   features.fileAttachmentsEnabled ← attachmentsSchema default false
+//   features.allowedExtensions  ← attachmentsSchema default []
+//   features.maxFileSizeKB      ← attachmentsSchema default maxFileSizeMB(10) * 1024 = 10240
+//
+// Non-overlapping / translated-shape fields (kept local, no canonical equivalent):
+//   style.theme        — widget receives a boolean themeMode, canonical is theme.mode enum
+//   style.primaryColor — widget fallback only; server sends theme.color.accent.primary
+//   style.backgroundColor, textColor, cornerRadius, fontFamily — legacy style fields
+//   connection.captureContext — kept local; canonical connection is server-side only
+
 /**
  * Default configuration values
  */
 const DEFAULT_CONFIG: WidgetConfig = {
   branding: {
-    companyName: 'Support',
-    welcomeText: 'How can we help?',
+    companyName: 'My Company',
+    welcomeText: 'Welcome! How can we help you today?',
     firstMessage: 'Hello! How can I assist you today?',
   },
   style: {
@@ -30,7 +51,7 @@ const DEFAULT_CONFIG: WidgetConfig = {
   features: {
     fileAttachmentsEnabled: false,
     allowedExtensions: [],
-    maxFileSizeKB: 5120,
+    maxFileSizeKB: 10240,
   },
   connection: {
     captureContext: true,
