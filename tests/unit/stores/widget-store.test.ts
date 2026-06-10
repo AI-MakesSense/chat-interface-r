@@ -166,4 +166,40 @@ describe('widget store uses canonical config', () => {
     const { saveConfig } = useWidgetStore.getState();
     await expect(saveConfig()).rejects.toThrow('No widget selected');
   });
+
+  it('rejection is WHOLESALE: an invalid color in one section also drops a valid sibling-section patch', () => {
+    // Documents the contract the sidebar relies on: a multi-section update
+    // containing any invalid leaf is rejected in full — the valid parts do
+    // NOT land. (This is why ColorPicker must only commit valid hex.)
+    const warn = jest.spyOn(console, 'warn').mockImplementation(() => {});
+    const { updateConfig } = useWidgetStore.getState();
+    updateConfig({
+      branding: { companyName: 'Should Not Land' },
+      theme: { colors: { primary: '#ff' } }, // invalid mid-typing hex
+    } as never);
+    const state = useWidgetStore.getState();
+    expect(state.currentConfig.branding.companyName).toBe('My Company'); // sibling unchanged
+    expect(state.currentConfig.theme.colors.primary).toBe('#4F46E5');
+    expect(state.hasUnsavedChanges).toBe(false);
+    expect(warn).toHaveBeenCalled();
+    warn.mockRestore();
+  });
+
+  it('updateConfig REPLACES arrays whole (starterPrompts shrink works)', () => {
+    const { updateConfig } = useWidgetStore.getState();
+    updateConfig({
+      startScreen: {
+        starterPrompts: [
+          { label: 'One', icon: 'pen' },
+          { label: 'Two', icon: 'zap' },
+        ],
+      },
+    });
+    expect(useWidgetStore.getState().currentConfig.startScreen.starterPrompts).toHaveLength(2);
+
+    updateConfig({ startScreen: { starterPrompts: [{ label: 'Only', icon: 'pen' }] } });
+    const prompts = useWidgetStore.getState().currentConfig.startScreen.starterPrompts;
+    expect(prompts).toHaveLength(1);
+    expect(prompts[0].label).toBe('Only');
+  });
 });

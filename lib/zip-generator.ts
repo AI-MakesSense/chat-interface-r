@@ -161,6 +161,9 @@ export class ZipGenerator {
         textColor: config.theme.colors.text || '#000000',
         fontFamily: config.theme.typography.fontFamily || 'Inter, sans-serif',
         fontSize: config.theme.typography.fontSize || 16,
+        // Runtime reads style.customFontUrl (widget/src/ui/chat-container.ts,
+        // widget/src/theming/css-variables.ts) — must not be dropped.
+        customFontUrl: config.theme.typography.fontUrl || undefined,
       },
       features: {
         fileAttachmentsEnabled: config.features.attachments.enabled || false,

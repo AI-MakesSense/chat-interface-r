@@ -12,7 +12,6 @@
 import { notFound } from 'next/navigation';
 import { getWidgetByKeyWithUser } from '@/lib/db/queries';
 import { ChatKitEmbed } from '@/components/chatkit-embed';
-import { WidgetConfig } from '@/stores/widget-store';
 import { migrateConfig } from '@/lib/widget-config/migrate';
 import { CHATKIT_SERVER_ENABLED } from '@/lib/feature-flags';
 

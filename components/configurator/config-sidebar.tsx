@@ -264,33 +264,116 @@ const SidebarInput = ({ isDark, ...props }: React.InputHTMLAttributes<HTMLInputE
   />
 );
 
+const HEX_COLOR_RE = /^#[0-9A-Fa-f]{6}$/;
+
+/**
+ * Legacy flat key → canonical nested patch. Keeps the dozens of existing
+ * handleChange('flatKey', v) call sites unchanged while the store config is
+ * canonical-shaped. This sidebar gets fully rewritten against the canonical
+ * schema in a later task; this map is the mechanical bridge until then.
+ */
+const FLAT_KEY_PATCHES = {
+  themeMode: (v: unknown) => ({ theme: { mode: v } }),
+  useAccent: (v: unknown) => ({ colorSystem: { useAccent: v } }),
+  accentColor: (v: unknown) => ({ colorSystem: { accentColor: v } }),
+  useTintedGrayscale: (v: unknown) => ({ colorSystem: { useTintedGrayscale: v } }),
+  tintHue: (v: unknown) => ({ colorSystem: { tintHue: v } }),
+  tintLevel: (v: unknown) => ({ colorSystem: { tintLevel: v } }),
+  shadeLevel: (v: unknown) => ({ colorSystem: { shadeLevel: v } }),
+  useCustomSurfaceColors: (v: unknown) => ({ colorSystem: { useCustomSurfaceColors: v } }),
+  surfaceBackgroundColor: (v: unknown) => ({ colorSystem: { surfaceBackgroundColor: v } }),
+  surfaceForegroundColor: (v: unknown) => ({ colorSystem: { surfaceForegroundColor: v } }),
+  useCustomTextColor: (v: unknown) => ({ colorSystem: { useCustomTextColor: v } }),
+  customTextColor: (v: unknown) => ({ colorSystem: { customTextColor: v } }),
+  useCustomIconColor: (v: unknown) => ({ colorSystem: { useCustomIconColor: v } }),
+  customIconColor: (v: unknown) => ({ colorSystem: { customIconColor: v } }),
+  useCustomUserMessageColors: (v: unknown) => ({ colorSystem: { useCustomUserMessageColors: v } }),
+  customUserMessageTextColor: (v: unknown) => ({ colorSystem: { customUserMessageTextColor: v } }),
+  customUserMessageBackgroundColor: (v: unknown) => ({ colorSystem: { customUserMessageBackgroundColor: v } }),
+  chatkitGrayscaleHue: (v: unknown) => ({ chatkit: { grayscaleHue: v } }),
+  chatkitGrayscaleTint: (v: unknown) => ({ chatkit: { grayscaleTint: v } }),
+  chatkitGrayscaleShade: (v: unknown) => ({ chatkit: { grayscaleShade: v } }),
+  chatkitAccentPrimary: (v: unknown) => ({ chatkit: { accentPrimary: v } }),
+  chatkitAccentLevel: (v: unknown) => ({ chatkit: { accentLevel: v } }),
+  enableModelPicker: (v: unknown) => ({ chatkit: { enableModelPicker: v } }),
+  fontFamily: (v: unknown) => ({ theme: { typography: { fontFamily: v } } }),
+  fontSize: (v: unknown) => ({ theme: { typography: { fontSize: v } } }),
+  radius: (v: unknown) => ({ theme: { radius: v } }),
+  density: (v: unknown) => ({ theme: { density: v } }),
+  greeting: (v: unknown) => ({ startScreen: { greeting: v } }),
+  starterPrompts: (v: unknown) => ({ startScreen: { starterPrompts: v } }),
+  placeholder: (v: unknown) => ({ composer: { placeholder: v } }),
+  disclaimer: (v: unknown) => ({ composer: { disclaimer: v } }),
+  enableAttachments: (v: unknown) => ({ features: { attachments: { enabled: v } } }),
+  enablePdfLightbox: (v: unknown) => ({ features: { pdfLightbox: v } }),
+} as const;
+
+type LegacyFlatKey = keyof typeof FLAT_KEY_PATCHES;
+
+/** Deep-merge a nested patch over the current config (arrays replace whole). */
+const mergePatch = (base: unknown, patch: unknown): unknown => {
+  if (!patch || typeof patch !== 'object' || Array.isArray(patch)) return patch;
+  if (!base || typeof base !== 'object' || Array.isArray(base)) return patch;
+  const out: Record<string, unknown> = { ...(base as Record<string, unknown>) };
+  for (const [k, v] of Object.entries(patch)) {
+    out[k] = mergePatch((base as Record<string, unknown>)[k], v);
+  }
+  return out;
+};
+
 // Color Picker component - MUST be outside ConfigSidebar to prevent re-creation on each render
-const ColorPicker = ({ label, value, onColorChange, isDark }: { label: string; value: string; onColorChange: (v: string) => void; isDark: boolean }) => (
-  <Row>
-    <div className={isDark ? 'text-[#afafaf]' : 'text-neutral-500'}>{label}</div>
-    <div className="flex items-center gap-2">
-      <div className="relative flex items-center justify-center">
-        <div
-          className={`w-6 h-6 rounded-[4px] border shadow-sm ${isDark ? 'border-white/10' : 'border-black/10'}`}
-          style={{ backgroundColor: value }}
-        />
-        <input
-          type="color"
-          value={value}
-          onChange={(e) => onColorChange(e.target.value)}
-          className="absolute inset-0 opacity-0 cursor-pointer w-full h-full"
+// The free-text input keeps a local draft and only commits VALID hex values:
+// the store rejects invalid config updates wholesale, so committing every
+// keystroke (e.g. "#ff" mid-typing) would silently drop the whole patch.
+// The native color input always produces valid hex and commits directly.
+const ColorPicker = ({ label, value, onColorChange, isDark }: { label: string; value: string; onColorChange: (v: string) => void; isDark: boolean }) => {
+  const [draft, setDraft] = useState(value);
+  const [lastValue, setLastValue] = useState(value);
+  // Sync draft when the committed value changes externally (render-phase
+  // state adjustment — avoids setState-in-effect).
+  if (value !== lastValue) {
+    setLastValue(value);
+    setDraft(value);
+  }
+
+  return (
+    <Row>
+      <div className={isDark ? 'text-[#afafaf]' : 'text-neutral-500'}>{label}</div>
+      <div className="flex items-center gap-2">
+        <div className="relative flex items-center justify-center">
+          <div
+            className={`w-6 h-6 rounded-[4px] border shadow-sm ${isDark ? 'border-white/10' : 'border-black/10'}`}
+            style={{ backgroundColor: value }}
+          />
+          <input
+            type="color"
+            value={value}
+            onChange={(e) => onColorChange(e.target.value)}
+            className="absolute inset-0 opacity-0 cursor-pointer w-full h-full"
+          />
+        </div>
+        <SidebarInput
+          type="text"
+          value={draft}
+          onChange={(e) => {
+            setDraft(e.target.value);
+            if (HEX_COLOR_RE.test(e.target.value)) {
+              onColorChange(e.target.value);
+            }
+          }}
+          onBlur={() => {
+            // Revert an invalid draft to the last committed value
+            if (!HEX_COLOR_RE.test(draft)) {
+              setDraft(value);
+            }
+          }}
+          className="w-24 uppercase"
+          isDark={isDark}
         />
       </div>
-      <SidebarInput
-        type="text"
-        value={value}
-        onChange={(e) => onColorChange(e.target.value)}
-        className="w-24 uppercase"
-        isDark={isDark}
-      />
-    </div>
-  </Row>
-);
+    </Row>
+  );
+};
 
 // Icon Picker with categorized icons for better UX
 interface IconCategory {
@@ -792,61 +875,6 @@ export const ConfigSidebar: React.FC<ConfigSidebarProps> = ({
     hover: isDark ? 'hover:bg-white/10' : 'hover:bg-neutral-100',
     buttonIcon: isDark ? 'text-white' : 'text-neutral-600',
     buttonBg: isDark ? 'bg-white/10 hover:bg-white/20' : 'bg-neutral-100 hover:bg-neutral-200',
-  };
-
-  /**
-   * Legacy flat key → canonical nested patch. Keeps the dozens of existing
-   * handleChange('flatKey', v) call sites unchanged while the store config is
-   * canonical-shaped. This sidebar gets fully rewritten against the canonical
-   * schema in a later task; this map is the mechanical bridge until then.
-   */
-  const FLAT_KEY_PATCHES = {
-    themeMode: (v: unknown) => ({ theme: { mode: v } }),
-    useAccent: (v: unknown) => ({ colorSystem: { useAccent: v } }),
-    accentColor: (v: unknown) => ({ colorSystem: { accentColor: v } }),
-    useTintedGrayscale: (v: unknown) => ({ colorSystem: { useTintedGrayscale: v } }),
-    tintHue: (v: unknown) => ({ colorSystem: { tintHue: v } }),
-    tintLevel: (v: unknown) => ({ colorSystem: { tintLevel: v } }),
-    shadeLevel: (v: unknown) => ({ colorSystem: { shadeLevel: v } }),
-    useCustomSurfaceColors: (v: unknown) => ({ colorSystem: { useCustomSurfaceColors: v } }),
-    surfaceBackgroundColor: (v: unknown) => ({ colorSystem: { surfaceBackgroundColor: v } }),
-    surfaceForegroundColor: (v: unknown) => ({ colorSystem: { surfaceForegroundColor: v } }),
-    useCustomTextColor: (v: unknown) => ({ colorSystem: { useCustomTextColor: v } }),
-    customTextColor: (v: unknown) => ({ colorSystem: { customTextColor: v } }),
-    useCustomIconColor: (v: unknown) => ({ colorSystem: { useCustomIconColor: v } }),
-    customIconColor: (v: unknown) => ({ colorSystem: { customIconColor: v } }),
-    useCustomUserMessageColors: (v: unknown) => ({ colorSystem: { useCustomUserMessageColors: v } }),
-    customUserMessageTextColor: (v: unknown) => ({ colorSystem: { customUserMessageTextColor: v } }),
-    customUserMessageBackgroundColor: (v: unknown) => ({ colorSystem: { customUserMessageBackgroundColor: v } }),
-    chatkitGrayscaleHue: (v: unknown) => ({ chatkit: { grayscaleHue: v } }),
-    chatkitGrayscaleTint: (v: unknown) => ({ chatkit: { grayscaleTint: v } }),
-    chatkitGrayscaleShade: (v: unknown) => ({ chatkit: { grayscaleShade: v } }),
-    chatkitAccentPrimary: (v: unknown) => ({ chatkit: { accentPrimary: v } }),
-    chatkitAccentLevel: (v: unknown) => ({ chatkit: { accentLevel: v } }),
-    enableModelPicker: (v: unknown) => ({ chatkit: { enableModelPicker: v } }),
-    fontFamily: (v: unknown) => ({ theme: { typography: { fontFamily: v } } }),
-    fontSize: (v: unknown) => ({ theme: { typography: { fontSize: v } } }),
-    radius: (v: unknown) => ({ theme: { radius: v } }),
-    density: (v: unknown) => ({ theme: { density: v } }),
-    greeting: (v: unknown) => ({ startScreen: { greeting: v } }),
-    starterPrompts: (v: unknown) => ({ startScreen: { starterPrompts: v } }),
-    placeholder: (v: unknown) => ({ composer: { placeholder: v } }),
-    disclaimer: (v: unknown) => ({ composer: { disclaimer: v } }),
-    enableAttachments: (v: unknown) => ({ features: { attachments: { enabled: v } } }),
-    enablePdfLightbox: (v: unknown) => ({ features: { pdfLightbox: v } }),
-  } as const;
-
-  type LegacyFlatKey = keyof typeof FLAT_KEY_PATCHES;
-
-  /** Deep-merge a nested patch over the current config (arrays replace whole). */
-  const mergePatch = (base: unknown, patch: unknown): unknown => {
-    if (!patch || typeof patch !== 'object' || Array.isArray(patch)) return patch;
-    if (!base || typeof base !== 'object' || Array.isArray(base)) return patch;
-    const out: Record<string, unknown> = { ...(base as Record<string, unknown>) };
-    for (const [k, v] of Object.entries(patch)) {
-      out[k] = mergePatch((base as Record<string, unknown>)[k], v);
-    }
-    return out;
   };
 
   const applyPatch = (patch: WidgetConfigUpdate) => {
@@ -1391,26 +1419,22 @@ export const ConfigSidebar: React.FC<ConfigSidebarProps> = ({
                         : 'border-neutral-200 hover:border-neutral-300'
                       }`}
                     onClick={() => {
-                      onChange({
-                        ...config,
+                      applyPatch({
                         connection: {
-                          ...config.connection,
                           provider: 'n8n',
                           webhookUrl: config.connection?.webhookUrl || '',
-                        }
+                        },
                       });
                     }}
                     role="button"
                     tabIndex={0}
                     onKeyDown={(e) => {
                       if (e.key === 'Enter' || e.key === ' ') {
-                        onChange({
-                          ...config,
+                        applyPatch({
                           connection: {
-                            ...config.connection,
                             provider: 'n8n',
                             webhookUrl: config.connection?.webhookUrl || '',
-                          }
+                          },
                         });
                       }
                     }}
@@ -1433,13 +1457,11 @@ export const ConfigSidebar: React.FC<ConfigSidebarProps> = ({
                         <SidebarInput
                           type="url"
                           value={config.connection?.webhookUrl || ''}
-                          onChange={(e) => onChange({
-                            ...config,
+                          onChange={(e) => applyPatch({
                             connection: {
-                              ...config.connection,
                               provider: 'n8n',
                               webhookUrl: e.target.value,
-                            }
+                            },
                           })}
                           className="w-full"
                           placeholder="https://your-n8n-instance.com/webhook/..."
@@ -1466,17 +1488,14 @@ export const ConfigSidebar: React.FC<ConfigSidebarProps> = ({
                         : 'border-neutral-200 hover:border-neutral-300'
                       }`}
                     onClick={() => {
-                      onChange({
-                        ...config,
+                      applyPatch({
                         connection: {
-                          ...config.connection,
                           provider: 'chatkit',
                           workflowId: config.connection?.workflowId || '',
                           apiKey: config.connection?.apiKey || '',
                         },
                         // Set defaults for ChatKit if switching
                         chatkit: {
-                          ...config.chatkit,
                           grayscaleHue: config.chatkit.grayscaleHue ?? 220,
                           grayscaleTint: config.chatkit.grayscaleTint ?? 6,
                           grayscaleShade: config.chatkit.grayscaleShade ?? (config.theme.mode === 'dark' ? -1 : -4),
@@ -1506,13 +1525,11 @@ export const ConfigSidebar: React.FC<ConfigSidebarProps> = ({
                           <SidebarInput
                             type="text"
                             value={config.connection?.workflowId || ''}
-                            onChange={(e) => onChange({
-                              ...config,
+                            onChange={(e) => applyPatch({
                               connection: {
-                                ...config.connection,
                                 provider: 'chatkit',
                                 workflowId: e.target.value,
-                              }
+                              },
                             })}
                             className="w-full font-mono text-xs"
                             placeholder="wf_..."
@@ -1525,13 +1542,11 @@ export const ConfigSidebar: React.FC<ConfigSidebarProps> = ({
                           <SidebarInput
                             type="password"
                             value={config.connection?.apiKey || ''}
-                            onChange={(e) => onChange({
-                              ...config,
+                            onChange={(e) => applyPatch({
                               connection: {
-                                ...config.connection,
                                 provider: 'chatkit',
                                 apiKey: e.target.value,
-                              }
+                              },
                             })}
                             className="w-full font-mono text-xs"
                             placeholder="sk-..."
@@ -1555,13 +1570,11 @@ export const ConfigSidebar: React.FC<ConfigSidebarProps> = ({
                 <SidebarInput
                   type="text"
                   value={config.connection?.webhookUrl || ''}
-                  onChange={(e) => onChange({
-                    ...config,
+                  onChange={(e) => applyPatch({
                     connection: {
-                      ...config.connection,
                       provider: 'n8n',
                       webhookUrl: e.target.value,
-                    }
+                    },
                   })}
                   className="w-full"
                   placeholder="https://your-n8n-instance.com/webhook/..."
@@ -1577,13 +1590,11 @@ export const ConfigSidebar: React.FC<ConfigSidebarProps> = ({
                   <SidebarInput
                     type="text"
                     value={config.connection?.workflowId || ''}
-                    onChange={(e) => onChange({
-                      ...config,
+                    onChange={(e) => applyPatch({
                       connection: {
-                        ...config.connection,
                         provider: 'chatkit',
                         workflowId: e.target.value,
-                      }
+                      },
                     })}
                     className="w-full font-mono text-xs"
                     placeholder="wf_..."
@@ -1595,13 +1606,11 @@ export const ConfigSidebar: React.FC<ConfigSidebarProps> = ({
                   <SidebarInput
                     type="password"
                     value={config.connection?.apiKey || ''}
-                    onChange={(e) => onChange({
-                      ...config,
+                    onChange={(e) => applyPatch({
                       connection: {
-                        ...config.connection,
                         provider: 'chatkit',
                         apiKey: e.target.value,
-                      }
+                      },
                     })}
                     className="w-full font-mono text-xs"
                     placeholder="sk-..."
