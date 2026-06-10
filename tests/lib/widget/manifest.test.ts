@@ -38,12 +38,12 @@ describe('getBundlePath', () => {
     expect(fs.readFileSync).toHaveBeenCalledTimes(1);
   });
 
-  it('throws a clear error when the manifest file is missing', () => {
+  it('throws a clear error when the manifest cannot be read', () => {
     fs.readFileSync.mockImplementation(() => {
       throw Object.assign(new Error('ENOENT'), { code: 'ENOENT' });
     });
 
-    expect(() => getBundlePath()).toThrow(/manifest not found/i);
+    expect(() => getBundlePath()).toThrow(/could not be read or parsed/i);
   });
 
   it('throws when the manifest has no valid bundlePath', () => {

@@ -110,6 +110,17 @@ export async function GET(
     // embeds and accept a null domain (skip domain authz) rather than blocking
     // the widget entirely — the user experience of a silent failure is worse
     // than serving the widget to an unknown origin.
+    //
+    // NOTE: precedence here is INTENTIONALLY referer-first, the opposite of the
+    // shared getRequestDomain (lib/widget/resolve-widget.ts), which is
+    // origin-first. This legacy compat route serves plain <script src> loads,
+    // where browsers send Referer but typically no Origin — and sandboxed
+    // iframes send the literal "Origin: null", which never parses. Referer is
+    // the richer signal for this traffic shape. The divergence is safe because
+    // this route is documented fail-open (unknown domain => warn + serve), and
+    // the loader bootstrap it returns triggers /api/w/[key]/config, which
+    // re-runs domain authz via getRequestDomain fail-closed. Do not "unify"
+    // this ordering without considering both properties.
     const referer = request.headers.get('referer');
     const origin = request.headers.get('origin');
 

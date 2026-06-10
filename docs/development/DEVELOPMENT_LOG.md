@@ -543,3 +543,34 @@ Executed a 26-task production-readiness plan (docs/superpowers/plans/2026-06-09-
 **Final state:** type-check clean; 46 jest suites / 580 tests green; `pnpm build` + `pnpm build:widget` succeed. Deploy: run `pnpm db:deploy-v2` (backfill then migrate) before serving.
 
 **Out of scope (deferred):** real Stripe integration; converting the 55 vitest-syntax test files to jest; the widget.ts monolith refactor.
+
+---
+
+## 2026-06-10 — Code-review fix round (feat/production-readiness, PR #9)
+
+Executed docs/superpowers/plans/2026-06-10-code-review-fixes.md: 11 fix commits addressing findings #11–#21 from review run 20260610-061226-73c78561, plus a final verification gate (type-check, 48 jest suites / 629 tests, widget + Next.js production builds — all green).
+
+**Commits:**
+- `cf80552` fix(security): close Host-header first-party bypass in fullpage embed route
+- `29e9277` fix(relay): normalize legacy provider/webhookUrl instead of raw config reads (permanent-400 bug)
+- `29b1415` fix(relay): cap buffered n8n response at 1MB (OOM guard)
+- `e7784b5` fix(compat): legacy adapter fails closed when widget resolution is ambiguous
+- `4076a8b` fix(compat): JS_UNAVAILABLE becomes a per-request factory (shared Response body is one-shot)
+- `de63819` fix(theme): map canonical shadeLevel 0-20 to runtime shade -4..4 at translate boundary
+- `448aeb3` fix(theme): GrayscaleConfig is ChatKit-scale end-to-end; generateTintedSurfaces converts internally
+- `fb759e7` fix(security): hex-validate accentColor and JSON-encode URLs in served ChatKit popup script
+- `65e1eb5` fix(config): sanitizeConfig no longer shadows canonical schema defaults
+- `b450df0` fix(preview): bridge accepts config only from parent frame; serialize concurrent mounts
+- `49668f7` refactor: extract shared getRequestDomain into resolve-widget (removes divergent copies)
+- `6290d6e` fix(observability): warn on repairSection default fallback; backfill exit code 2 for dangling widgets
+- `e67e16f` + `873c75f` ops: lock_timeout on v2 migration + deployment runbook (snapshot, verification SQL, rollback, dangling-widget procedure)
+- Gate repair: `tests/lib/widget/manifest.test.ts` expected the pre-`17ab127` "manifest not found" message; updated to the unified "could not be read or parsed" expectation (stale test from the previous review round, not a behavior change).
+- Gate docs: documented the intentional referer-first domain extraction in `app/w/[widgetKey]/route.ts` (legacy `<script src>` traffic sends Referer, often no Origin; fail-open here, loader config call re-checks authz origin-first fail-closed).
+- Bundle-tracking audit: confirmed no widget bundle is git-tracked anywhere (local or remote); `public/widget/v/` is fully build-generated and `pnpm build` runs `build:widget` at deploy time. Stale local hashed bundles are untracked leftovers only.
+
+**Out of scope (deliberately deferred, with reasons):**
+- `migrateConfig` caching on hot read paths (M-04) — perf only, no correctness impact; revisit with real traffic data.
+- `any`-type holes in `path.ts`/`migrate.ts`/`RelayBody` (M-06/07/08) — broad type refactor, separate PR.
+- "Two normalizers must be called together" coupling (M-05) — needs design discussion.
+- `isSubscriptionActive` null→active (security, confidence 50) — intentional: users without billing rows are active by design while BILLING_ENABLED=false.
+- Widget↔license linkage column for the legacy adapter — Task 4 fails closed instead; adding a column back contradicts the v2 schema direction.
