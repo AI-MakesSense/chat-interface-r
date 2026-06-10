@@ -16,7 +16,8 @@
     "test": "jest",
     "test:watch": "jest --watch",
     "test:coverage": "jest --coverage",
-    "build:widget": "node scripts/build-widget-secure.mjs"
+    "build:widget": "node scripts/build-widget-secure.mjs",
+    "db:backfill-v2": "tsx scripts/migrate-v2-backfill.ts"
   },
   "dependencies": {
     "@hookform/resolvers": "^5.2.2",

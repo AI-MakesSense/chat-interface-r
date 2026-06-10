@@ -20,25 +20,12 @@
 import { db } from '../lib/db/client';
 import { widgets, licenses, users } from '../lib/db/schema';
 import { eq, isNull, and } from 'drizzle-orm';
+import { generateWidgetKey } from '../lib/license/widget-key';
 
 // Parse command line arguments
 const args = process.argv.slice(2);
 const isDryRun = args.includes('--dry-run');
 const isVerbose = args.includes('--verbose');
-
-/**
- * Generate a 16-character alphanumeric widget key
- */
-function generateWidgetKey(): string {
-  const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
-  let result = '';
-  const randomValues = new Uint8Array(16);
-  crypto.getRandomValues(randomValues);
-  for (let i = 0; i < 16; i++) {
-    result += chars[randomValues[i] % chars.length];
-  }
-  return result;
-}
 
 interface MigrationStats {
   total: number;

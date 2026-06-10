@@ -13,6 +13,7 @@
 
 import { eq, ne, and, desc, sql } from 'drizzle-orm';
 import { db } from './client';
+import { generateWidgetKey } from '../license/widget-key';
 import {
   users,
   licenses,
@@ -921,17 +922,4 @@ export async function getWidgetsPaginatedV2(
   return { widgets: results, total };
 }
 
-/**
- * Generate a 16-character alphanumeric widget key
- * Uses crypto-safe random generation
- */
-function generateWidgetKey(): string {
-  const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
-  let result = '';
-  const randomValues = new Uint8Array(16);
-  crypto.getRandomValues(randomValues);
-  for (let i = 0; i < 16; i++) {
-    result += chars[randomValues[i] % chars.length];
-  }
-  return result;
-}
+// generateWidgetKey is imported from lib/license/widget-key
