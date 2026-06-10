@@ -19,3 +19,12 @@ export const CHATKIT_UI_ENABLED = parseBooleanFlag(process.env.NEXT_PUBLIC_ENABL
 export const CHATKIT_SERVER_ENABLED = parseBooleanFlag(
   process.env.ENABLE_CHATKIT ?? process.env.NEXT_PUBLIC_ENABLE_CHATKIT
 );
+
+/**
+ * Billing is intentionally disabled until Stripe integration ships.
+ * Tiers are admin-managed out-of-band.
+ *
+ * When false (default), all subscription mutation endpoints return 501 so no
+ * code path can silently upgrade a user's tier without real payment.
+ */
+export const BILLING_ENABLED = parseBooleanFlag(process.env.BILLING_ENABLED);
