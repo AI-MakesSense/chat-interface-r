@@ -4,9 +4,14 @@
  */
 
 import { WidgetConfig } from '@/stores/widget-store';
+import { migrateConfig } from '@/lib/widget-config/migrate';
 
-/** Base config shared across all presets */
-const base: WidgetConfig = {
+/**
+ * Base preset, authored in the legacy flat playground shape for readability.
+ * Each preset literal below is normalized to the canonical schema through
+ * migrateConfig — the exported PRESET_CONFIGS array is canonical-shaped.
+ */
+const base = {
   branding: { companyName: 'ChatKit', welcomeText: '' },
   style: { theme: 'light', primaryColor: '#0ea5e9', position: 'bottom-right' },
   connection: { provider: 'n8n', webhookUrl: '' },
@@ -50,7 +55,7 @@ const base: WidgetConfig = {
   chatkitAccentLevel: 1,
 };
 
-export const PRESET_CONFIGS: WidgetConfig[] = [
+const FLAT_PRESETS = [
   {
     // 1. Clean blue on white — default friendly look
     ...base,
@@ -116,3 +121,6 @@ export const PRESET_CONFIGS: WidgetConfig[] = [
     radius: 'large',
   },
 ];
+
+/** Canonical-shaped showcase presets (normalized at module load). */
+export const PRESET_CONFIGS: WidgetConfig[] = FLAT_PRESETS.map((preset) => migrateConfig(preset));

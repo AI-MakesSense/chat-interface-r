@@ -3,7 +3,7 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { createPortal } from 'react-dom';
 import { Save, RotateCcw } from 'lucide-react';
-import { WidgetConfig, StarterPrompt } from '@/stores/widget-store';
+import { WidgetConfig, StarterPrompt, WidgetConfigUpdate } from '@/stores/widget-store';
 import {
   // Communication
   MessageCircle,
@@ -765,10 +765,10 @@ export const ConfigSidebar: React.FC<ConfigSidebarProps> = ({
   widgetName = 'Widget',
   lockedProvider
 }) => {
-  const [customFontUrl, setCustomFontUrl] = useState(config.customFontCss || '');
-  const [customFontName, setCustomFontName] = useState(config.customFontName || '');
+  const [customFontUrl, setCustomFontUrl] = useState(config.theme.typography.customFontCss || '');
+  const [customFontName, setCustomFontName] = useState(config.theme.typography.customFontName || '');
 
-  const isDark = config.themeMode === 'dark';
+  const isDark = config.theme.mode === 'dark';
   const resolvedProvider =
     CHATKIT_UI_ENABLED
       ? (lockedProvider || config.connection?.provider || 'n8n')
@@ -777,9 +777,9 @@ export const ConfigSidebar: React.FC<ConfigSidebarProps> = ({
     ? FONT_OPTIONS
     : FONT_OPTIONS.filter((font) => font !== 'OpenAI Sans');
   const selectedFontFamily =
-    !CHATKIT_UI_ENABLED && config.fontFamily === 'OpenAI Sans'
+    !CHATKIT_UI_ENABLED && config.theme.typography.fontFamily === 'OpenAI Sans'
       ? 'Inter'
-      : (config.fontFamily || 'system-ui');
+      : (config.theme.typography.fontFamily || 'system-ui');
 
   // Dynamic Theme Classes
   const theme = {
@@ -794,23 +794,82 @@ export const ConfigSidebar: React.FC<ConfigSidebarProps> = ({
     buttonBg: isDark ? 'bg-white/10 hover:bg-white/20' : 'bg-neutral-100 hover:bg-neutral-200',
   };
 
-  const handleChange = <K extends keyof WidgetConfig>(key: K, value: WidgetConfig[K]) => {
-    onChange({ ...config, [key]: value });
+  /**
+   * Legacy flat key → canonical nested patch. Keeps the dozens of existing
+   * handleChange('flatKey', v) call sites unchanged while the store config is
+   * canonical-shaped. This sidebar gets fully rewritten against the canonical
+   * schema in a later task; this map is the mechanical bridge until then.
+   */
+  const FLAT_KEY_PATCHES = {
+    themeMode: (v: unknown) => ({ theme: { mode: v } }),
+    useAccent: (v: unknown) => ({ colorSystem: { useAccent: v } }),
+    accentColor: (v: unknown) => ({ colorSystem: { accentColor: v } }),
+    useTintedGrayscale: (v: unknown) => ({ colorSystem: { useTintedGrayscale: v } }),
+    tintHue: (v: unknown) => ({ colorSystem: { tintHue: v } }),
+    tintLevel: (v: unknown) => ({ colorSystem: { tintLevel: v } }),
+    shadeLevel: (v: unknown) => ({ colorSystem: { shadeLevel: v } }),
+    useCustomSurfaceColors: (v: unknown) => ({ colorSystem: { useCustomSurfaceColors: v } }),
+    surfaceBackgroundColor: (v: unknown) => ({ colorSystem: { surfaceBackgroundColor: v } }),
+    surfaceForegroundColor: (v: unknown) => ({ colorSystem: { surfaceForegroundColor: v } }),
+    useCustomTextColor: (v: unknown) => ({ colorSystem: { useCustomTextColor: v } }),
+    customTextColor: (v: unknown) => ({ colorSystem: { customTextColor: v } }),
+    useCustomIconColor: (v: unknown) => ({ colorSystem: { useCustomIconColor: v } }),
+    customIconColor: (v: unknown) => ({ colorSystem: { customIconColor: v } }),
+    useCustomUserMessageColors: (v: unknown) => ({ colorSystem: { useCustomUserMessageColors: v } }),
+    customUserMessageTextColor: (v: unknown) => ({ colorSystem: { customUserMessageTextColor: v } }),
+    customUserMessageBackgroundColor: (v: unknown) => ({ colorSystem: { customUserMessageBackgroundColor: v } }),
+    chatkitGrayscaleHue: (v: unknown) => ({ chatkit: { grayscaleHue: v } }),
+    chatkitGrayscaleTint: (v: unknown) => ({ chatkit: { grayscaleTint: v } }),
+    chatkitGrayscaleShade: (v: unknown) => ({ chatkit: { grayscaleShade: v } }),
+    chatkitAccentPrimary: (v: unknown) => ({ chatkit: { accentPrimary: v } }),
+    chatkitAccentLevel: (v: unknown) => ({ chatkit: { accentLevel: v } }),
+    enableModelPicker: (v: unknown) => ({ chatkit: { enableModelPicker: v } }),
+    fontFamily: (v: unknown) => ({ theme: { typography: { fontFamily: v } } }),
+    fontSize: (v: unknown) => ({ theme: { typography: { fontSize: v } } }),
+    radius: (v: unknown) => ({ theme: { radius: v } }),
+    density: (v: unknown) => ({ theme: { density: v } }),
+    greeting: (v: unknown) => ({ startScreen: { greeting: v } }),
+    starterPrompts: (v: unknown) => ({ startScreen: { starterPrompts: v } }),
+    placeholder: (v: unknown) => ({ composer: { placeholder: v } }),
+    disclaimer: (v: unknown) => ({ composer: { disclaimer: v } }),
+    enableAttachments: (v: unknown) => ({ features: { attachments: { enabled: v } } }),
+    enablePdfLightbox: (v: unknown) => ({ features: { pdfLightbox: v } }),
+  } as const;
+
+  type LegacyFlatKey = keyof typeof FLAT_KEY_PATCHES;
+
+  /** Deep-merge a nested patch over the current config (arrays replace whole). */
+  const mergePatch = (base: unknown, patch: unknown): unknown => {
+    if (!patch || typeof patch !== 'object' || Array.isArray(patch)) return patch;
+    if (!base || typeof base !== 'object' || Array.isArray(base)) return patch;
+    const out: Record<string, unknown> = { ...(base as Record<string, unknown>) };
+    for (const [k, v] of Object.entries(patch)) {
+      out[k] = mergePatch((base as Record<string, unknown>)[k], v);
+    }
+    return out;
+  };
+
+  const applyPatch = (patch: WidgetConfigUpdate) => {
+    onChange(mergePatch(config, patch) as WidgetConfig);
+  };
+
+  const handleChange = (key: LegacyFlatKey, value: unknown) => {
+    applyPatch(FLAT_KEY_PATCHES[key](value) as WidgetConfigUpdate);
   };
 
   const updatePrompt = (index: number, field: 'label' | 'icon', value: string) => {
-    const newPrompts = [...(config.starterPrompts || [])];
+    const newPrompts = [...(config.startScreen.starterPrompts || [])];
     newPrompts[index] = { ...newPrompts[index], [field]: value };
     handleChange('starterPrompts', newPrompts);
   };
 
   // Use ref to track last processed prompt count to avoid duplicate processing
-  const lastPromptCountRef = useRef((config.starterPrompts || []).length);
+  const lastPromptCountRef = useRef((config.startScreen.starterPrompts || []).length);
 
   // Sync ref when config changes externally (e.g., loading saved widget)
   useEffect(() => {
-    lastPromptCountRef.current = (config.starterPrompts || []).length;
-  }, [config.starterPrompts]);
+    lastPromptCountRef.current = (config.startScreen.starterPrompts || []).length;
+  }, [config.startScreen.starterPrompts]);
 
   const handlePromptCountChange = (count: number) => {
     // Skip if count hasn't changed (prevents duplicate processing from rapid slider events)
@@ -821,7 +880,7 @@ export const ConfigSidebar: React.FC<ConfigSidebarProps> = ({
 
     // Build array of exactly 'count' prompts
     // Preserve existing prompts where possible, add new ones if needed
-    const existing = config.starterPrompts || [];
+    const existing = config.startScreen.starterPrompts || [];
     const newPrompts: StarterPrompt[] = [];
 
     for (let i = 0; i < count; i++) {
@@ -839,20 +898,26 @@ export const ConfigSidebar: React.FC<ConfigSidebarProps> = ({
 
   const handleSaveCustomFont = () => {
     if (customFontUrl && customFontName) {
-      onChange({
-        ...config,
-        customFontCss: customFontUrl,
-        customFontName: customFontName,
-        fontFamily: customFontName
+      applyPatch({
+        theme: {
+          typography: {
+            customFontCss: customFontUrl,
+            customFontName: customFontName,
+            fontFamily: customFontName,
+          },
+        },
       });
     }
   };
 
   const handleToggleCustomFont = (enabled: boolean) => {
-    onChange({
-      ...config,
-      useCustomFont: enabled,
-      fontFamily: (!enabled && config.fontFamily === config.customFontName) ? 'Inter' : config.fontFamily
+    applyPatch({
+      theme: {
+        typography: {
+          useCustomFont: enabled,
+          fontFamily: (!enabled && config.theme.typography.fontFamily === config.theme.typography.customFontName) ? 'Inter' : config.theme.typography.fontFamily,
+        },
+      },
     });
   };
 
@@ -898,18 +963,18 @@ export const ConfigSidebar: React.FC<ConfigSidebarProps> = ({
               {/* Animated background pill */}
               <div
                 className={`absolute top-[2px] bottom-[2px] rounded-[4px] transition-all duration-200 ease-in-out w-[calc(50%-4px)] shadow-sm ${isDark ? 'bg-[#303030]' : 'bg-white'}`}
-                style={{ left: config.themeMode === 'light' ? '2px' : 'calc(50% + 2px)' }}
+                style={{ left: config.theme.mode === 'light' ? '2px' : 'calc(50% + 2px)' }}
               />
               <button
                 onClick={() => handleChange('themeMode', 'light')}
-                className={`relative z-10 px-3 py-0.5 text-xs font-medium rounded-[4px] w-[50px] text-center transition-colors ${config.themeMode === 'light' ? (isDark ? 'text-[#afafaf]' : 'text-neutral-900') : (isDark ? 'text-white' : 'text-neutral-500')
+                className={`relative z-10 px-3 py-0.5 text-xs font-medium rounded-[4px] w-[50px] text-center transition-colors ${config.theme.mode === 'light' ? (isDark ? 'text-[#afafaf]' : 'text-neutral-900') : (isDark ? 'text-white' : 'text-neutral-500')
                   }`}
               >
                 Light
               </button>
               <button
                 onClick={() => handleChange('themeMode', 'dark')}
-                className={`relative z-10 px-3 py-0.5 text-xs font-medium rounded-[4px] w-[50px] text-center transition-colors ${config.themeMode === 'dark' ? (isDark ? 'text-white' : 'text-neutral-900') : (isDark ? 'text-[#afafaf]' : 'text-neutral-500')
+                className={`relative z-10 px-3 py-0.5 text-xs font-medium rounded-[4px] w-[50px] text-center transition-colors ${config.theme.mode === 'dark' ? (isDark ? 'text-white' : 'text-neutral-900') : (isDark ? 'text-[#afafaf]' : 'text-neutral-500')
                   }`}
               >
                 Dark
@@ -929,20 +994,20 @@ export const ConfigSidebar: React.FC<ConfigSidebarProps> = ({
 
                 <Row>
                   <div className={`w-12 ${theme.textMuted}`}>Hue</div>
-                  <Slider value={config.chatkitGrayscaleHue || 0} max={360} onChange={(v) => handleChange('chatkitGrayscaleHue', v)} gradient isDark={isDark} />
-                  <div className={`w-8 text-right ${theme.textMuted}`}>{config.chatkitGrayscaleHue || 0}°</div>
+                  <Slider value={config.chatkit.grayscaleHue || 0} max={360} onChange={(v) => handleChange('chatkitGrayscaleHue', v)} gradient isDark={isDark} />
+                  <div className={`w-8 text-right ${theme.textMuted}`}>{config.chatkit.grayscaleHue || 0}°</div>
                 </Row>
 
                 <Row>
                   <div className={`w-12 ${theme.textMuted}`}>Tint</div>
-                  <Slider value={config.chatkitGrayscaleTint ?? 6} max={9} onChange={(v) => handleChange('chatkitGrayscaleTint', v)} isDark={isDark} />
-                  <div className={`w-8 text-right ${theme.textMuted}`}>{config.chatkitGrayscaleTint ?? 6}</div>
+                  <Slider value={config.chatkit.grayscaleTint ?? 6} max={9} onChange={(v) => handleChange('chatkitGrayscaleTint', v)} isDark={isDark} />
+                  <div className={`w-8 text-right ${theme.textMuted}`}>{config.chatkit.grayscaleTint ?? 6}</div>
                 </Row>
 
                 <Row>
                   <div className={`w-12 ${theme.textMuted}`}>Shade</div>
-                  <Slider value={(config.chatkitGrayscaleShade ?? -4) + 4} max={8} onChange={(v) => handleChange('chatkitGrayscaleShade', v - 4)} isDark={isDark} />
-                  <div className={`w-8 text-right ${theme.textMuted}`}>{config.chatkitGrayscaleShade ?? -4}</div>
+                  <Slider value={(config.chatkit.grayscaleShade ?? -4) + 4} max={8} onChange={(v) => handleChange('chatkitGrayscaleShade', v - 4)} isDark={isDark} />
+                  <div className={`w-8 text-right ${theme.textMuted}`}>{config.chatkit.grayscaleShade ?? -4}</div>
                 </Row>
               </div>
 
@@ -957,18 +1022,18 @@ export const ConfigSidebar: React.FC<ConfigSidebarProps> = ({
                       <div className="relative flex items-center justify-center">
                         <div
                           className={`w-6 h-6 rounded-[4px] border shadow-sm ${isDark ? 'border-white/10' : 'border-black/10'}`}
-                          style={{ backgroundColor: config.chatkitAccentPrimary || '#0f172a' }}
+                          style={{ backgroundColor: config.chatkit.accentPrimary || '#0f172a' }}
                         />
                         <input
                           type="color"
-                          value={config.chatkitAccentPrimary || '#0f172a'}
+                          value={config.chatkit.accentPrimary || '#0f172a'}
                           onChange={(e) => handleChange('chatkitAccentPrimary', e.target.value)}
                           className="absolute inset-0 opacity-0 cursor-pointer w-full h-full"
                         />
                       </div>
                       <SidebarInput
                         type="text"
-                        value={config.chatkitAccentPrimary || '#0f172a'}
+                        value={config.chatkit.accentPrimary || '#0f172a'}
                         onChange={(e) => handleChange('chatkitAccentPrimary', e.target.value)}
                         className="w-24 uppercase"
                         isDark={isDark}
@@ -979,21 +1044,21 @@ export const ConfigSidebar: React.FC<ConfigSidebarProps> = ({
 
                 <Row>
                   <div className={`w-12 ${theme.textMuted}`}>Level</div>
-                  <Slider value={config.chatkitAccentLevel ?? 1} max={3} onChange={(v) => handleChange('chatkitAccentLevel', v)} isDark={isDark} />
-                  <div className={`w-8 text-right ${theme.textMuted}`}>{config.chatkitAccentLevel ?? 1}</div>
+                  <Slider value={config.chatkit.accentLevel ?? 1} max={3} onChange={(v) => handleChange('chatkitAccentLevel', v)} isDark={isDark} />
+                  <div className={`w-8 text-right ${theme.textMuted}`}>{config.chatkit.accentLevel ?? 1}</div>
                 </Row>
               </div>
 
               {/* Surface Colors - ChatKit supports this too */}
               <div className="space-y-4">
-                <Row className={config.useCustomSurfaceColors ? 'mb-0' : ''}>
+                <Row className={config.colorSystem.useCustomSurfaceColors ? 'mb-0' : ''}>
                   <div className={`font-medium ${theme.text}`}>Custom surface colors</div>
-                  <Toggle checked={config.useCustomSurfaceColors || false} onChange={(v) => handleChange('useCustomSurfaceColors', v)} isDark={isDark} />
+                  <Toggle checked={config.colorSystem.useCustomSurfaceColors || false} onChange={(v) => handleChange('useCustomSurfaceColors', v)} isDark={isDark} />
                 </Row>
-                {config.useCustomSurfaceColors && (
+                {config.colorSystem.useCustomSurfaceColors && (
                   <div className="animate-in slide-in-from-top-2 fade-in duration-200 space-y-4">
-                    <ColorPicker label="Background" value={config.surfaceBackgroundColor || '#ffffff'} onColorChange={(v) => handleChange('surfaceBackgroundColor', v)} isDark={isDark} />
-                    <ColorPicker label="Foreground" value={config.surfaceForegroundColor || '#f8fafc'} onColorChange={(v) => handleChange('surfaceForegroundColor', v)} isDark={isDark} />
+                    <ColorPicker label="Background" value={config.colorSystem.surfaceBackgroundColor || '#ffffff'} onColorChange={(v) => handleChange('surfaceBackgroundColor', v)} isDark={isDark} />
+                    <ColorPicker label="Foreground" value={config.colorSystem.surfaceForegroundColor || '#f8fafc'} onColorChange={(v) => handleChange('surfaceForegroundColor', v)} isDark={isDark} />
                   </div>
                 )}
               </div>
@@ -1002,84 +1067,84 @@ export const ConfigSidebar: React.FC<ConfigSidebarProps> = ({
             // N8n Specific Controls (Existing)
             <>
               {/* Accent */}
-              <Row className={config.useAccent ? 'mb-0' : 'mb-4'}>
+              <Row className={config.colorSystem.useAccent ? 'mb-0' : 'mb-4'}>
                 <Label isDark={isDark}>Accent</Label>
-                <Toggle checked={config.useAccent || false} onChange={(v) => handleChange('useAccent', v)} isDark={isDark} />
+                <Toggle checked={config.colorSystem.useAccent || false} onChange={(v) => handleChange('useAccent', v)} isDark={isDark} />
               </Row>
-              {config.useAccent && (
+              {config.colorSystem.useAccent && (
                 <div className="mt-3 mb-4 pl-0 animate-in slide-in-from-top-2 fade-in duration-200">
-                  <ColorPicker label="Color" value={config.accentColor || '#0ea5e9'} onColorChange={(v) => handleChange('accentColor', v)} isDark={isDark} />
+                  <ColorPicker label="Color" value={config.colorSystem.accentColor || '#0ea5e9'} onColorChange={(v) => handleChange('accentColor', v)} isDark={isDark} />
                 </div>
               )}
 
               {/* Tinted Grayscale */}
-              <Row className={config.useTintedGrayscale ? 'mb-0' : 'mb-4'}>
+              <Row className={config.colorSystem.useTintedGrayscale ? 'mb-0' : 'mb-4'}>
                 <Label isDark={isDark}>Tinted grayscale</Label>
-                <Toggle checked={config.useTintedGrayscale || false} onChange={(v) => handleChange('useTintedGrayscale', v)} isDark={isDark} />
+                <Toggle checked={config.colorSystem.useTintedGrayscale || false} onChange={(v) => handleChange('useTintedGrayscale', v)} isDark={isDark} />
               </Row>
-              {config.useTintedGrayscale && (
+              {config.colorSystem.useTintedGrayscale && (
                 <div className="animate-in slide-in-from-top-2 fade-in duration-200 space-y-4 mt-4 mb-2">
                   <Row>
                     <div className={`w-12 ${theme.textMuted}`}>Hue</div>
-                    <Slider value={config.tintHue || 220} max={360} onChange={(v) => handleChange('tintHue', v)} gradient isDark={isDark} />
-                    <div className={`w-6 text-right ${theme.textMuted}`}>{config.tintHue || 220}°</div>
+                    <Slider value={config.colorSystem.tintHue || 220} max={360} onChange={(v) => handleChange('tintHue', v)} gradient isDark={isDark} />
+                    <div className={`w-6 text-right ${theme.textMuted}`}>{config.colorSystem.tintHue || 220}°</div>
                   </Row>
                   <Row>
                     <div className={`w-12 ${theme.textMuted}`}>Tint</div>
-                    <Slider value={config.tintLevel || 10} max={20} onChange={(v) => handleChange('tintLevel', v)} isDark={isDark} />
-                    <div className={`w-6 text-right ${theme.textMuted}`}>{config.tintLevel || 10}</div>
+                    <Slider value={config.colorSystem.tintLevel || 10} max={20} onChange={(v) => handleChange('tintLevel', v)} isDark={isDark} />
+                    <div className={`w-6 text-right ${theme.textMuted}`}>{config.colorSystem.tintLevel || 10}</div>
                   </Row>
                   <Row>
                     <div className={`w-12 ${theme.textMuted}`}>Shade</div>
-                    <Slider value={config.shadeLevel ?? 10} max={20} onChange={(v) => handleChange('shadeLevel', v)} isDark={isDark} />
-                    <div className={`w-6 text-right ${theme.textMuted}`}>{config.shadeLevel ?? 10}</div>
+                    <Slider value={config.colorSystem.shadeLevel ?? 10} max={20} onChange={(v) => handleChange('shadeLevel', v)} isDark={isDark} />
+                    <div className={`w-6 text-right ${theme.textMuted}`}>{config.colorSystem.shadeLevel ?? 10}</div>
                   </Row>
                 </div>
               )}
 
               {/* Custom Surface Colors */}
-              <Row className={config.useCustomSurfaceColors ? 'mb-0' : 'mt-4'}>
+              <Row className={config.colorSystem.useCustomSurfaceColors ? 'mb-0' : 'mt-4'}>
                 <Label isDark={isDark}>Custom surface colors</Label>
-                <Toggle checked={config.useCustomSurfaceColors || false} onChange={(v) => handleChange('useCustomSurfaceColors', v)} isDark={isDark} />
+                <Toggle checked={config.colorSystem.useCustomSurfaceColors || false} onChange={(v) => handleChange('useCustomSurfaceColors', v)} isDark={isDark} />
               </Row>
-              {config.useCustomSurfaceColors && (
+              {config.colorSystem.useCustomSurfaceColors && (
                 <div className="animate-in slide-in-from-top-2 fade-in duration-200 space-y-4 mt-4">
-                  <ColorPicker label="Surface background" value={config.surfaceBackgroundColor || '#ffffff'} onColorChange={(v) => handleChange('surfaceBackgroundColor', v)} isDark={isDark} />
-                  <ColorPicker label="Surface foreground" value={config.surfaceForegroundColor || '#f8fafc'} onColorChange={(v) => handleChange('surfaceForegroundColor', v)} isDark={isDark} />
+                  <ColorPicker label="Surface background" value={config.colorSystem.surfaceBackgroundColor || '#ffffff'} onColorChange={(v) => handleChange('surfaceBackgroundColor', v)} isDark={isDark} />
+                  <ColorPicker label="Surface foreground" value={config.colorSystem.surfaceForegroundColor || '#f8fafc'} onColorChange={(v) => handleChange('surfaceForegroundColor', v)} isDark={isDark} />
                 </div>
               )}
 
               {/* Custom Text Color */}
-              <Row className={config.useCustomTextColor ? 'mb-0' : 'mt-4'}>
+              <Row className={config.colorSystem.useCustomTextColor ? 'mb-0' : 'mt-4'}>
                 <Label isDark={isDark}>Custom text color</Label>
-                <Toggle checked={config.useCustomTextColor || false} onChange={(v) => handleChange('useCustomTextColor', v)} isDark={isDark} />
+                <Toggle checked={config.colorSystem.useCustomTextColor || false} onChange={(v) => handleChange('useCustomTextColor', v)} isDark={isDark} />
               </Row>
-              {config.useCustomTextColor && (
+              {config.colorSystem.useCustomTextColor && (
                 <div className="animate-in slide-in-from-top-2 fade-in duration-200 mt-4">
-                  <ColorPicker label="Text color" value={config.customTextColor || '#1e293b'} onColorChange={(v) => handleChange('customTextColor', v)} isDark={isDark} />
+                  <ColorPicker label="Text color" value={config.colorSystem.customTextColor || '#1e293b'} onColorChange={(v) => handleChange('customTextColor', v)} isDark={isDark} />
                 </div>
               )}
 
               {/* Custom Icon Color */}
-              <Row className={config.useCustomIconColor ? 'mb-0' : 'mt-4'}>
+              <Row className={config.colorSystem.useCustomIconColor ? 'mb-0' : 'mt-4'}>
                 <Label isDark={isDark}>Custom icon color</Label>
-                <Toggle checked={config.useCustomIconColor || false} onChange={(v) => handleChange('useCustomIconColor', v)} isDark={isDark} />
+                <Toggle checked={config.colorSystem.useCustomIconColor || false} onChange={(v) => handleChange('useCustomIconColor', v)} isDark={isDark} />
               </Row>
-              {config.useCustomIconColor && (
+              {config.colorSystem.useCustomIconColor && (
                 <div className="animate-in slide-in-from-top-2 fade-in duration-200 mt-4">
-                  <ColorPicker label="Icon color" value={config.customIconColor || '#64748b'} onColorChange={(v) => handleChange('customIconColor', v)} isDark={isDark} />
+                  <ColorPicker label="Icon color" value={config.colorSystem.customIconColor || '#64748b'} onColorChange={(v) => handleChange('customIconColor', v)} isDark={isDark} />
                 </div>
               )}
 
               {/* User Message Colors */}
-              <Row className={config.useCustomUserMessageColors ? 'mb-0' : 'mt-4'}>
+              <Row className={config.colorSystem.useCustomUserMessageColors ? 'mb-0' : 'mt-4'}>
                 <Label isDark={isDark}>User message colors</Label>
-                <Toggle checked={config.useCustomUserMessageColors || false} onChange={(v) => handleChange('useCustomUserMessageColors', v)} isDark={isDark} />
+                <Toggle checked={config.colorSystem.useCustomUserMessageColors || false} onChange={(v) => handleChange('useCustomUserMessageColors', v)} isDark={isDark} />
               </Row>
-              {config.useCustomUserMessageColors && (
+              {config.colorSystem.useCustomUserMessageColors && (
                 <div className="animate-in slide-in-from-top-2 fade-in duration-200 mt-4 space-y-4">
-                  <ColorPicker label="Message Text" value={config.customUserMessageTextColor || '#ffffff'} onColorChange={(v) => handleChange('customUserMessageTextColor', v)} isDark={isDark} />
-                  <ColorPicker label="Message Background" value={config.customUserMessageBackgroundColor || '#0ea5e9'} onColorChange={(v) => handleChange('customUserMessageBackgroundColor', v)} isDark={isDark} />
+                  <ColorPicker label="Message Text" value={config.colorSystem.customUserMessageTextColor || '#ffffff'} onColorChange={(v) => handleChange('customUserMessageTextColor', v)} isDark={isDark} />
+                  <ColorPicker label="Message Background" value={config.colorSystem.customUserMessageBackgroundColor || '#0ea5e9'} onColorChange={(v) => handleChange('customUserMessageBackgroundColor', v)} isDark={isDark} />
                 </div>
               )}
             </>
@@ -1103,8 +1168,8 @@ export const ConfigSidebar: React.FC<ConfigSidebarProps> = ({
                   {availableFontOptions.map((f) => (
                     <option key={f} value={f} className="text-black">{f}</option>
                   ))}
-                  {config.useCustomFont && config.customFontName && (
-                    <option value={config.customFontName} className="text-black">{config.customFontName} (Custom)</option>
+                  {config.theme.typography.useCustomFont && config.theme.typography.customFontName && (
+                    <option value={config.theme.typography.customFontName} className="text-black">{config.theme.typography.customFontName} (Custom)</option>
                   )}
                 </select>
                 <SelectValue value={selectedFontFamily} isDark={isDark} />
@@ -1114,7 +1179,7 @@ export const ConfigSidebar: React.FC<ConfigSidebarProps> = ({
               <div className={theme.textMuted}>Font size</div>
               <div className="relative">
                 <select
-                  value={config.fontSize || 16}
+                  value={config.theme.typography.fontSize || 16}
                   onChange={(e) => handleChange('fontSize', Number(e.target.value))}
                   className="opacity-0 absolute inset-0 w-full h-full cursor-pointer"
                 >
@@ -1122,18 +1187,18 @@ export const ConfigSidebar: React.FC<ConfigSidebarProps> = ({
                   <option value={16} className="text-black">16px</option>
                   <option value={18} className="text-black">18px</option>
                 </select>
-                <SelectValue value={`${config.fontSize || 16}px`} isDark={isDark} />
+                <SelectValue value={`${config.theme.typography.fontSize || 16}px`} isDark={isDark} />
               </div>
             </Row>
 
             {/* Custom Font Toggle */}
-            <Row className={config.useCustomFont ? 'mt-4 mb-0' : 'mt-4'}>
+            <Row className={config.theme.typography.useCustomFont ? 'mt-4 mb-0' : 'mt-4'}>
               <Label isDark={isDark}>Custom font</Label>
-              <Toggle checked={config.useCustomFont || false} onChange={handleToggleCustomFont} isDark={isDark} />
+              <Toggle checked={config.theme.typography.useCustomFont || false} onChange={handleToggleCustomFont} isDark={isDark} />
             </Row>
 
             {/* Custom Font Importer */}
-            {config.useCustomFont && (
+            {config.theme.typography.useCustomFont && (
               <div className={`mt-4 pt-2 border-t animate-in slide-in-from-top-2 fade-in duration-200 ${theme.border}`}>
                 <div className={`text-xs font-semibold mb-2 ${theme.text}`}>Import Custom Font</div>
                 <div className="space-y-2">
@@ -1179,7 +1244,7 @@ export const ConfigSidebar: React.FC<ConfigSidebarProps> = ({
               <div className={theme.textMuted}>Radius</div>
               <div className="relative">
                 <select
-                  value={config.radius || 'medium'}
+                  value={config.theme.radius || 'medium'}
                   onChange={(e) => handleChange('radius', e.target.value as typeof RADIUS_OPTIONS[number])}
                   className="opacity-0 absolute inset-0 w-full h-full cursor-pointer"
                 >
@@ -1187,14 +1252,14 @@ export const ConfigSidebar: React.FC<ConfigSidebarProps> = ({
                     <option key={r} value={r} className="text-black capitalize">{r}</option>
                   ))}
                 </select>
-                <SelectValue value={(config.radius || 'medium').charAt(0).toUpperCase() + (config.radius || 'medium').slice(1)} isDark={isDark} />
+                <SelectValue value={(config.theme.radius || 'medium').charAt(0).toUpperCase() + (config.theme.radius || 'medium').slice(1)} isDark={isDark} />
               </div>
             </Row>
             <Row>
               <div className={theme.textMuted}>Density</div>
               <div className="relative">
                 <select
-                  value={config.density || 'normal'}
+                  value={config.theme.density || 'normal'}
                   onChange={(e) => handleChange('density', e.target.value as typeof DENSITY_OPTIONS[number])}
                   className="opacity-0 absolute inset-0 w-full h-full cursor-pointer"
                 >
@@ -1202,7 +1267,7 @@ export const ConfigSidebar: React.FC<ConfigSidebarProps> = ({
                     <option key={r} value={r} className="text-black capitalize">{r}</option>
                   ))}
                 </select>
-                <SelectValue value={(config.density || 'normal').charAt(0).toUpperCase() + (config.density || 'normal').slice(1)} isDark={isDark} />
+                <SelectValue value={(config.theme.density || 'normal').charAt(0).toUpperCase() + (config.theme.density || 'normal').slice(1)} isDark={isDark} />
               </div>
             </Row>
           </div>
@@ -1218,7 +1283,7 @@ export const ConfigSidebar: React.FC<ConfigSidebarProps> = ({
               <div className={`${theme.textMuted} font-medium`}>Greeting</div>
               <SidebarInput
                 type="text"
-                value={config.greeting || ''}
+                value={config.startScreen.greeting || ''}
                 onChange={(e) => handleChange('greeting', e.target.value)}
                 className="text-right w-40"
                 isDark={isDark}
@@ -1229,18 +1294,18 @@ export const ConfigSidebar: React.FC<ConfigSidebarProps> = ({
             <Row>
               <div className={`${theme.textMuted} font-medium w-24`}>Prompts</div>
               <Slider
-                value={(config.starterPrompts || []).length}
+                value={(config.startScreen.starterPrompts || []).length}
                 max={5}
                 onChange={handlePromptCountChange}
                 isDark={isDark}
               />
-              <div className={`w-6 text-right ${theme.textMuted}`}>{(config.starterPrompts || []).length}</div>
+              <div className={`w-6 text-right ${theme.textMuted}`}>{(config.startScreen.starterPrompts || []).length}</div>
             </Row>
 
             {/* Prompt List Editor */}
-            {(config.starterPrompts || []).length > 0 && (
+            {(config.startScreen.starterPrompts || []).length > 0 && (
               <div className="space-y-2 mt-2">
-                {(config.starterPrompts || []).map((prompt: StarterPrompt, index: number) => (
+                {(config.startScreen.starterPrompts || []).map((prompt: StarterPrompt, index: number) => (
                   <div key={index} className="flex gap-2 animate-in slide-in-from-top-1 fade-in duration-200">
                     <IconPicker value={prompt.icon} onChange={(val) => updatePrompt(index, 'icon', val)} isDark={isDark} provider={resolvedProvider} />
                     <SidebarInput
@@ -1268,7 +1333,7 @@ export const ConfigSidebar: React.FC<ConfigSidebarProps> = ({
               <div className={`${theme.textMuted} font-medium`}>Placeholder</div>
               <SidebarInput
                 type="text"
-                value={config.placeholder || ''}
+                value={config.composer.placeholder || ''}
                 onChange={(e) => handleChange('placeholder', e.target.value)}
                 className="text-right w-40"
                 isDark={isDark}
@@ -1278,7 +1343,7 @@ export const ConfigSidebar: React.FC<ConfigSidebarProps> = ({
               <div className={`${theme.textMuted} font-medium`}>Disclaimer</div>
               <SidebarInput
                 type="text"
-                value={config.disclaimer || ''}
+                value={config.composer.disclaimer || ''}
                 onChange={(e) => handleChange('disclaimer', e.target.value)}
                 className="text-right w-40"
                 isDark={isDark}
@@ -1286,11 +1351,11 @@ export const ConfigSidebar: React.FC<ConfigSidebarProps> = ({
             </Row>
             <Row>
               <div className={`${theme.textMuted} font-medium`}>Attachments</div>
-              <Toggle checked={config.enableAttachments || false} onChange={(v) => handleChange('enableAttachments', v)} isDark={isDark} />
+              <Toggle checked={config.features.attachments.enabled || false} onChange={(v) => handleChange('enableAttachments', v)} isDark={isDark} />
             </Row>
             <Row>
               <div className={`${theme.textMuted} font-medium`}>PDF Lightbox</div>
-              <Toggle checked={config.enablePdfLightbox || false} onChange={(v) => handleChange('enablePdfLightbox', v)} isDark={isDark} />
+              <Toggle checked={config.features.pdfLightbox || false} onChange={(v) => handleChange('enablePdfLightbox', v)} isDark={isDark} />
             </Row>
           </div>
         </Section>
@@ -1299,7 +1364,7 @@ export const ConfigSidebar: React.FC<ConfigSidebarProps> = ({
         <Section isDark={isDark}>
           <Row>
             <Label isDark={isDark}>Model picker</Label>
-            <Toggle checked={config.enableModelPicker || false} onChange={(v) => handleChange('enableModelPicker', v)} isDark={isDark} />
+            <Toggle checked={config.chatkit.enableModelPicker || false} onChange={(v) => handleChange('enableModelPicker', v)} isDark={isDark} />
           </Row>
         </Section>
 
@@ -1410,11 +1475,14 @@ export const ConfigSidebar: React.FC<ConfigSidebarProps> = ({
                           apiKey: config.connection?.apiKey || '',
                         },
                         // Set defaults for ChatKit if switching
-                        chatkitGrayscaleHue: config.chatkitGrayscaleHue ?? 220,
-                        chatkitGrayscaleTint: config.chatkitGrayscaleTint ?? 6,
-                        chatkitGrayscaleShade: config.chatkitGrayscaleShade ?? (config.themeMode === 'dark' ? -1 : -4),
-                        chatkitAccentPrimary: config.chatkitAccentPrimary ?? (config.themeMode === 'dark' ? '#f1f5f9' : '#0f172a'),
-                        chatkitAccentLevel: config.chatkitAccentLevel ?? 1,
+                        chatkit: {
+                          ...config.chatkit,
+                          grayscaleHue: config.chatkit.grayscaleHue ?? 220,
+                          grayscaleTint: config.chatkit.grayscaleTint ?? 6,
+                          grayscaleShade: config.chatkit.grayscaleShade ?? (config.theme.mode === 'dark' ? -1 : -4),
+                          accentPrimary: config.chatkit.accentPrimary ?? (config.theme.mode === 'dark' ? '#f1f5f9' : '#0f172a'),
+                          accentLevel: config.chatkit.accentLevel ?? 1,
+                        },
                       });
                     }}
                   >

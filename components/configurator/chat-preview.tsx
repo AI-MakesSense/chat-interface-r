@@ -289,7 +289,7 @@ export const ChatPreview: React.FC<ChatPreviewProps> = ({ config }) => {
   // Generate session ID once per component mount
   const sessionId = useMemo(() => 'preview-' + Math.random().toString(36).substring(7), []);
 
-  const isDark = config.themeMode === 'dark';
+  const isDark = config.theme.mode === 'dark';
   const hasMessages = messages.length > 0;
 
   // Responsive breakpoint
@@ -327,7 +327,7 @@ export const ChatPreview: React.FC<ChatPreviewProps> = ({ config }) => {
 
   // --- Style Logic (Radius) ---
   const getRadius = () => {
-    switch (config.radius) {
+    switch (config.theme.radius) {
       case 'none':
         return '0px';
       case 'small':
@@ -343,11 +343,11 @@ export const ChatPreview: React.FC<ChatPreviewProps> = ({ config }) => {
     }
   };
 
-  const elementRadius = config.radius === 'pill' ? '20px' : getRadius();
+  const elementRadius = config.theme.radius === 'pill' ? '20px' : getRadius();
 
   // --- Density Logic ---
   const getContainerPadding = () => {
-    switch (config.density) {
+    switch (config.theme.density) {
       case 'compact':
         return '1rem';
       case 'spacious':
@@ -358,7 +358,7 @@ export const ChatPreview: React.FC<ChatPreviewProps> = ({ config }) => {
   };
 
   const getMessageVerticalSpacing = () => {
-    switch (config.density) {
+    switch (config.theme.density) {
       case 'compact':
         return 'space-y-3';
       case 'spacious':
@@ -369,7 +369,7 @@ export const ChatPreview: React.FC<ChatPreviewProps> = ({ config }) => {
   };
 
   const getBubblePadding = () => {
-    switch (config.density) {
+    switch (config.theme.density) {
       case 'compact':
         return 'px-3 py-2';
       case 'spacious':
@@ -392,13 +392,13 @@ export const ChatPreview: React.FC<ChatPreviewProps> = ({ config }) => {
     composerSurface: string,
     hoverSurface: string;
 
-  if (config.useTintedGrayscale) {
-    const h = config.tintHue || 220;
+  if (config.colorSystem.useTintedGrayscale) {
+    const h = config.colorSystem.tintHue ?? 220;
     // ?? not ||: an explicit 0 must render as 0, not fall back to the default.
     // Fallbacks match the canonical schema defaults (10) — the old `|| 50`
     // shadeLevel fallback was out of the valid 0-20 range entirely.
-    const tLevel = config.tintLevel ?? 10;
-    const sLevel = config.shadeLevel ?? 10;
+    const tLevel = config.colorSystem.tintLevel ?? 10;
+    const sLevel = config.colorSystem.shadeLevel ?? 10;
 
     if (isDark) {
       const sat = 5 + tLevel * 2;
@@ -423,10 +423,10 @@ export const ChatPreview: React.FC<ChatPreviewProps> = ({ config }) => {
       subText = `hsl(${h}, ${sat}%, 40%)`;
       hoverSurface = `hsla(${h}, ${sat}%, 10%, 0.05)`;
     }
-  } else if (config.useCustomSurfaceColors) {
-    bg = config.surfaceBackgroundColor || '#ffffff';
-    surface = config.surfaceForegroundColor || '#f8fafc';
-    composerSurface = config.surfaceForegroundColor || '#f8fafc';
+  } else if (config.colorSystem.useCustomSurfaceColors) {
+    bg = config.colorSystem.surfaceBackgroundColor || '#ffffff';
+    surface = config.colorSystem.surfaceForegroundColor || '#f8fafc';
+    composerSurface = config.colorSystem.surfaceForegroundColor || '#f8fafc';
 
     if (isDark) {
       border = 'rgba(255,255,255,0.1)';
@@ -450,30 +450,30 @@ export const ChatPreview: React.FC<ChatPreviewProps> = ({ config }) => {
   }
 
   // Custom Text Color Override
-  if (config.useCustomTextColor) {
-    text = config.customTextColor || text;
+  if (config.colorSystem.useCustomTextColor) {
+    text = config.colorSystem.customTextColor || text;
   }
 
   // Custom Icon Color Override
-  if (config.useCustomIconColor) {
-    subText = config.customIconColor || subText;
+  if (config.colorSystem.useCustomIconColor) {
+    subText = config.colorSystem.customIconColor || subText;
   }
 
   // --- Accent & Message Logic ---
-  const accentColor = config.accentColor || '#0ea5e9';
+  const accentColor = config.colorSystem.accentColor || '#0ea5e9';
   const linkColor = resolveLinkColor(accentColor, bg);
   const linkBgTint = rgbaTint(linkColor, 0.12);
   const linkBgTintHover = rgbaTint(linkColor, 0.22);
-  const useAccent = config.useAccent || false;
+  const useAccent = config.colorSystem.useAccent || false;
 
   let userMsgBg = useAccent ? accentColor : surface;
   let userMsgText = useAccent ? '#ffffff' : text;
   let userMsgBorder = useAccent ? 'transparent' : isDark ? border : 'transparent';
 
   // Custom User Message Colors
-  if (config.useCustomUserMessageColors) {
-    userMsgBg = config.customUserMessageBackgroundColor || userMsgBg;
-    userMsgText = config.customUserMessageTextColor || userMsgText;
+  if (config.colorSystem.useCustomUserMessageColors) {
+    userMsgBg = config.colorSystem.customUserMessageBackgroundColor || userMsgBg;
+    userMsgText = config.colorSystem.customUserMessageTextColor || userMsgText;
     userMsgBorder = 'transparent';
   }
 
@@ -578,7 +578,7 @@ export const ChatPreview: React.FC<ChatPreviewProps> = ({ config }) => {
   // PDF Lightbox demo: inject/remove a demo PDF message when toggle changes
   useEffect(() => {
     const DEMO_PDF_MSG_ID = -999;
-    if (config.enablePdfLightbox) {
+    if (config.features.pdfLightbox) {
       setMessages((prev) => {
         if (prev.some((m) => m.id === DEMO_PDF_MSG_ID)) return prev;
         return [
@@ -593,7 +593,7 @@ export const ChatPreview: React.FC<ChatPreviewProps> = ({ config }) => {
     } else {
       setMessages((prev) => prev.filter((m) => m.id !== DEMO_PDF_MSG_ID));
     }
-  }, [config.enablePdfLightbox]);
+  }, [config.features.pdfLightbox]);
 
   const renderMessageWithCards = (htmlContent: string) => {
     const linkRegex = /<a\s+[^>]*href="([^"]+)"[^>]*>[^<]*<\/a>/g;
@@ -650,14 +650,14 @@ export const ChatPreview: React.FC<ChatPreviewProps> = ({ config }) => {
       style={{
         backgroundColor: bg,
         color: text,
-        fontFamily: getFontFamily(config.fontFamily || 'system-ui'),
-        fontSize: `${config.fontSize || 16}px`
+        fontFamily: getFontFamily(config.theme.typography.fontFamily || 'system-ui'),
+        fontSize: `${config.theme.typography.fontSize || 16}px`
       }}
     >
       {/* Inject Custom Font CSS */}
       {/* Intentional: Allow admins to inject custom CSS for advanced styling */}
-      {config.useCustomFont && config.customFontCss && (
-        <style dangerouslySetInnerHTML={{ __html: config.customFontCss }} />
+      {config.theme.typography.useCustomFont && config.theme.typography.customFontCss && (
+        <style dangerouslySetInnerHTML={{ __html: config.theme.typography.customFontCss }} />
       )}
 
       {/* Typing Animation Styles */}
@@ -784,20 +784,20 @@ export const ChatPreview: React.FC<ChatPreviewProps> = ({ config }) => {
                   }`}
                 style={{ color: text }}
               >
-                {config.greeting || 'How can I help you today?'}
+                {config.startScreen.greeting || 'How can I help you today?'}
               </h2>
 
-              {config.starterPrompts && config.starterPrompts.length > 0 && (
+              {config.startScreen.starterPrompts && config.startScreen.starterPrompts.length > 0 && (
                 <div
                   className={
                     isWide
                       ? 'flex flex-wrap justify-center gap-3'
-                      : config.density === 'compact'
+                      : config.theme.density === 'compact'
                         ? 'space-y-1'
                         : 'space-y-2'
                   }
                 >
-                  {config.starterPrompts.map((item: StarterPrompt, i: number) => {
+                  {config.startScreen.starterPrompts.map((item: StarterPrompt, i: number) => {
                     const IconComp = getIconByName(item.icon);
                     return (
                       <button
@@ -881,12 +881,12 @@ export const ChatPreview: React.FC<ChatPreviewProps> = ({ config }) => {
           className="flex items-center gap-2 p-1.5 transition-all focus-within:ring-1 focus-within:ring-blue-500/50"
           style={{
             backgroundColor: composerSurface,
-            borderRadius: config.radius === 'none' ? '0px' : '999px',
+            borderRadius: config.theme.radius === 'none' ? '0px' : '999px',
             border: `1px solid ${border}`,
             boxShadow: isDark ? 'none' : '0 4px 12px rgba(0,0,0,0.05)'
           }}
         >
-          {config.enableAttachments ? (
+          {config.features.attachments.enabled ? (
             <button
               type="button"
               className="w-8 h-8 flex items-center justify-center rounded-full transition-colors shrink-0"
@@ -904,7 +904,7 @@ export const ChatPreview: React.FC<ChatPreviewProps> = ({ config }) => {
             type="text"
             value={inputValue}
             onChange={(e) => setInputValue(e.target.value)}
-            placeholder={config.placeholder || 'Type a message...'}
+            placeholder={config.composer.placeholder || 'Type a message...'}
             className="flex-1 bg-transparent border-none focus:ring-0 focus:outline-none px-2 text-sm"
             style={{ color: text }}
             disabled={isLoading}
@@ -944,8 +944,8 @@ export const ChatPreview: React.FC<ChatPreviewProps> = ({ config }) => {
           <div
             className="flex items-center gap-2"
             style={{
-              opacity: config.enableModelPicker ? 1 : 0,
-              pointerEvents: config.enableModelPicker ? 'auto' : 'none'
+              opacity: config.chatkit.enableModelPicker ? 1 : 0,
+              pointerEvents: config.chatkit.enableModelPicker ? 'auto' : 'none'
             }}
           >
             <button
@@ -959,12 +959,12 @@ export const ChatPreview: React.FC<ChatPreviewProps> = ({ config }) => {
             </button>
           </div>
 
-          {config.disclaimer && (
+          {config.composer.disclaimer && (
             <div
               className="text-[10px] select-none truncate max-w-[150px]"
               style={{ color: subText, opacity: 0.7 }}
             >
-              {config.disclaimer}
+              {config.composer.disclaimer}
             </div>
           )}
 

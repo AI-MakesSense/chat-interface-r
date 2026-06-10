@@ -4,6 +4,7 @@ import { licenses, widgets } from '@/lib/db/schema';
 import { eq } from 'drizzle-orm';
 import { ChatKitEmbed } from '@/components/chatkit-embed';
 import { WidgetConfig } from '@/stores/widget-store';
+import { migrateConfig } from '@/lib/widget-config/migrate';
 import { CHATKIT_SERVER_ENABLED } from '@/lib/feature-flags';
 
 interface PageProps {
@@ -51,13 +52,13 @@ export default async function ChatKitWidgetPage({ params }: PageProps) {
     }
 
     // Check if it's a ChatKit widget
-    if (widget.widgetType !== 'chatkit' && (widget.config as WidgetConfig).connection?.provider !== 'chatkit') {
+    if (widget.widgetType !== 'chatkit' && (migrateConfig(widget.config)).connection?.provider !== 'chatkit') {
         // Fallback or error if trying to load N8n widget via ChatKit route
         // But for now, we might just render it if the config is compatible, or show error
         // Ideally, the embed code should point to the correct URL.
     }
 
-    const config = widget.config as WidgetConfig;
+    const config = migrateConfig(widget.config);
 
     return (
         <div className="h-screen w-screen overflow-hidden bg-transparent pointer-events-none">

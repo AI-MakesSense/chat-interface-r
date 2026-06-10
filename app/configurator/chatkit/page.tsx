@@ -304,7 +304,7 @@ function ConfiguratorPage() {
                 {/* Preview Canvas */}
                 <PreviewCanvas
                     config={currentConfig}
-                    onDimensionsChange={(width, height) => updateConfig({ inlineWidth: width, inlineHeight: height })}
+                    onDimensionsChange={(width, height) => updateConfig({ theme: { size: { inlineWidth: width, inlineHeight: height } } })}
                 />
             </div>
 

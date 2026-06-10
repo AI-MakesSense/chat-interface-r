@@ -16,6 +16,7 @@ import { notFound } from 'next/navigation';
 import { getWidgetByKey, getWidgetByKeyWithUser } from '@/lib/db/queries';
 import { CHATKIT_SERVER_ENABLED } from '@/lib/feature-flags';
 import FullpageWidget from './fullpage-widget';
+import { migrateConfig } from '@/lib/widget-config/migrate';
 
 interface PageProps {
   params: Promise<{
@@ -53,7 +54,7 @@ export default async function FullpageChatPage({ params }: PageProps) {
   }
 
   // Extract config from JSONB
-  const config = widget.config as any;
+  const config = migrateConfig(widget.config);
 
   // ChatKit fullpage is disabled when provider flag is off.
   if (!CHATKIT_SERVER_ENABLED) {
@@ -100,7 +101,7 @@ export async function generateMetadata({ params }: PageProps) {
     };
   }
 
-  const config = widget.config as any;
+  const config = migrateConfig(widget.config);
   const companyName = config?.branding?.companyName || 'Chat';
 
   return {

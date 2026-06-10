@@ -140,7 +140,10 @@ export class ZipGenerator {
   }
 
   private sanitizeConfig(config: WidgetConfig): any {
-    // Ensure all required fields for the widget runtime are present
+    // Ensure all required fields for the widget runtime are present.
+    // NOTE: the downloaded widget runtime (widget/src) still consumes the
+    // LEGACY shape (style.*, features.fileAttachmentsEnabled), so this
+    // method reads from the canonical config but emits the legacy shape.
     return {
       ...config,
       branding: {
@@ -150,16 +153,19 @@ export class ZipGenerator {
         firstMessage: config.branding.firstMessage || '',
       },
       style: {
-        ...config.style,
-        backgroundColor: config.style.backgroundColor || '#ffffff',
-        textColor: config.style.textColor || '#000000',
-        fontFamily: config.typography?.fontFamily || 'Inter, sans-serif',
-        fontSize: config.typography?.fontSize || 16,
+        theme: config.theme.mode,
+        primaryColor: config.theme.colors.primary,
+        position: config.theme.position.position,
+        cornerRadius: config.theme.cornerRadius,
+        backgroundColor: config.theme.colors.background || '#ffffff',
+        textColor: config.theme.colors.text || '#000000',
+        fontFamily: config.theme.typography.fontFamily || 'Inter, sans-serif',
+        fontSize: config.theme.typography.fontSize || 16,
       },
       features: {
-        fileAttachmentsEnabled: config.features?.fileAttachments || false,
-        allowedExtensions: config.features?.allowedExtensions || [],
-        maxFileSizeKB: (config.features?.maxFileSize || 5) * 1024,
+        fileAttachmentsEnabled: config.features.attachments.enabled || false,
+        allowedExtensions: config.features.attachments.allowedExtensions || [],
+        maxFileSizeKB: (config.features.attachments.maxFileSizeMB || 5) * 1024,
       }
     };
   }

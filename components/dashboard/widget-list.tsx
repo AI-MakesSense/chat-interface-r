@@ -106,7 +106,7 @@ export function WidgetList({ widgets, onDelete }: WidgetListProps) {
             embedCode = generateEmbedCode(
                 { widgetKey: widget.widgetKey },
                 selectedEmbedType,
-                { baseUrl, inlineWidth: widget.config?.inlineWidth, inlineHeight: widget.config?.inlineHeight }
+                { baseUrl, inlineWidth: widget.config?.theme.size.inlineWidth, inlineHeight: widget.config?.theme.size.inlineHeight }
             ).code;
         } else if (widget.licenseKey) {
             // Legacy embed code using licenseKey

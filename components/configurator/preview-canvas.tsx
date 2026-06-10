@@ -21,14 +21,14 @@ interface Dimensions {
 
 export const PreviewCanvas: React.FC<PreviewCanvasProps> = ({ config, onDimensionsChange }) => {
   const [size, setSize] = useState<Dimensions>({
-    width: config.inlineWidth || 400,
-    height: config.inlineHeight || 600,
+    width: config.theme.size.inlineWidth || 400,
+    height: config.theme.size.inlineHeight || 600,
   });
   const [embedMode, setEmbedMode] = useState<EmbedMode>('inline');
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
   const [isPopupOpen, setIsPopupOpen] = useState(false);
 
-  const isDark = config.themeMode === 'dark';
+  const isDark = config.theme.mode === 'dark';
 
   const resizeRef = useRef<{
     startX: number;
@@ -68,8 +68,8 @@ export const PreviewCanvas: React.FC<PreviewCanvasProps> = ({ config, onDimensio
     if (mode === 'full') {
       setSize({ width: 1000, height: 700 });
     } else if (mode === 'inline') {
-      const w = config.inlineWidth || 400;
-      const h = config.inlineHeight || 600;
+      const w = config.theme.size.inlineWidth || 400;
+      const h = config.theme.size.inlineHeight || 600;
       const next = { width: w, height: h };
       sizeRef.current = next;
       setSize(next);
@@ -130,12 +130,12 @@ export const PreviewCanvas: React.FC<PreviewCanvasProps> = ({ config, onDimensio
 
   // Determine styles for the launcher button based on config
   const getLauncherStyle = () => {
-    if (config.useAccent) {
-      return { backgroundColor: config.accentColor || '#0ea5e9', color: '#ffffff' };
+    if (config.colorSystem.useAccent) {
+      return { backgroundColor: config.colorSystem.accentColor || '#0ea5e9', color: '#ffffff' };
     }
-    if (config.useCustomSurfaceColors) {
+    if (config.colorSystem.useCustomSurfaceColors) {
       return {
-        backgroundColor: config.surfaceForegroundColor || '#f8fafc',
+        backgroundColor: config.colorSystem.surfaceForegroundColor || '#f8fafc',
         color: isDark ? '#e5e5e5' : '#111827'
       };
     }
