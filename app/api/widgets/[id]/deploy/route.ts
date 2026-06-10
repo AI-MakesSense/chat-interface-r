@@ -108,7 +108,6 @@ export async function POST(
     // time (user is mid-setup) but a widget must NOT deploy pointing at the
     // placeholder. Reject it with a clear message before the SSRF guard (which
     // would otherwise let example.com through as a public host).
-    const provider = (widget.config as any)?.connection?.provider ?? 'n8n';
     if (isPlaceholderWebhook(webhookUrl)) {
       return NextResponse.json(
         {
@@ -124,29 +123,28 @@ export async function POST(
       );
     }
 
-    // SSRF + scheme validation for the n8n webhook. Replaces the old
-    // protocol-only check: assertPublicWebhookUrl enforces https (localhost
-    // exempt outside production) AND rejects private-IP literals / hostnames
-    // that DNS-resolve to private addresses. ChatKit/display widgets without a
-    // real n8n webhook still reach here only if a webhookUrl is present, so the
-    // guard is scoped to n8n providers.
-    if (provider === 'n8n') {
-      try {
-        await assertPublicWebhookUrl(webhookUrl);
-      } catch (err) {
-        return NextResponse.json(
-          {
-            error: 'Widget configuration is not ready for deployment',
-            details: [
-              {
-                path: ['connection', 'webhookUrl'],
-                message: (err as Error).message,
-              },
-            ],
-          },
-          { status: 400 }
-        );
-      }
+    // SSRF + scheme validation. Replaces the old protocol-only check:
+    // assertPublicWebhookUrl enforces https (localhost exempt outside production)
+    // AND rejects private-IP literals / hostnames that DNS-resolve to private
+    // addresses. Applied provider-agnostically: any widget carrying a non-empty
+    // connection.webhookUrl must point at a public endpoint to deploy, regardless
+    // of provider (display/chatkit must not deploy a private-IP webhook either —
+    // defense-in-depth, consistent with the save-time guard).
+    try {
+      await assertPublicWebhookUrl(webhookUrl);
+    } catch (err) {
+      return NextResponse.json(
+        {
+          error: 'Widget configuration is not ready for deployment',
+          details: [
+            {
+              path: ['connection', 'webhookUrl'],
+              message: (err as Error).message,
+            },
+          ],
+        },
+        { status: 400 }
+      );
     }
 
     // 8. Deploy widget (sets deployedAt if not already set, activates if paused)

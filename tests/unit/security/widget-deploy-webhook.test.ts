@@ -51,14 +51,17 @@ const urlGuard = require('@/lib/security/url-guard');
 const WIDGET_ID = '550e8400-e29b-41d4-a716-446655440000';
 const USER_ID = 'user-aaa-bbb-ccc';
 
-function buildWidget(webhookUrl: string) {
+function buildWidget(
+  webhookUrl: string,
+  opts: { provider?: string; kind?: string } = {}
+) {
   return {
     id: WIDGET_ID,
     userId: USER_ID,
-    kind: 'chat',
+    kind: opts.kind ?? 'chat',
     status: 'active',
     config: {
-      connection: { provider: 'n8n', webhookUrl },
+      connection: { provider: opts.provider ?? 'n8n', webhookUrl },
     },
   };
 }
@@ -100,6 +103,31 @@ describe('Widget deploy — webhook validation', () => {
     const data = await res.json();
     expect(JSON.stringify(data)).toMatch(/private address/i);
   });
+
+  // TG-05: the deploy guard is provider-agnostic. A display/chatkit widget
+  // carrying a private-IP webhookUrl must be rejected too (defense-in-depth,
+  // consistent with the save-time guard) — not just n8n.
+  it.each([
+    { provider: 'display', kind: 'display' },
+    { provider: 'chatkit', kind: 'chat' },
+  ])(
+    'rejects a private-IP webhook for a $provider widget with 400 (TG-05)',
+    async ({ provider, kind }) => {
+      dbQueries.getWidgetById.mockResolvedValue(
+        buildWidget('https://10.0.0.5/hook', { provider, kind })
+      );
+      urlGuard.assertPublicWebhookUrl.mockRejectedValue(
+        new Error('Webhook URL resolves to a private address')
+      );
+
+      const res = await POST(makeRequest(), params);
+      expect(res.status).toBe(400);
+      expect(urlGuard.assertPublicWebhookUrl).toHaveBeenCalledWith('https://10.0.0.5/hook');
+      expect(dbQueries.deployWidget).not.toHaveBeenCalled();
+      const data = await res.json();
+      expect(JSON.stringify(data)).toMatch(/private address/i);
+    }
+  );
 
   // Sentinel rejected at deploy (but the guard is NOT even consulted — placeholder
   // check short-circuits first with a configure-your-webhook message).
