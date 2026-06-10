@@ -205,6 +205,28 @@ export function generateEmbedCode(
 /**
  * Generate all embed code variants for a widget
  */
+/**
+ * Extract inline embed dimensions from a stored widget config.
+ *
+ * Canonical (schemaVersion 2) configs store inline dimensions at
+ * config.theme.size.inlineWidth / inlineHeight. Older flat configs stored them
+ * at config.inlineWidth / inlineHeight. Reads the canonical path first and falls
+ * back to the legacy flat path. Returns undefined for a dimension when neither is
+ * present, so generateEmbedCode applies its own default (400×600).
+ */
+export function extractInlineDimensions(
+  config: unknown
+): { inlineWidth?: number; inlineHeight?: number } {
+  const c = config as
+    | { theme?: { size?: { inlineWidth?: number; inlineHeight?: number } }; inlineWidth?: number; inlineHeight?: number }
+    | null
+    | undefined;
+  return {
+    inlineWidth: c?.theme?.size?.inlineWidth ?? c?.inlineWidth,
+    inlineHeight: c?.theme?.size?.inlineHeight ?? c?.inlineHeight,
+  };
+}
+
 export function generateAllEmbedCodes(
   widget: WidgetForEmbed,
   options?: { baseUrl?: string; inlineWidth?: number; inlineHeight?: number }

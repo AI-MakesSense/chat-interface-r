@@ -156,7 +156,7 @@ function ChatConfigurator({ variant }: { variant: ConfiguratorVariant }) {
 
         <PreviewCanvas
           config={config}
-          tier={widget?.license?.tier}
+          tier={user?.tier}
           onDimensionsChange={(width, height) =>
             useWidgetStore.getState().updateConfig({ theme: { size: { inlineWidth: width, inlineHeight: height } } })
           }

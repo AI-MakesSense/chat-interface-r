@@ -10,6 +10,7 @@ export {
   type WidgetForEmbed,
   generateEmbedCode,
   generateAllEmbedCodes,
+  extractInlineDimensions,
   getPrimaryEmbedCode,
   resolveEmbedBaseUrl,
   resolveEmbedBaseUrlFromRequest,

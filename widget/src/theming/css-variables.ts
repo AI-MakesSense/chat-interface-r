@@ -264,6 +264,12 @@ export function createCSSVariables(config: WidgetConfig): Record<string, string>
     variables['--cw-hover-surface'] = isDark ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.05)';
   }
 
+  // Text color override (applied after grayscale so a custom text color wins)
+  const textColor = theme?.color?.text;
+  if (textColor) {
+    variables['--cw-text-color'] = textColor;
+  }
+
   // Icon color (only set default if not already set)
   const iconColor = theme?.color?.icon;
   if (iconColor) {

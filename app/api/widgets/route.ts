@@ -32,7 +32,7 @@ import { migrateConfig } from '@/lib/widget-config/migrate';
 import { TIER_LIMITS, canCreateWidget, normalizeUserTier } from '@/lib/license/tiers';
 import { deepMerge, forceN8nProviderConfig } from '@/lib/utils/config-helpers';
 import { CHATKIT_SERVER_ENABLED } from '@/lib/feature-flags';
-import { generateEmbedCode, resolveEmbedBaseUrlFromRequest, type EmbedType as GeneratedEmbedType } from '@/lib/embed';
+import { generateEmbedCode, extractInlineDimensions, resolveEmbedBaseUrlFromRequest, type EmbedType as GeneratedEmbedType } from '@/lib/embed';
 import { assertPublicWebhookUrl, isPlaceholderWebhook } from '@/lib/security/url-guard';
 import { z } from 'zod';
 
@@ -440,7 +440,9 @@ function generateEmbedCodes(baseUrl: string, widgetKey: string, primaryEmbedType
   const normalizedPrimary = validTypes.includes(primaryEmbedType as GeneratedEmbedType)
     ? (primaryEmbedType as GeneratedEmbedType)
     : 'popup';
-  const opts = { baseUrl, inlineWidth: config?.inlineWidth, inlineHeight: config?.inlineHeight };
+  // Canonical v2 stores inline dimensions at config.theme.size.*; extractInlineDimensions
+  // reads the canonical path and falls back to the legacy flat path.
+  const opts = { baseUrl, ...extractInlineDimensions(config) };
   const popup = generateEmbedCode(widget, 'popup', opts).code;
   const inline = generateEmbedCode(widget, 'inline', opts).code;
   const fullpage = generateEmbedCode(widget, 'fullpage', opts).code;

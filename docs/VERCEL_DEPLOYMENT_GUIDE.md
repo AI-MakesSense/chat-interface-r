@@ -261,6 +261,28 @@ export DATABASE_URL="postgresql://username:password@host/database?sslmode=requir
 npm run db:push
 ```
 
+### Step 5.1b: v1 → v2 Schema Migration (ordering matters)
+
+The v2 schema adds NOT NULL columns (`userId`, `widgetKey`, `allowedDomains`) that
+must be **backfilled before** the migration that enforces the constraints. Running
+the migration first will abort (by design — the constraints fail loudly on un-backfilled
+rows).
+
+Run the backfill and the migration as **one ordered command** so the happy path can't be
+done out of order:
+
+```bash
+# Backfill legacy rows, THEN apply the NOT NULL migration — in that order.
+pnpm db:deploy-v2
+```
+
+This is equivalent to:
+
+```bash
+pnpm db:backfill-v2   # idempotent; safe to re-run. Add `-- --dry-run` to preview.
+pnpm db:migrate       # applies the v2 NOT NULL migration
+```
+
 ### Step 5.2: Seed Database (Optional)
 
 If you have a seed script:

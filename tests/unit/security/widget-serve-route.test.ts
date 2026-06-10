@@ -159,6 +159,44 @@ describe('Widget Serve Route (compat bootstrap)', () => {
     expect(response.status).toBe(429);
   });
 
+  describe('localhost bypass is gated on NODE_ENV (F6)', () => {
+    const savedNodeEnv = process.env.NODE_ENV;
+    afterEach(() => {
+      // @ts-expect-error NODE_ENV is normally readonly
+      process.env.NODE_ENV = savedNodeEnv;
+    });
+
+    it('authorizes a localhost request in development', async () => {
+      // @ts-expect-error NODE_ENV is normally readonly
+      process.env.NODE_ENV = 'development';
+      dbQueries.getWidgetByKeyWithUser.mockResolvedValue(
+        n8nWidget({ allowedDomains: ['example.com'] })
+      );
+
+      const response = await GET(
+        makeRequest({ origin: 'http://localhost:3000', host: 'localhost:3000' }),
+        { params: Promise.resolve({ widgetKey: `${widgetKey}.js` }) }
+      );
+
+      expect(response.status).toBe(200);
+    });
+
+    it('rejects a localhost request in production', async () => {
+      // @ts-expect-error NODE_ENV is normally readonly
+      process.env.NODE_ENV = 'production';
+      dbQueries.getWidgetByKeyWithUser.mockResolvedValue(
+        n8nWidget({ allowedDomains: ['example.com'] })
+      );
+
+      const response = await GET(
+        makeRequest({ origin: 'http://localhost:3000', host: 'chat-interface-r.vercel.app' }),
+        { params: Promise.resolve({ widgetKey: `${widgetKey}.js` }) }
+      );
+
+      expect(response.status).toBe(403);
+    });
+  });
+
   it('serves the ChatKit iframe injector for a chatkit widget when the flag is enabled', async () => {
     jest.resetModules();
     jest.doMock('@/lib/feature-flags', () => ({ CHATKIT_SERVER_ENABLED: true }));

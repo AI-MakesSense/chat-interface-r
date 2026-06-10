@@ -217,7 +217,13 @@ export async function GET(
         allowedDomains.length > 0 &&
         !isFirstPartyRequest
       ) {
-        const isAuthorized = normalizedRequestDomain === 'localhost' || allowedDomains.some((allowedDomain: string) => {
+        // localhost bypass is only for non-production environments, matching
+        // resolve-widget.ts. In production a ChatKit widget must not be embeddable
+        // from localhost (this route serves the full iframe embed with no downstream
+        // re-validation).
+        const localhostBypass =
+          normalizedRequestDomain === 'localhost' && process.env.NODE_ENV !== 'production';
+        const isAuthorized = localhostBypass || allowedDomains.some((allowedDomain: string) => {
           const normalizedAllowed = normalizeDomain(allowedDomain);
           return normalizedAllowed === normalizedRequestDomain ||
             normalizedRequestDomain.endsWith('.' + normalizedAllowed);

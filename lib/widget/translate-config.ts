@@ -84,6 +84,10 @@ export function translateConfig(
     };
   }
 
+  if (cs.useCustomTextColor) {
+    theme.color.text = cs.customTextColor;
+  }
+
   if (cs.useCustomIconColor) {
     theme.color.icon = cs.customIconColor;
   }
