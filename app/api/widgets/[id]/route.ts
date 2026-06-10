@@ -14,6 +14,7 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { requireAuth } from '@/lib/auth/guard';
+import { handleAPIError } from '@/lib/utils/api-error';
 import { getWidgetById, updateWidget, deleteWidget, getUserById } from '@/lib/db/queries';
 import { getSchemaForKind, normalizeTier } from '@/lib/widget-config/schema';
 import { TIER_LIMITS, normalizeUserTier } from '@/lib/license/tiers';
@@ -133,9 +134,8 @@ export async function GET(
       return NextResponse.json({ error: errorMessage }, { status: 401 });
     }
 
-    // Log unexpected errors
-    console.error('Widget retrieval error:', error);
-    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
+    // Log unexpected errors and return consistent error response
+    return handleAPIError(error);
   }
 }
 
@@ -306,12 +306,8 @@ export async function PATCH(
       return NextResponse.json({ error: errorMessage }, { status: 401 });
     }
 
-    // Log unexpected errors
-    console.error('Widget update error:', error);
-    return NextResponse.json({
-      error: 'Internal server error',
-      details: error instanceof Error ? error.message : String(error)
-    }, { status: 500 });
+    // Log unexpected errors and return consistent error response
+    return handleAPIError(error);
   }
 }
 
@@ -372,8 +368,7 @@ export async function DELETE(
       return NextResponse.json({ error: errorMessage }, { status: 401 });
     }
 
-    // Log unexpected errors
-    console.error('Widget deletion error:', error);
-    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
+    // Log unexpected errors and return consistent error response
+    return handleAPIError(error);
   }
 }
