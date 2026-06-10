@@ -1,17 +1,28 @@
-"use client";
-import { useState } from "react";
-import { useRouter } from "next/navigation";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Switch } from "@/components/ui/switch";
-import { Button } from "@/components/ui/button";
-import { toast } from "sonner";
-import { DisplaySection, type DisplaySectionValue } from "@/components/configurator/sections/display-section";
-import { DisplayThemeSection, type DisplayThemeValue } from "@/components/configurator/sections/display-theme-section";
-import { DisplayBrandingSection, type DisplayBrandingValue } from "@/components/configurator/sections/display-branding-section";
-import { DisplayPreview } from "@/components/configurator/display-preview";
+'use client';
 
-export default function DisplayConfiguratorPage() {
+/**
+ * Display-kind configurator client.
+ *
+ * Lifted verbatim from the old app/configurator/n8n-display page. Display does
+ * not use the widget store (display configs never flow through it), uses local
+ * state, posts directly to /api/widgets with a display-kind config, and renders
+ * the dedicated display sections + DisplayPreview. Kept separate from the chat
+ * client because the two share almost no orchestration.
+ */
+
+import { useState } from 'react';
+import { useRouter } from 'next/navigation';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Switch } from '@/components/ui/switch';
+import { Button } from '@/components/ui/button';
+import { toast } from 'sonner';
+import { DisplaySection, type DisplaySectionValue } from '@/components/configurator/sections/display-section';
+import { DisplayThemeSection, type DisplayThemeValue } from '@/components/configurator/sections/display-theme-section';
+import { DisplayBrandingSection, type DisplayBrandingValue } from '@/components/configurator/sections/display-branding-section';
+import { DisplayPreview } from '@/components/configurator/display-preview';
+
+export function DisplayConfiguratorClient() {
   const router = useRouter();
   const [saving, setSaving] = useState(false);
 

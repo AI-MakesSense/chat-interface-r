@@ -22,7 +22,7 @@ export default function ConfiguratorSelectionPage() {
             n8nName;
         const path =
             selectedType === 'chatkit' ? '/configurator/chatkit' :
-            selectedType === 'display' ? '/configurator/n8n-display' :
+            selectedType === 'display' ? '/configurator/display' :
             '/configurator/n8n';
         const query = name.trim() ? `?name=${encodeURIComponent(name.trim())}` : '';
         router.push(`${path}${query}`);
