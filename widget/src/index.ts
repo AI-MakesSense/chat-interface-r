@@ -72,9 +72,13 @@ if (typeof window !== 'undefined') {
       containerId: injectedConfig?.display?.containerId || scriptTag?.getAttribute('data-container') || undefined,
     };
 
-    // Check if we have a FULL configuration (Legacy or fully injected mode)
-    // We check both flat structure and nested uiConfig structure
-    if (injectedRelay && injectedRelay.relayUrl && (injectedConfig.branding || (injectedConfig.uiConfig && injectedConfig.uiConfig.branding))) {
+    // Check if we have a FULL configuration (Legacy or fully injected mode).
+    // The loader always sets relay.relayUrl alongside a pre-injected uiConfig, so
+    // relay.relayUrl + uiConfig is the reliable "already injected" signal. We do NOT
+    // require uiConfig.branding — translateConfig only sets branding for CHAT widgets,
+    // so a display-kind (or branding-less) config would otherwise fall through to the
+    // slow path and trigger a wasted re-fetch of /api/w/<key>/config on every load.
+    if (injectedRelay && injectedRelay.relayUrl && injectedConfig.uiConfig) {
       console.log('[N8n Chat Widget] Using existing full configuration');
       try {
         // Mirror pre-injected license flags onto the legacy global some renderers read.

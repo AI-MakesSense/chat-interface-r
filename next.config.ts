@@ -19,9 +19,12 @@ const contentSecurityPolicy = [
  * Security headers for application pages.
  *
  * Excluded paths (no CSP / Referrer-Policy applied):
- *   /w/          – widget JS bundle serving
+ *   /w/          – widget JS bundle serving AND the public config endpoint at
+ *                  /api/w/<key>/config (which also matches this prefix) — the config
+ *                  route correctly emits CORS '*' from its handler, not the strict CSP
  *   /api/widget/ – legacy widget API
  *   /api/embed/  – embed bundle serving
+ *   /widget/     – content-hashed bundles (/widget/v/*) and the stable loader.js
  *   /chat/       – fullpage widget iframe page (must be embeddable cross-origin)
  *   /chatkit/    – ChatKit widget iframe page
  */

@@ -146,7 +146,9 @@ export function readConfigFromWindow(): Partial<WidgetConfig> {
 }
 
 /**
- * Reads license flags from window.__LICENSE_FLAGS__
+ * Reads license flags from window.N8N_LICENSE_FLAGS — the SAME global the loader and
+ * index.ts write ({ tier, brandingEnabled }). Maps brandingEnabled → { branding } for
+ * the legacy footer contract. Defaults to showing branding when the global is absent.
  * @returns License flags or default values
  */
 export function readLicenseFlagsFromWindow(): { branding: boolean } {
@@ -154,13 +156,13 @@ export function readLicenseFlagsFromWindow(): { branding: boolean } {
     return { branding: true };
   }
 
-  const flags = (window as any).__LICENSE_FLAGS__;
+  const flags = (window as any).N8N_LICENSE_FLAGS;
 
   if (!flags || typeof flags !== 'object') {
     return { branding: true };
   }
 
   return {
-    branding: flags.branding !== undefined ? flags.branding : true,
+    branding: flags.brandingEnabled !== undefined ? flags.brandingEnabled : true,
   };
 }

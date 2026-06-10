@@ -693,7 +693,9 @@ export function createChatWidget(runtimeConfig: WidgetRuntimeConfig): WidgetClea
     const inlineTarget = document.getElementById(inlineContainerId);
     if (!inlineTarget) {
       console.warn(`[N8n Chat Widget] Inline container not found: #${inlineContainerId}`);
-      return;
+      // Honor the WidgetCleanup contract for any direct caller: nothing mounted, so
+      // destroy() is a no-op.
+      return { destroy() {} };
     }
     mountTarget = inlineTarget;
     mountTarget.innerHTML = '';
